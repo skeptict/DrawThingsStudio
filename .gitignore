@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+*.swp
+*~.nib
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+DerivedData/
+*.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
