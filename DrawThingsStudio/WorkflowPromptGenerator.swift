@@ -82,15 +82,18 @@ class WorkflowPromptGenerator: ObservableObject {
         let prompt = """
         \(style.systemPrompt)
 
-        Create exactly \(variationCount) variations of this image prompt: "\(basePrompt)"
+        Create exactly \(variationCount) different variations of this image prompt:
+        "\(basePrompt)"
 
-        Each variation should:
-        - Keep the core concept intact
-        - Change style, mood, lighting, or specific details
-        - Be a complete, standalone prompt
-        - Be on a separate line
+        IMPORTANT:
+        - Each variation MUST be on its own line
+        - Each variation should change style, mood, lighting, or details
+        - Keep the core subject/concept the same
+        - Output ONLY the prompts, nothing else
+        - Do NOT number the prompts
+        - Do NOT add explanations
 
-        Output ONLY the prompts, one per line, no numbering, no explanations.
+        Generate \(variationCount) variations now:
         """
 
         let response = try await ollamaClient.generateText(
@@ -99,11 +102,31 @@ class WorkflowPromptGenerator: ObservableObject {
             options: .creative
         )
 
-        let variations = parseMultilineResponse(response, expectedCount: variationCount)
+        var variations = parseMultilineResponse(response, expectedCount: variationCount)
 
-        logger.info("Generated \(variations.count) variations")
+        logger.info("Generated \(variations.count) variations from LLM")
 
-        return variations
+        // Fallback: if we didn't get enough variations, create simple modifications
+        if variations.isEmpty {
+            variations = [basePrompt]
+        }
+
+        let styleModifiers = [
+            ", dramatic lighting, cinematic",
+            ", soft natural lighting, serene atmosphere",
+            ", vibrant colors, high contrast",
+            ", moody dark tones, atmospheric",
+            ", golden hour lighting, warm tones"
+        ]
+
+        while variations.count < variationCount {
+            let modifierIndex = variations.count % styleModifiers.count
+            let newVariation = basePrompt + styleModifiers[modifierIndex]
+            variations.append(newVariation)
+            logger.debug("Added fallback variation \(variations.count)")
+        }
+
+        return Array(variations.prefix(variationCount))
     }
 
     // MARK: - Character Description
@@ -394,25 +417,55 @@ class WorkflowPromptGenerator: ObservableObject {
     // MARK: - Helpers
 
     private func parseMultilineResponse(_ response: String, expectedCount: Int) -> [String] {
-        let lines = response
-            .split(separator: "\n")
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .filter { !$0.hasPrefix("#") && !$0.hasPrefix("*") } // Remove markdown formatting
-            .map { line in
-                // Remove numbering like "1.", "1)", "- ", etc.
+        logger.debug("Parsing response (\(response.count) chars) for \(expectedCount) items")
+
+        // Try splitting by double newlines first (common format)
+        var lines: [String] = []
+
+        // Check if response uses double-newline separation
+        if response.contains("\n\n") {
+            lines = response
+                .components(separatedBy: "\n\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+
+        // If not enough results, try single newlines
+        if lines.count < expectedCount {
+            lines = response
+                .components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+
+        // Clean up each line
+        let cleaned = lines
+            .filter { !$0.hasPrefix("#") && !$0.hasPrefix("**") } // Remove markdown headers
+            .map { line -> String in
                 var cleaned = line
-                if let range = cleaned.range(of: #"^\d+[\.\)]\s*"#, options: .regularExpression) {
+                // Remove numbering like "1.", "1)", "1:", "- ", "• ", etc.
+                if let range = cleaned.range(of: #"^[\d]+[\.\)\:]\s*"#, options: .regularExpression) {
                     cleaned.removeSubrange(range)
                 }
                 if cleaned.hasPrefix("- ") {
                     cleaned.removeFirst(2)
                 }
-                return cleaned
+                if cleaned.hasPrefix("• ") {
+                    cleaned.removeFirst(2)
+                }
+                // Remove quotes if the entire line is quoted
+                if cleaned.hasPrefix("\"") && cleaned.hasSuffix("\"") && cleaned.count > 2 {
+                    cleaned.removeFirst()
+                    cleaned.removeLast()
+                }
+                return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            .filter { !$0.isEmpty }
+            .filter { !$0.isEmpty && $0.count > 10 } // Filter out very short lines (likely not prompts)
 
-        return Array(lines.prefix(expectedCount))
+        logger.debug("Parsed \(cleaned.count) items from response")
+
+        // Return what we got, up to expected count
+        return Array(cleaned.prefix(expectedCount))
     }
 
     @MainActor

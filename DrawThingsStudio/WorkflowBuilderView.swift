@@ -13,6 +13,7 @@ struct WorkflowBuilderView: View {
     @State private var showJSONPreview = false
     @State private var showAddInstructionSheet = false
     @State private var showTemplatesSheet = false
+    @State private var showAIGeneration = false
 
     var body: some View {
         HSplitView {
@@ -26,6 +27,13 @@ struct WorkflowBuilderView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                // AI Generation button
+                Button {
+                    showAIGeneration = true
+                } label: {
+                    Label("AI Generate", systemImage: "sparkles")
+                }
+
                 // Add instruction menu
                 Menu {
                     addInstructionMenu
@@ -65,6 +73,9 @@ struct WorkflowBuilderView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.instructions.isEmpty)
             }
+        }
+        .sheet(isPresented: $showAIGeneration) {
+            AIGenerationSheet(viewModel: viewModel, isPresented: $showAIGeneration)
         }
         .sheet(isPresented: $showJSONPreview) {
             JSONPreviewView(viewModel: viewModel)
