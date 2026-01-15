@@ -334,14 +334,14 @@ struct GenerationOptionsView: View {
     @State private var concept: String = ""
     @State private var sceneCount: Int = 3
     @State private var variationCount: Int = 5
-    @State private var selectedStyle: PromptStyle = .creative
+    @State private var selectedStyle: PromptStyle = AppSettings.shared.defaultPromptStyle
     @State private var characterConcept: String = ""
     @State private var sceneDescriptions: String = ""
 
-    // Config
-    @State private var width: Int = 1024
-    @State private var height: Int = 1024
-    @State private var steps: Int = 30
+    // Config - use defaults from settings
+    @State private var width: Int = AppSettings.shared.defaultWidth
+    @State private var height: Int = AppSettings.shared.defaultHeight
+    @State private var steps: Int = AppSettings.shared.defaultSteps
 
     var body: some View {
         VStack(spacing: 0) {
@@ -594,11 +594,14 @@ struct GenerationOptionsView: View {
     // MARK: - Generate Action
 
     private func generate() async {
+        let settings = AppSettings.shared
         let config = DrawThingsConfig(
             width: width,
             height: height,
             steps: steps,
-            guidanceScale: 7.5
+            guidanceScale: Float(settings.defaultGuidanceScale),
+            samplerName: settings.defaultSampler.isEmpty ? nil : settings.defaultSampler,
+            shift: settings.defaultShift > 0 ? Float(settings.defaultShift) : nil
         )
 
         do {

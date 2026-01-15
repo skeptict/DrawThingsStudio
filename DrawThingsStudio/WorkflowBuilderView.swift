@@ -806,6 +806,8 @@ struct ConfigEditor: View {
     @State private var editSeed: Int = -1
     @State private var editModel: String = ""
     @State private var editStrength: Float = 1.0
+    @State private var editSampler: String = ""
+    @State private var editShift: Float = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -851,6 +853,21 @@ struct ConfigEditor: View {
             .onChange(of: editStrength) { _, _ in updateConfig() }
 
             VStack(alignment: .leading) {
+                Text("Shift (0 = not set): \(editShift, specifier: "%.1f")")
+                    .font(.caption)
+                Slider(value: $editShift, in: 0...10, step: 0.5)
+            }
+            .onChange(of: editShift) { _, _ in updateConfig() }
+
+            VStack(alignment: .leading) {
+                Text("Sampler")
+                    .font(.caption)
+                TextField("e.g., DPM++ 2M Karras", text: $editSampler)
+                    .textFieldStyle(.roundedBorder)
+            }
+            .onChange(of: editSampler) { _, _ in updateConfig() }
+
+            VStack(alignment: .leading) {
                 Text("Model")
                     .font(.caption)
                 TextField("model_name.ckpt", text: $editModel)
@@ -877,6 +894,8 @@ struct ConfigEditor: View {
         editSeed = config.seed ?? -1
         editModel = config.model ?? ""
         editStrength = config.strength ?? 1.0
+        editSampler = config.samplerName ?? ""
+        editShift = config.shift ?? 0
     }
 
     private func updateConfig() {
@@ -887,7 +906,9 @@ struct ConfigEditor: View {
             guidanceScale: editGuidanceScale,
             seed: editSeed == -1 ? nil : editSeed,
             model: editModel.isEmpty ? nil : editModel,
-            strength: editStrength < 1.0 ? editStrength : nil
+            samplerName: editSampler.isEmpty ? nil : editSampler,
+            strength: editStrength < 1.0 ? editStrength : nil,
+            shift: editShift > 0 ? editShift : nil
         )
         onChange(newConfig)
     }

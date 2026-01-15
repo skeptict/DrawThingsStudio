@@ -53,6 +53,7 @@ struct ContentView: View {
                 }
             }
         }
+        .focusedSceneValue(\.workflowViewModel, workflowViewModel)
     }
 }
 
