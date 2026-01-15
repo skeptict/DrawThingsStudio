@@ -191,7 +191,7 @@ class WorkflowPromptGenerator: ObservableObject {
         - Art style and quality tags
         - Composition hints
 
-        Output ONLY the enhanced prompt, nothing else.
+        IMPORTANT: Output ONLY the prompt text itself. Do not include any introduction, explanation, or phrases like "Here is" or "The prompt is". Start directly with the image description.
         """
 
         let response = try await ollamaClient.generateText(
@@ -200,11 +200,51 @@ class WorkflowPromptGenerator: ObservableObject {
             options: .creative
         )
 
-        let enhanced = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        let enhanced = cleanPromptResponse(response)
 
         logger.info("Enhanced prompt from '\(concept)' to '\(enhanced.prefix(50))...'")
 
         return enhanced
+    }
+
+    /// Clean LLM response by removing common preambles
+    private func cleanPromptResponse(_ response: String) -> String {
+        var cleaned = response.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Common preambles to remove (case-insensitive patterns)
+        let preamblePatterns = [
+            "here is the enhanced prompt:",
+            "here is the generated prompt:",
+            "here is the prompt:",
+            "here's the enhanced prompt:",
+            "here's the generated prompt:",
+            "here's the prompt:",
+            "the enhanced prompt is:",
+            "the generated prompt is:",
+            "the prompt is:",
+            "enhanced prompt:",
+            "generated prompt:",
+            "here is:",
+            "here's:",
+            "prompt:"
+        ]
+
+        let lowercased = cleaned.lowercased()
+        for pattern in preamblePatterns {
+            if lowercased.hasPrefix(pattern) {
+                cleaned = String(cleaned.dropFirst(pattern.count))
+                cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+
+        // Remove surrounding quotes if present
+        if cleaned.hasPrefix("\"") && cleaned.hasSuffix("\"") && cleaned.count > 2 {
+            cleaned = String(cleaned.dropFirst().dropLast())
+            cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return cleaned
     }
 
     // MARK: - Iterative Refinement

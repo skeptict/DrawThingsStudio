@@ -9,11 +9,15 @@ import SwiftUI
 
 /// Main view for building StoryFlow workflows
 struct WorkflowBuilderView: View {
-    @StateObject private var viewModel = WorkflowBuilderViewModel()
+    @ObservedObject var viewModel: WorkflowBuilderViewModel
     @State private var showJSONPreview = false
     @State private var showAddInstructionSheet = false
     @State private var showTemplatesSheet = false
     @State private var showAIGeneration = false
+
+    init(viewModel: WorkflowBuilderViewModel? = nil) {
+        self.viewModel = viewModel ?? WorkflowBuilderViewModel()
+    }
 
     var body: some View {
         HSplitView {
@@ -27,6 +31,15 @@ struct WorkflowBuilderView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                // Open workflow
+                Button {
+                    Task {
+                        await viewModel.importWithOpenPanel()
+                    }
+                } label: {
+                    Label("Open", systemImage: "folder")
+                }
+
                 // AI Generation button
                 Button {
                     showAIGeneration = true
@@ -60,6 +73,15 @@ struct WorkflowBuilderView: View {
                     viewModel.copyToClipboard()
                 } label: {
                     Label("Copy", systemImage: "doc.on.clipboard")
+                }
+                .disabled(viewModel.instructions.isEmpty)
+
+                Button {
+                    Task {
+                        await viewModel.exportWithSavePanel()
+                    }
+                } label: {
+                    Label("Save", systemImage: "square.and.arrow.down")
                 }
                 .disabled(viewModel.instructions.isEmpty)
 
@@ -155,6 +177,8 @@ struct WorkflowBuilderView: View {
 
 struct InstructionListView: View {
     @ObservedObject var viewModel: WorkflowBuilderViewModel
+    @State private var showValidation: Bool = false
+    @State private var validationResult: ValidationResult?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -163,6 +187,18 @@ struct InstructionListView: View {
                 Text("Instructions")
                     .font(.headline)
                 Spacer()
+
+                // Validation button
+                Button {
+                    validationResult = viewModel.validate()
+                    showValidation = true
+                } label: {
+                    Image(systemName: validationStatusIcon)
+                        .foregroundColor(validationStatusColor)
+                }
+                .buttonStyle(.borderless)
+                .help("Validate workflow")
+
                 Text("\(viewModel.instructionCount)")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -172,6 +208,11 @@ struct InstructionListView: View {
                     .cornerRadius(4)
             }
             .padding()
+
+            // Validation panel
+            if showValidation, let result = validationResult {
+                ValidationPanel(result: result, isExpanded: $showValidation)
+            }
 
             Divider()
 
@@ -249,6 +290,108 @@ struct InstructionListView: View {
         }
         .background(Color(NSColor.controlBackgroundColor))
     }
+
+    private var validationStatusIcon: String {
+        guard let result = validationResult else {
+            return "checkmark.circle"
+        }
+        if !result.errors.isEmpty {
+            return "exclamationmark.triangle.fill"
+        } else if !result.warnings.isEmpty {
+            return "exclamationmark.circle.fill"
+        } else {
+            return "checkmark.circle.fill"
+        }
+    }
+
+    private var validationStatusColor: Color {
+        guard let result = validationResult else {
+            return .secondary
+        }
+        if !result.errors.isEmpty {
+            return .red
+        } else if !result.warnings.isEmpty {
+            return .orange
+        } else {
+            return .green
+        }
+    }
+}
+
+// MARK: - Validation Panel
+
+struct ValidationPanel: View {
+    let result: ValidationResult
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                if result.isValid && result.warnings.isEmpty {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Workflow is valid")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                } else if result.isValid {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundColor(.orange)
+                    Text("\(result.warnings.count) warning(s)")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                } else {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                    Text("\(result.errors.count) error(s)")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+                Spacer()
+                Button {
+                    isExpanded = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+            }
+
+            if !result.errors.isEmpty {
+                ForEach(Array(result.errors.enumerated()), id: \.offset) { _, error in
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.red)
+                            .font(.caption)
+                        Text(error.localizedDescription)
+                            .font(.caption)
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+
+            if !result.warnings.isEmpty {
+                ForEach(Array(result.warnings.enumerated()), id: \.offset) { _, warning in
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                            .font(.caption)
+                        Text(warning.description)
+                            .font(.caption)
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(result.isValid ? (result.warnings.isEmpty ? Color.green : Color.orange) : Color.red, lineWidth: 1)
+        )
+        .padding(.horizontal)
+        .padding(.bottom, 8)
+    }
 }
 
 // MARK: - Instruction Row
@@ -301,6 +444,7 @@ struct InstructionEditorView: View {
                 ScrollView {
                     InstructionEditorContent(viewModel: viewModel, instruction: instruction)
                         .padding()
+                        .id(instruction.id)
                 }
             } else {
                 // No selection
@@ -338,12 +482,12 @@ struct InstructionEditorContent: View {
                 }
 
             case .prompt(let text):
-                PromptEditor(label: "Prompt", text: text) { newText in
+                PromptEditor(label: "Prompt", text: text, viewModel: viewModel) { newText in
                     viewModel.updateSelectedInstruction(type: .prompt(newText))
                 }
 
             case .negativePrompt(let text):
-                PromptEditor(label: "Negative Prompt", text: text) { newText in
+                PromptEditor(label: "Negative Prompt", text: text, viewModel: viewModel) { newText in
                     viewModel.updateSelectedInstruction(type: .negativePrompt(newText))
                 }
 
@@ -388,12 +532,12 @@ struct InstructionEditorContent: View {
                 }
 
             case .maskAsk(let description):
-                PromptEditor(label: "Description", text: description, placeholder: "e.g., the person's face") { newDesc in
+                PromptEditor(label: "Description", text: description, placeholder: "e.g., the person's face", viewModel: viewModel) { newDesc in
                     viewModel.updateSelectedInstruction(type: .maskAsk(newDesc))
                 }
 
             case .askZoom(let description):
-                PromptEditor(label: "Target Description", text: description, placeholder: "e.g., the building") { newDesc in
+                PromptEditor(label: "Target Description", text: description, placeholder: "e.g., the building", viewModel: viewModel) { newDesc in
                     viewModel.updateSelectedInstruction(type: .askZoom(newDesc))
                 }
 
@@ -457,6 +601,7 @@ struct NoteEditor: View {
                 }
         }
         .onAppear { editText = text }
+        .onChange(of: text) { _, newValue in editText = newValue }
     }
 }
 
@@ -465,13 +610,24 @@ struct PromptEditor: View {
     let text: String
     var placeholder: String = "Enter prompt..."
     let onChange: (String) -> Void
+    var viewModel: WorkflowBuilderViewModel? = nil
 
     @State private var editText: String = ""
+    @State private var isEnhancing: Bool = false
+    @State private var showStylePicker: Bool = false
+    @State private var selectedStyle: PromptStyle = .creative
+    @State private var enhanceError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.headline)
+            HStack {
+                Text(label)
+                    .font(.headline)
+                Spacer()
+                if viewModel != nil {
+                    enhanceButton
+                }
+            }
             TextEditor(text: $editText)
                 .font(.body)
                 .frame(minHeight: 100)
@@ -483,11 +639,92 @@ struct PromptEditor: View {
                     onChange(newValue)
                 }
 
-            Text("\(editText.count) characters")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("\(editText.count) characters")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                if let error = enhanceError {
+                    Spacer()
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
         }
         .onAppear { editText = text }
+        .onChange(of: text) { _, newValue in
+            editText = newValue
+        }
+        .popover(isPresented: $showStylePicker) {
+            stylePickerPopover
+        }
+    }
+
+    @ViewBuilder
+    private var enhanceButton: some View {
+        if isEnhancing {
+            ProgressView()
+                .scaleEffect(0.7)
+        } else {
+            Button {
+                showStylePicker = true
+            } label: {
+                Label("Enhance", systemImage: "sparkles")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .help("Enhance prompt with AI")
+        }
+    }
+
+    private var stylePickerPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Enhance Style")
+                .font(.headline)
+
+            ForEach(PromptStyle.allCases) { style in
+                Button {
+                    selectedStyle = style
+                    showStylePicker = false
+                    enhancePrompt(style: style)
+                } label: {
+                    HStack {
+                        Image(systemName: style.icon)
+                            .frame(width: 24)
+                        Text(style.displayName)
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding()
+        .frame(width: 180)
+    }
+
+    private func enhancePrompt(style: PromptStyle) {
+        guard let viewModel = viewModel else { return }
+
+        isEnhancing = true
+        enhanceError = nil
+
+        Task {
+            do {
+                let enhanced = try await viewModel.enhancePrompt(editText, style: style)
+                await MainActor.run {
+                    editText = enhanced
+                    onChange(enhanced)
+                    isEnhancing = false
+                }
+            } catch {
+                await MainActor.run {
+                    enhanceError = error.localizedDescription
+                    isEnhancing = false
+                }
+            }
+        }
     }
 }
 
@@ -526,6 +763,7 @@ struct FilePathEditor: View {
             }
         }
         .onAppear { editPath = path }
+        .onChange(of: path) { _, newValue in editPath = newValue }
     }
 }
 
@@ -553,6 +791,7 @@ struct NumberEditor: View {
             }
         }
         .onAppear { editValue = value }
+        .onChange(of: value) { _, newValue in editValue = newValue }
     }
 }
 
@@ -560,95 +799,95 @@ struct ConfigEditor: View {
     let config: DrawThingsConfig
     let onChange: (DrawThingsConfig) -> Void
 
-    @State private var width: Int = 1024
-    @State private var height: Int = 1024
-    @State private var steps: Int = 30
-    @State private var guidanceScale: Float = 7.5
-    @State private var seed: Int = -1
-    @State private var model: String = ""
-    @State private var strength: Float = 1.0
+    @State private var editWidth: Int = 1024
+    @State private var editHeight: Int = 1024
+    @State private var editSteps: Int = 30
+    @State private var editGuidanceScale: Float = 7.5
+    @State private var editSeed: Int = -1
+    @State private var editModel: String = ""
+    @State private var editStrength: Float = 1.0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Generation Settings")
                 .font(.headline)
 
-            Group {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("Width")
-                            .font(.caption)
-                        TextField("", value: $width, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    VStack(alignment: .leading) {
-                        Text("Height")
-                            .font(.caption)
-                        TextField("", value: $height, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                }
-
+            HStack {
                 VStack(alignment: .leading) {
-                    Text("Steps: \(steps)")
+                    Text("Width")
                         .font(.caption)
-                    Slider(value: .init(get: { Float(steps) }, set: { steps = Int($0) }), in: 1...150, step: 1)
-                }
-
-                VStack(alignment: .leading) {
-                    Text("Guidance Scale: \(guidanceScale, specifier: "%.1f")")
-                        .font(.caption)
-                    Slider(value: $guidanceScale, in: 1...30, step: 0.5)
-                }
-
-                VStack(alignment: .leading) {
-                    Text("Strength: \(strength, specifier: "%.2f")")
-                        .font(.caption)
-                    Slider(value: $strength, in: 0...1, step: 0.05)
-                }
-
-                VStack(alignment: .leading) {
-                    Text("Model")
-                        .font(.caption)
-                    TextField("model_name.ckpt", text: $model)
+                    TextField("", value: $editWidth, format: .number)
                         .textFieldStyle(.roundedBorder)
                 }
-
                 VStack(alignment: .leading) {
-                    Text("Seed (-1 for random)")
+                    Text("Height")
                         .font(.caption)
-                    TextField("", value: $seed, format: .number)
+                    TextField("", value: $editHeight, format: .number)
                         .textFieldStyle(.roundedBorder)
                 }
             }
-            .onChange(of: width) { _, _ in updateConfig() }
-            .onChange(of: height) { _, _ in updateConfig() }
-            .onChange(of: steps) { _, _ in updateConfig() }
-            .onChange(of: guidanceScale) { _, _ in updateConfig() }
-            .onChange(of: seed) { _, _ in updateConfig() }
-            .onChange(of: model) { _, _ in updateConfig() }
-            .onChange(of: strength) { _, _ in updateConfig() }
+            .onChange(of: editWidth) { _, _ in updateConfig() }
+            .onChange(of: editHeight) { _, _ in updateConfig() }
+
+            VStack(alignment: .leading) {
+                Text("Steps: \(editSteps)")
+                    .font(.caption)
+                Slider(value: .init(get: { Float(editSteps) }, set: { editSteps = Int($0) }), in: 1...150, step: 1)
+            }
+            .onChange(of: editSteps) { _, _ in updateConfig() }
+
+            VStack(alignment: .leading) {
+                Text("Guidance Scale: \(editGuidanceScale, specifier: "%.1f")")
+                    .font(.caption)
+                Slider(value: $editGuidanceScale, in: 1...30, step: 0.5)
+            }
+            .onChange(of: editGuidanceScale) { _, _ in updateConfig() }
+
+            VStack(alignment: .leading) {
+                Text("Strength: \(editStrength, specifier: "%.2f")")
+                    .font(.caption)
+                Slider(value: $editStrength, in: 0...1, step: 0.05)
+            }
+            .onChange(of: editStrength) { _, _ in updateConfig() }
+
+            VStack(alignment: .leading) {
+                Text("Model")
+                    .font(.caption)
+                TextField("model_name.ckpt", text: $editModel)
+                    .textFieldStyle(.roundedBorder)
+            }
+            .onChange(of: editModel) { _, _ in updateConfig() }
+
+            VStack(alignment: .leading) {
+                Text("Seed (-1 for random)")
+                    .font(.caption)
+                TextField("", value: $editSeed, format: .number)
+                    .textFieldStyle(.roundedBorder)
+            }
+            .onChange(of: editSeed) { _, _ in updateConfig() }
         }
-        .onAppear {
-            width = config.width ?? 1024
-            height = config.height ?? 1024
-            steps = config.steps ?? 30
-            guidanceScale = config.guidanceScale ?? 7.5
-            seed = config.seed ?? -1
-            model = config.model ?? ""
-            strength = config.strength ?? 1.0
-        }
+        .onAppear { loadConfig() }
+    }
+
+    private func loadConfig() {
+        editWidth = config.width ?? 1024
+        editHeight = config.height ?? 1024
+        editSteps = config.steps ?? 30
+        editGuidanceScale = config.guidanceScale ?? 7.5
+        editSeed = config.seed ?? -1
+        editModel = config.model ?? ""
+        editStrength = config.strength ?? 1.0
     }
 
     private func updateConfig() {
         let newConfig = DrawThingsConfig(
-            width: width,
-            height: height,
-            steps: steps,
-            guidanceScale: guidanceScale,
-            seed: seed == -1 ? nil : seed,
-            model: model.isEmpty ? nil : model,
-            strength: strength < 1.0 ? strength : nil
+            width: editWidth,
+            height: editHeight,
+            steps: editSteps,
+            guidanceScale: editGuidanceScale,
+            seed: editSeed == -1 ? nil : editSeed,
+            model: editModel.isEmpty ? nil : editModel,
+            strength: editStrength < 1.0 ? editStrength : nil
         )
         onChange(newConfig)
     }
@@ -697,6 +936,8 @@ struct LoopEditor: View {
             editCount = count
             editStart = start
         }
+        .onChange(of: count) { _, newValue in editCount = newValue }
+        .onChange(of: start) { _, newValue in editStart = newValue }
     }
 }
 
@@ -737,9 +978,12 @@ struct MoodboardWeightsEditor: View {
                 .onChange(of: editWeights[i].weight) { _, _ in updateWeights() }
             }
         }
-        .onAppear {
-            editWeights = weights.map { (index: $0.key, weight: $0.value) }.sorted { $0.index < $1.index }
-        }
+        .onAppear { loadWeights() }
+        .onChange(of: weights) { _, _ in loadWeights() }
+    }
+
+    private func loadWeights() {
+        editWeights = weights.map { (index: $0.key, weight: $0.value) }.sorted { $0.index < $1.index }
     }
 
     private func updateWeights() {
@@ -792,12 +1036,18 @@ struct InpaintToolsEditor: View {
         .onChange(of: editBlur) { _, _ in update() }
         .onChange(of: editOutset) { _, _ in update() }
         .onChange(of: editRestore) { _, _ in update() }
-        .onAppear {
-            editStrength = strength ?? 0.7
-            editBlur = maskBlur ?? 4
-            editOutset = maskBlurOutset ?? 0
-            editRestore = restoreOriginal ?? false
-        }
+        .onAppear { loadValues() }
+        .onChange(of: strength) { _, _ in loadValues() }
+        .onChange(of: maskBlur) { _, _ in loadValues() }
+        .onChange(of: maskBlurOutset) { _, _ in loadValues() }
+        .onChange(of: restoreOriginal) { _, _ in loadValues() }
+    }
+
+    private func loadValues() {
+        editStrength = strength ?? 0.7
+        editBlur = maskBlur ?? 4
+        editOutset = maskBlurOutset ?? 0
+        editRestore = restoreOriginal ?? false
     }
 
     private func update() {
@@ -844,11 +1094,16 @@ struct MoveScaleEditor: View {
         .onChange(of: editX) { _, _ in onChange(editX, editY, editScale) }
         .onChange(of: editY) { _, _ in onChange(editX, editY, editScale) }
         .onChange(of: editScale) { _, _ in onChange(editX, editY, editScale) }
-        .onAppear {
-            editX = x
-            editY = y
-            editScale = scale
-        }
+        .onAppear { loadValues() }
+        .onChange(of: x) { _, _ in loadValues() }
+        .onChange(of: y) { _, _ in loadValues() }
+        .onChange(of: scale) { _, _ in loadValues() }
+    }
+
+    private func loadValues() {
+        editX = x
+        editY = y
+        editScale = scale
     }
 }
 
@@ -882,10 +1137,14 @@ struct SizeEditor: View {
         }
         .onChange(of: editWidth) { _, _ in onChange(editWidth, editHeight) }
         .onChange(of: editHeight) { _, _ in onChange(editWidth, editHeight) }
-        .onAppear {
-            editWidth = width
-            editHeight = height
-        }
+        .onAppear { loadValues() }
+        .onChange(of: width) { _, newValue in editWidth = newValue }
+        .onChange(of: height) { _, newValue in editHeight = newValue }
+    }
+
+    private func loadValues() {
+        editWidth = width
+        editHeight = height
     }
 }
 
@@ -896,7 +1155,7 @@ struct TemplatesSheet: View {
     @Binding var isPresented: Bool
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             Text("Workflow Templates")
                 .font(.title2)
                 .fontWeight(.semibold)
@@ -905,45 +1164,113 @@ struct TemplatesSheet: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            VStack(spacing: 12) {
-                TemplateButton(
-                    title: "Simple Story",
-                    description: "3-scene story sequence with prompts and saves",
-                    icon: "book"
-                ) {
-                    viewModel.loadStoryTemplate()
-                    isPresented = false
-                }
+            ScrollView {
+                VStack(spacing: 10) {
+                    // Basic Templates
+                    Text("Basic")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
 
-                TemplateButton(
-                    title: "Batch Variations",
-                    description: "Generate 5 variations of a single prompt",
-                    icon: "square.stack.3d.up"
-                ) {
-                    viewModel.loadBatchVariationTemplate()
-                    isPresented = false
-                }
+                    TemplateButton(
+                        title: "Simple Story",
+                        description: "3-scene story sequence with prompts and saves",
+                        icon: "book"
+                    ) {
+                        viewModel.loadStoryTemplate()
+                        isPresented = false
+                    }
 
-                TemplateButton(
-                    title: "Character Consistency",
-                    description: "Create consistent character across scenes using moodboard",
-                    icon: "person.2"
-                ) {
-                    viewModel.loadCharacterConsistencyTemplate()
-                    isPresented = false
-                }
+                    TemplateButton(
+                        title: "Batch Variations",
+                        description: "Generate 5 variations of a single prompt",
+                        icon: "square.stack.3d.up"
+                    ) {
+                        viewModel.loadBatchVariationTemplate()
+                        isPresented = false
+                    }
 
-                TemplateButton(
-                    title: "Img2Img",
-                    description: "Transform an input image with a prompt",
-                    icon: "photo.on.rectangle"
-                ) {
-                    viewModel.loadImg2ImgTemplate()
-                    isPresented = false
+                    TemplateButton(
+                        title: "Character Consistency",
+                        description: "Create consistent character across scenes using moodboard",
+                        icon: "person.2"
+                    ) {
+                        viewModel.loadCharacterConsistencyTemplate()
+                        isPresented = false
+                    }
+
+                    // Image Processing
+                    Text("Image Processing")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 8)
+
+                    TemplateButton(
+                        title: "Img2Img",
+                        description: "Transform an input image with a prompt",
+                        icon: "photo.on.rectangle"
+                    ) {
+                        viewModel.loadImg2ImgTemplate()
+                        isPresented = false
+                    }
+
+                    TemplateButton(
+                        title: "Inpainting",
+                        description: "Replace parts of an image using AI masking",
+                        icon: "paintbrush"
+                    ) {
+                        viewModel.loadInpaintingTemplate()
+                        isPresented = false
+                    }
+
+                    TemplateButton(
+                        title: "Upscaling",
+                        description: "High-resolution output with enhanced details",
+                        icon: "arrow.up.left.and.arrow.down.right"
+                    ) {
+                        viewModel.loadUpscaleTemplate()
+                        isPresented = false
+                    }
+
+                    // Batch Processing
+                    Text("Batch Processing")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 8)
+
+                    TemplateButton(
+                        title: "Batch Folder",
+                        description: "Process all images in a folder with same prompt",
+                        icon: "folder"
+                    ) {
+                        viewModel.loadBatchFolderTemplate()
+                        isPresented = false
+                    }
+
+                    TemplateButton(
+                        title: "Video Frames",
+                        description: "Stylize video frames for animation",
+                        icon: "film"
+                    ) {
+                        viewModel.loadVideoFramesTemplate()
+                        isPresented = false
+                    }
+
+                    TemplateButton(
+                        title: "Model Comparison",
+                        description: "Compare same prompt across multiple models",
+                        icon: "square.grid.2x2"
+                    ) {
+                        viewModel.loadModelComparisonTemplate()
+                        isPresented = false
+                    }
                 }
             }
-
-            Spacer()
 
             Button("Cancel") {
                 isPresented = false
@@ -951,7 +1278,7 @@ struct TemplatesSheet: View {
             .keyboardShortcut(.cancelAction)
         }
         .padding(24)
-        .frame(width: 400, height: 400)
+        .frame(width: 420, height: 520)
     }
 }
 

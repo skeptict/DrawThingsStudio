@@ -203,10 +203,21 @@ enum ValidationError: Error {
 // MARK: - Validation Warnings
 
 /// Warnings found during validation (non-fatal issues)
-enum ValidationWarning {
+enum ValidationWarning: CustomStringConvertible {
     case unclosedLoop
     case noPrompts
     case noConfig
+
+    var description: String {
+        switch self {
+        case .unclosedLoop:
+            return "Loop is not closed - add loopEnd instruction"
+        case .noPrompts:
+            return "Workflow has no prompt instructions"
+        case .noConfig:
+            return "Workflow has no config instruction - defaults will be used"
+        }
+    }
 }
 
 // MARK: - Error Descriptions

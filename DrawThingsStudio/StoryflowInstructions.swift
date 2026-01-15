@@ -32,11 +32,12 @@ struct DrawThingsConfig: Codable {
     var batchCount: Int?
     var batchSize: Int?
     var clipSkip: Int?
+    var shift: Float?
     var loras: [[String: Any]]?
 
     enum CodingKeys: String, CodingKey {
         case width, height, steps, guidanceScale, seed, model
-        case samplerName, numFrames, strength, batchCount, batchSize, clipSkip
+        case samplerName, numFrames, strength, batchCount, batchSize, clipSkip, shift
     }
 
     init(
@@ -52,6 +53,7 @@ struct DrawThingsConfig: Codable {
         batchCount: Int? = nil,
         batchSize: Int? = nil,
         clipSkip: Int? = nil,
+        shift: Float? = nil,
         loras: [[String: Any]]? = nil
     ) {
         self.width = width
@@ -66,6 +68,7 @@ struct DrawThingsConfig: Codable {
         self.batchCount = batchCount
         self.batchSize = batchSize
         self.clipSkip = clipSkip
+        self.shift = shift
         self.loras = loras
     }
 
@@ -83,6 +86,7 @@ struct DrawThingsConfig: Codable {
         if let batchCount = batchCount { dict["batchCount"] = batchCount }
         if let batchSize = batchSize { dict["batchSize"] = batchSize }
         if let clipSkip = clipSkip { dict["clipSkip"] = clipSkip }
+        if let shift = shift { dict["shift"] = shift }
         if let loras = loras { dict["loras"] = loras }
         return dict
     }

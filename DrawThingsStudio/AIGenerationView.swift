@@ -56,12 +56,21 @@ struct AIGenerationSheet: View {
 
 @MainActor
 class AIGenerationViewModel: ObservableObject {
-    // Connection
-    @Published var host: String = "localhost"
-    @Published var port: String = "11434"
+    // Connection - load from settings
+    @Published var host: String
+    @Published var port: String
     @Published var connectionStatus: LLMConnectionStatus = .disconnected
     @Published var availableModels: [LLMModel] = []
-    @Published var selectedModel: String = "llama3.2"
+    @Published var selectedModel: String
+
+    private let settings = AppSettings.shared
+
+    init() {
+        // Initialize from saved settings
+        self.host = settings.ollamaHost
+        self.port = String(settings.ollamaPort)
+        self.selectedModel = settings.ollamaDefaultModel
+    }
 
     // Generation state
     @Published var isGenerating: Bool = false
@@ -83,12 +92,17 @@ class AIGenerationViewModel: ObservableObject {
             ollamaClient = client
             promptGenerator = WorkflowPromptGenerator(ollamaClient: client)
 
+            // Save successful connection settings
+            settings.ollamaHost = host
+            settings.ollamaPort = Int(port) ?? 11434
+
             // Load models
             do {
                 availableModels = try await client.listModels()
                 if let firstModel = availableModels.first {
                     selectedModel = firstModel.name
                     client.defaultModel = firstModel.name
+                    settings.ollamaDefaultModel = firstModel.name
                 }
             } catch {
                 errorMessage = "Failed to load models: \(error.localizedDescription)"
