@@ -3,3 +3,6 @@
 !*.xcodeproj/project.pbxproj
 DerivedData/
 xcuserdata/
+# Swift Package Manager
+.build/
+.swiftpm/
