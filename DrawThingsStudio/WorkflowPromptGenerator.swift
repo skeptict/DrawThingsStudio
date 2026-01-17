@@ -62,7 +62,7 @@ class WorkflowPromptGenerator: ObservableObject {
         let response = try await llmClient.generateText(
             prompt: prompt,
             model: llmClient.defaultModel,
-            options: .creative
+            options: LLMGenerationOptions.creative
         )
 
         let scenes = parseMultilineResponse(response, expectedCount: sceneCount)
@@ -104,7 +104,7 @@ class WorkflowPromptGenerator: ObservableObject {
         let response = try await llmClient.generateText(
             prompt: prompt,
             model: llmClient.defaultModel,
-            options: .creative
+            options: LLMGenerationOptions.creative
         )
 
         var variations = parseMultilineResponse(response, expectedCount: variationCount)
@@ -202,7 +202,7 @@ class WorkflowPromptGenerator: ObservableObject {
         let response = try await llmClient.generateText(
             prompt: prompt,
             model: llmClient.defaultModel,
-            options: .creative
+            options: LLMGenerationOptions.creative
         )
 
         let enhanced = cleanPromptResponse(response)
@@ -284,7 +284,7 @@ class WorkflowPromptGenerator: ObservableObject {
         let response = try await llmClient.generateText(
             prompt: prompt,
             model: llmClient.defaultModel,
-            options: .creative
+            options: LLMGenerationOptions.creative
         )
 
         return response.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -327,7 +327,7 @@ class WorkflowPromptGenerator: ObservableObject {
         let response = try await llmClient.generateText(
             prompt: prompt,
             model: llmClient.defaultModel,
-            options: .precise
+            options: LLMGenerationOptions.precise
         )
 
         return response.trimmingCharacters(in: .whitespacesAndNewlines)

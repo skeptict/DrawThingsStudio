@@ -14,6 +14,9 @@ protocol LLMProvider {
     /// Generate text from a prompt
     func generateText(prompt: String) async throws -> String
 
+    /// Generate text with model and options
+    func generateText(prompt: String, model: String, options: LLMGenerationOptions) async throws -> String
+
     /// Generate text with streaming callback
     func generateTextStreaming(prompt: String, onToken: @escaping (String) -> Void) async throws -> String
 
