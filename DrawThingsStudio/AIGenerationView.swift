@@ -154,10 +154,10 @@ class AIGenerationViewModel: ObservableObject {
         config: DrawThingsConfig
     ) async throws -> [[String: Any]] {
         guard let generator = promptGenerator else {
-            throw LLMError.connectionFailed("Not connected to Ollama")
+            throw LLMError.connectionFailed("Not connected to LLM provider")
         }
 
-        ollamaClient?.defaultModel = selectedModel
+        llmClient?.defaultModel = selectedModel
         isGenerating = true
         generationProgress = "Generating story..."
 
@@ -178,10 +178,10 @@ class AIGenerationViewModel: ObservableObject {
         config: DrawThingsConfig
     ) async throws -> [[String: Any]] {
         guard let generator = promptGenerator else {
-            throw LLMError.connectionFailed("Not connected to Ollama")
+            throw LLMError.connectionFailed("Not connected to LLM provider")
         }
 
-        ollamaClient?.defaultModel = selectedModel
+        llmClient?.defaultModel = selectedModel
         isGenerating = true
         generationProgress = "Generating variations..."
 
@@ -202,10 +202,10 @@ class AIGenerationViewModel: ObservableObject {
         config: DrawThingsConfig
     ) async throws -> [[String: Any]] {
         guard let generator = promptGenerator else {
-            throw LLMError.connectionFailed("Not connected to Ollama")
+            throw LLMError.connectionFailed("Not connected to LLM provider")
         }
 
-        ollamaClient?.defaultModel = selectedModel
+        llmClient?.defaultModel = selectedModel
         isGenerating = true
         generationProgress = "Generating character workflow..."
 
@@ -221,10 +221,10 @@ class AIGenerationViewModel: ObservableObject {
 
     func enhancePrompt(concept: String, style: PromptStyle) async throws -> String {
         guard let generator = promptGenerator else {
-            throw LLMError.connectionFailed("Not connected to Ollama")
+            throw LLMError.connectionFailed("Not connected to LLM provider")
         }
 
-        ollamaClient?.defaultModel = selectedModel
+        llmClient?.defaultModel = selectedModel
         isGenerating = true
         generationProgress = "Enhancing prompt..."
 
