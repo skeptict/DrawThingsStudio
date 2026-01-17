@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
     @State private var selectedItem: SidebarItem? = .workflow
@@ -44,7 +45,10 @@ struct ContentView: View {
                     .allowsHitTesting(selectedItem == .workflow || selectedItem == nil)
 
                 if selectedItem == .library {
-                    SavedWorkflowsView()
+                    SavedWorkflowsView(
+                        viewModel: workflowViewModel,
+                        selectedItem: $selectedItem
+                    )
                 } else if selectedItem == .templates {
                     TemplatesLibraryView(
                         viewModel: workflowViewModel,
@@ -69,22 +73,555 @@ enum SidebarItem: String, Identifiable {
     var id: String { rawValue }
 }
 
-// MARK: - Placeholder Views
+// MARK: - Saved Workflows View
 
 struct SavedWorkflowsView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "folder")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary)
-            Text("Saved Workflows")
-                .font(.title2)
-            Text("Your saved workflows will appear here.\nUse the Save button in the toolbar to save workflows.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+    @ObservedObject var viewModel: WorkflowBuilderViewModel
+    @Binding var selectedItem: SidebarItem?
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \SavedWorkflow.modifiedAt, order: .reverse) private var workflows: [SavedWorkflow]
+
+    @State private var searchText = ""
+    @State private var selectedWorkflow: SavedWorkflow?
+    @State private var showingDeleteConfirmation = false
+    @State private var workflowToDelete: SavedWorkflow?
+    @State private var showingSaveSheet = false
+    @State private var showingRenameSheet = false
+
+    var filteredWorkflows: [SavedWorkflow] {
+        if searchText.isEmpty {
+            return workflows
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        return workflows.filter { workflow in
+            workflow.name.localizedCaseInsensitiveContains(searchText) ||
+            workflow.workflowDescription.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var favoriteWorkflows: [SavedWorkflow] {
+        filteredWorkflows.filter { $0.isFavorite }
+    }
+
+    var regularWorkflows: [SavedWorkflow] {
+        filteredWorkflows.filter { !$0.isFavorite }
+    }
+
+    var body: some View {
+        HSplitView {
+            // Left side: Workflow list
+            VStack(spacing: 0) {
+                // Search and actions bar
+                HStack {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                        TextField("Search workflows...", text: $searchText)
+                            .textFieldStyle(.plain)
+                    }
+                    .padding(8)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
+
+                    Button(action: { showingSaveSheet = true }) {
+                        Image(systemName: "plus")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Save current workflow to library")
+                    .disabled(viewModel.instructions.isEmpty)
+                }
+                .padding()
+
+                if workflows.isEmpty {
+                    // Empty state
+                    Spacer()
+                    VStack(spacing: 12) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 40))
+                            .foregroundColor(.secondary)
+                        Text("No Saved Workflows")
+                            .font(.headline)
+                        Text("Save workflows from the Workflow Builder\nto access them here.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+
+                        if !viewModel.instructions.isEmpty {
+                            Button("Save Current Workflow") {
+                                showingSaveSheet = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .padding(.top, 8)
+                        }
+                    }
+                    Spacer()
+                } else {
+                    // Workflow list
+                    List(selection: $selectedWorkflow) {
+                        if !favoriteWorkflows.isEmpty {
+                            Section("Favorites") {
+                                ForEach(favoriteWorkflows) { workflow in
+                                    WorkflowRowView(workflow: workflow)
+                                        .tag(workflow)
+                                        .contextMenu {
+                                            workflowContextMenu(for: workflow)
+                                        }
+                                }
+                            }
+                        }
+
+                        Section(favoriteWorkflows.isEmpty ? "All Workflows" : "Other Workflows") {
+                            ForEach(regularWorkflows) { workflow in
+                                WorkflowRowView(workflow: workflow)
+                                    .tag(workflow)
+                                    .contextMenu {
+                                        workflowContextMenu(for: workflow)
+                                    }
+                            }
+                        }
+                    }
+                    .listStyle(.sidebar)
+                }
+            }
+            .frame(minWidth: 280, idealWidth: 320)
+
+            // Right side: Workflow details
+            WorkflowDetailPanel(
+                workflow: selectedWorkflow,
+                onLoad: { workflow in
+                    loadWorkflow(workflow)
+                },
+                onDuplicate: { workflow in
+                    duplicateWorkflow(workflow)
+                },
+                onDelete: { workflow in
+                    workflowToDelete = workflow
+                    showingDeleteConfirmation = true
+                },
+                onToggleFavorite: { workflow in
+                    toggleFavorite(workflow)
+                }
+            )
+            .frame(minWidth: 400)
+        }
+        .navigationTitle("Saved Workflows")
+        .sheet(isPresented: $showingSaveSheet) {
+            SaveWorkflowSheet(
+                viewModel: viewModel,
+                isPresented: $showingSaveSheet,
+                onSave: { name, description in
+                    saveCurrentWorkflow(name: name, description: description)
+                }
+            )
+        }
+        .sheet(isPresented: $showingRenameSheet) {
+            if let workflow = selectedWorkflow {
+                RenameWorkflowSheet(
+                    workflow: workflow,
+                    isPresented: $showingRenameSheet
+                )
+            }
+        }
+        .alert("Delete Workflow?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let workflow = workflowToDelete {
+                    deleteWorkflow(workflow)
+                }
+            }
+        } message: {
+            if let workflow = workflowToDelete {
+                Text("Are you sure you want to delete \"\(workflow.name)\"? This action cannot be undone.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func workflowContextMenu(for workflow: SavedWorkflow) -> some View {
+        Button(action: { loadWorkflow(workflow) }) {
+            Label("Open", systemImage: "doc")
+        }
+
+        Button(action: { toggleFavorite(workflow) }) {
+            Label(workflow.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                  systemImage: workflow.isFavorite ? "star.slash" : "star")
+        }
+
+        Divider()
+
+        Button(action: { duplicateWorkflow(workflow) }) {
+            Label("Duplicate", systemImage: "doc.on.doc")
+        }
+
+        Button(action: {
+            selectedWorkflow = workflow
+            showingRenameSheet = true
+        }) {
+            Label("Rename...", systemImage: "pencil")
+        }
+
+        Divider()
+
+        Button(role: .destructive, action: {
+            workflowToDelete = workflow
+            showingDeleteConfirmation = true
+        }) {
+            Label("Delete", systemImage: "trash")
+        }
+    }
+
+    private func loadWorkflow(_ workflow: SavedWorkflow) {
+        guard let jsonString = workflow.jsonString,
+              let data = jsonString.data(using: .utf8),
+              let instructions = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return
+        }
+
+        viewModel.clearAllInstructions()
+        for dict in instructions {
+            if let type = viewModel.parseInstructionDict(dict) {
+                viewModel.addInstruction(type)
+            }
+        }
+        viewModel.workflowName = workflow.name
+        viewModel.hasUnsavedChanges = false
+        selectedItem = .workflow
+    }
+
+    private func toggleFavorite(_ workflow: SavedWorkflow) {
+        workflow.isFavorite.toggle()
+        workflow.modifiedAt = Date()
+    }
+
+    private func duplicateWorkflow(_ workflow: SavedWorkflow) {
+        let newWorkflow = SavedWorkflow(
+            name: "\(workflow.name) Copy",
+            description: workflow.workflowDescription,
+            jsonData: workflow.jsonData,
+            instructionCount: workflow.instructionCount,
+            instructionPreview: workflow.instructionPreview
+        )
+        modelContext.insert(newWorkflow)
+    }
+
+    private func deleteWorkflow(_ workflow: SavedWorkflow) {
+        if selectedWorkflow?.id == workflow.id {
+            selectedWorkflow = nil
+        }
+        modelContext.delete(workflow)
+    }
+
+    private func saveCurrentWorkflow(name: String, description: String) {
+        let dicts = viewModel.getInstructionDicts()
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: dicts, options: [.prettyPrinted]) else {
+            return
+        }
+
+        let preview = viewModel.instructions.prefix(3).map { instruction in
+            instruction.type.title
+        }.joined(separator: ", ")
+
+        let workflow = SavedWorkflow(
+            name: name,
+            description: description,
+            jsonData: jsonData,
+            instructionCount: viewModel.instructions.count,
+            instructionPreview: preview.isEmpty ? "Empty workflow" : preview
+        )
+
+        modelContext.insert(workflow)
+        viewModel.workflowName = name
+        viewModel.hasUnsavedChanges = false
+    }
+}
+
+// MARK: - Workflow Row View
+
+struct WorkflowRowView: View {
+    let workflow: SavedWorkflow
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: workflow.isFavorite ? "star.fill" : "doc.text")
+                .foregroundColor(workflow.isFavorite ? .yellow : .accentColor)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(workflow.name)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+
+                Text("\(workflow.instructionCount) instructions")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Workflow Detail Panel
+
+struct WorkflowDetailPanel: View {
+    let workflow: SavedWorkflow?
+    let onLoad: (SavedWorkflow) -> Void
+    let onDuplicate: (SavedWorkflow) -> Void
+    let onDelete: (SavedWorkflow) -> Void
+    let onToggleFavorite: (SavedWorkflow) -> Void
+
+    var body: some View {
+        if let workflow = workflow {
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "doc.text.fill")
+                            .font(.system(size: 36))
+                            .foregroundColor(.accentColor)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(workflow.name)
+                                .font(.title2)
+                                .fontWeight(.semibold)
+
+                            Text("\(workflow.instructionCount) instructions")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button(action: { onToggleFavorite(workflow) }) {
+                            Image(systemName: workflow.isFavorite ? "star.fill" : "star")
+                                .font(.title2)
+                                .foregroundColor(workflow.isFavorite ? .yellow : .secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(24)
+
+                Divider()
+
+                // Details
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        if !workflow.workflowDescription.isEmpty {
+                            DetailSection(title: "Description") {
+                                Text(workflow.workflowDescription)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        DetailSection(title: "Preview") {
+                            Text(workflow.instructionPreview)
+                                .font(.system(.body, design: .monospaced))
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(NSColor.controlBackgroundColor))
+                                .cornerRadius(8)
+                        }
+
+                        DetailSection(title: "Details") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Created:")
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Text(workflow.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                }
+
+                                HStack {
+                                    Text("Modified:")
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Text(workflow.modifiedAt.formatted(date: .abbreviated, time: .shortened))
+                                }
+
+                                if let category = workflow.category {
+                                    HStack {
+                                        Text("Category:")
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                        Text(category)
+                                    }
+                                }
+                            }
+                        }
+
+                        // JSON Preview
+                        DetailSection(title: "JSON") {
+                            if let json = workflow.jsonString {
+                                Text(String(json.prefix(500)) + (json.count > 500 ? "..." : ""))
+                                    .font(.system(.caption, design: .monospaced))
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .cornerRadius(8)
+                            }
+                        }
+                    }
+                    .padding(24)
+                }
+
+                Divider()
+
+                // Actions
+                HStack(spacing: 12) {
+                    Button(action: { onDuplicate(workflow) }) {
+                        Label("Duplicate", systemImage: "doc.on.doc")
+                    }
+
+                    Button(role: .destructive, action: { onDelete(workflow) }) {
+                        Label("Delete", systemImage: "trash")
+                    }
+
+                    Spacer()
+
+                    Button(action: { onLoad(workflow) }) {
+                        Label("Open Workflow", systemImage: "doc")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding()
+            }
+        } else {
+            // Empty state
+            VStack(spacing: 16) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 48))
+                    .foregroundColor(.secondary)
+                Text("Select a Workflow")
+                    .font(.title2)
+                Text("Choose a workflow from the list to view details.")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+// MARK: - Save Workflow Sheet
+
+struct SaveWorkflowSheet: View {
+    @ObservedObject var viewModel: WorkflowBuilderViewModel
+    @Binding var isPresented: Bool
+    let onSave: (String, String) -> Void
+
+    @State private var name: String = ""
+    @State private var description: String = ""
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Save Workflow to Library")
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Name")
+                        .font(.headline)
+                    TextField("Workflow name", text: $name)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Description (optional)")
+                        .font(.headline)
+                    TextField("Brief description of this workflow", text: $description)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Preview")
+                        .font(.headline)
+                    Text("\(viewModel.instructions.count) instructions")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Save") {
+                    onSave(name.isEmpty ? "Untitled Workflow" : name, description)
+                    isPresented = false
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 400)
+        .onAppear {
+            name = viewModel.workflowName
+        }
+    }
+}
+
+// MARK: - Rename Workflow Sheet
+
+struct RenameWorkflowSheet: View {
+    let workflow: SavedWorkflow
+    @Binding var isPresented: Bool
+
+    @State private var name: String = ""
+    @State private var description: String = ""
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Rename Workflow")
+                .font(.title2)
+                .fontWeight(.semibold)
+
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Name")
+                        .font(.headline)
+                    TextField("Workflow name", text: $name)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Description")
+                        .font(.headline)
+                    TextField("Brief description", text: $description)
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+
+            HStack {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Save") {
+                    workflow.name = name.isEmpty ? "Untitled Workflow" : name
+                    workflow.workflowDescription = description
+                    workflow.modifiedAt = Date()
+                    isPresented = false
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 400)
+        .onAppear {
+            name = workflow.name
+            description = workflow.workflowDescription
+        }
     }
 }
 

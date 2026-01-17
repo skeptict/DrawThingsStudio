@@ -6,14 +6,17 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// Main view for building StoryFlow workflows
 struct WorkflowBuilderView: View {
     @ObservedObject var viewModel: WorkflowBuilderViewModel
+    @Environment(\.modelContext) private var modelContext
     @State private var showJSONPreview = false
     @State private var showAddInstructionSheet = false
     @State private var showTemplatesSheet = false
     @State private var showAIGeneration = false
+    @State private var showSaveToLibrary = false
 
     init(viewModel: WorkflowBuilderViewModel? = nil) {
         self.viewModel = viewModel ?? WorkflowBuilderViewModel()
@@ -63,6 +66,13 @@ struct WorkflowBuilderView: View {
                 Divider()
 
                 Button {
+                    showSaveToLibrary = true
+                } label: {
+                    Label("Save to Library", systemImage: "tray.and.arrow.down")
+                }
+                .disabled(viewModel.instructions.isEmpty)
+
+                Button {
                     showJSONPreview = true
                 } label: {
                     Label("Preview", systemImage: "eye")
@@ -104,6 +114,13 @@ struct WorkflowBuilderView: View {
         }
         .sheet(isPresented: $showTemplatesSheet) {
             TemplatesSheet(viewModel: viewModel, isPresented: $showTemplatesSheet)
+        }
+        .sheet(isPresented: $showSaveToLibrary) {
+            SaveToLibrarySheet(
+                viewModel: viewModel,
+                modelContext: modelContext,
+                isPresented: $showSaveToLibrary
+            )
         }
         .alert("Error", isPresented: .init(
             get: { viewModel.errorMessage != nil },
@@ -1335,5 +1352,141 @@ struct TemplateButton: View {
             .cornerRadius(8)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Save to Library Sheet
+
+struct SaveToLibrarySheet: View {
+    @ObservedObject var viewModel: WorkflowBuilderViewModel
+    var modelContext: ModelContext
+    @Binding var isPresented: Bool
+
+    @State private var name: String = ""
+    @State private var description: String = ""
+    @State private var showSuccess = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Header
+            HStack {
+                Image(systemName: "tray.and.arrow.down.fill")
+                    .font(.title)
+                    .foregroundColor(.accentColor)
+                Text("Save to Library")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+            }
+
+            // Form
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Workflow Name")
+                        .font(.headline)
+                    TextField("Enter a name for this workflow", text: $name)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Description (optional)")
+                        .font(.headline)
+                    TextField("Brief description of what this workflow does", text: $description)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                // Summary
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Summary")
+                        .font(.headline)
+
+                    HStack {
+                        Label("\(viewModel.instructions.count) instructions", systemImage: "list.bullet")
+                        Spacer()
+                    }
+                    .foregroundColor(.secondary)
+                    .font(.subheadline)
+
+                    // First few instructions preview
+                    if !viewModel.instructions.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(viewModel.instructions.prefix(3)) { instruction in
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(Color.accentColor)
+                                        .frame(width: 6, height: 6)
+                                    Text(instruction.type.title)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            if viewModel.instructions.count > 3 {
+                                Text("... and \(viewModel.instructions.count - 3) more")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.leading, 12)
+                            }
+                        }
+                        .padding(12)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(8)
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Actions
+            HStack {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button(action: saveWorkflow) {
+                    Label("Save to Library", systemImage: "checkmark.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 450, height: 420)
+        .onAppear {
+            name = viewModel.workflowName
+        }
+        .alert("Saved!", isPresented: $showSuccess) {
+            Button("OK") {
+                isPresented = false
+            }
+        } message: {
+            Text("Workflow saved to library successfully.")
+        }
+    }
+
+    private func saveWorkflow() {
+        let dicts = viewModel.getInstructionDicts()
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: dicts, options: [.prettyPrinted]) else {
+            return
+        }
+
+        let preview = viewModel.instructions.prefix(3).map { instruction in
+            instruction.type.title
+        }.joined(separator: ", ")
+
+        let workflow = SavedWorkflow(
+            name: name.trimmingCharacters(in: .whitespaces),
+            description: description,
+            jsonData: jsonData,
+            instructionCount: viewModel.instructions.count,
+            instructionPreview: preview.isEmpty ? "Empty workflow" : preview
+        )
+
+        modelContext.insert(workflow)
+        viewModel.workflowName = name
+        viewModel.hasUnsavedChanges = false
+        showSuccess = true
     }
 }

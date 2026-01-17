@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 // MARK: - Focused Values
 
@@ -24,10 +25,26 @@ extension FocusedValues {
 
 @main
 struct DrawThingsStudioApp: App {
+    var sharedModelContainer: ModelContainer = {
+        let schema = Schema([
+            SavedWorkflow.self,
+            GeneratedImage.self,
+            PromptTemplate.self
+        ])
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+
+        do {
+            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+        } catch {
+            fatalError("Could not create ModelContainer: \(error)")
+        }
+    }()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(sharedModelContainer)
         .commands {
             WorkflowCommands()
         }

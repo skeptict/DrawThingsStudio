@@ -265,7 +265,7 @@ class WorkflowBuilderViewModel: ObservableObject {
     }
 
     /// Parse instruction dictionary to InstructionType
-    private func parseInstructionDict(_ dict: [String: Any]) -> InstructionType? {
+    func parseInstructionDict(_ dict: [String: Any]) -> InstructionType? {
         guard let key = dict.keys.first else { return nil }
 
         switch key {
