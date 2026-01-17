@@ -60,6 +60,11 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
         OpenAICompatibleClient(providerType: .lmStudio, host: host, port: port)
     }
 
+    /// Convenience initializer for Jan
+    static func jan(host: String = "localhost", port: Int = 1337) -> OpenAICompatibleClient {
+        OpenAICompatibleClient(providerType: .jan, host: host, port: port)
+    }
+
     /// Convenience initializer for Msty Studio
     static func mstyStudio(host: String = "localhost", port: Int = 10000) -> OpenAICompatibleClient {
         OpenAICompatibleClient(providerType: .mstyStudio, host: host, port: port)

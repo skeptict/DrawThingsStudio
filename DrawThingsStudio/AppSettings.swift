@@ -43,6 +43,14 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(lmStudioPort, forKey: "lmstudio.port") }
     }
 
+    // Jan Settings
+    @Published var janHost: String {
+        didSet { defaults.set(janHost, forKey: "jan.host") }
+    }
+    @Published var janPort: Int {
+        didSet { defaults.set(janPort, forKey: "jan.port") }
+    }
+
     // Msty Studio Settings
     @Published var mstyStudioHost: String {
         didSet { defaults.set(mstyStudioHost, forKey: "mstystudio.host") }
@@ -105,6 +113,10 @@ final class AppSettings: ObservableObject {
         self.lmStudioHost = defaults.string(forKey: "lmstudio.host") ?? "localhost"
         self.lmStudioPort = defaults.integer(forKey: "lmstudio.port") != 0 ? defaults.integer(forKey: "lmstudio.port") : 1234
 
+        // Jan
+        self.janHost = defaults.string(forKey: "jan.host") ?? "localhost"
+        self.janPort = defaults.integer(forKey: "jan.port") != 0 ? defaults.integer(forKey: "jan.port") : 1337
+
         // Msty Studio
         self.mstyStudioHost = defaults.string(forKey: "mstystudio.host") ?? "localhost"
         self.mstyStudioPort = defaults.integer(forKey: "mstystudio.port") != 0 ? defaults.integer(forKey: "mstystudio.port") : 10000
@@ -158,6 +170,12 @@ final class AppSettings: ObservableObject {
                 host: lmStudioHost,
                 port: lmStudioPort
             )
+        case .jan:
+            return OpenAICompatibleClient(
+                providerType: .jan,
+                host: janHost,
+                port: janPort
+            )
         case .mstyStudio:
             return OpenAICompatibleClient(
                 providerType: .mstyStudio,
@@ -179,6 +197,9 @@ final class AppSettings: ObservableObject {
 
         lmStudioHost = "localhost"
         lmStudioPort = 1234
+
+        janHost = "localhost"
+        janPort = 1337
 
         mstyStudioHost = "localhost"
         mstyStudioPort = 10000
@@ -268,15 +289,29 @@ struct SettingsView: View {
                 }
             }
 
+            if settings.providerType == .jan {
+                Section("Jan Settings") {
+                    TextField("Host", text: $settings.janHost)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Port", value: $settings.janPort, format: .number)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("Jan uses OpenAI-compatible API on port 1337 by default.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
             if settings.providerType == .mstyStudio {
-                Section("Msty Studio Settings") {
+                Section("Msty Settings") {
                     TextField("Host", text: $settings.mstyStudioHost)
                         .textFieldStyle(.roundedBorder)
 
                     TextField("Port", value: $settings.mstyStudioPort, format: .number)
                         .textFieldStyle(.roundedBorder)
 
-                    Text("Msty Studio uses OpenAI-compatible API on port 10000 by default.")
+                    Text("Msty uses OpenAI-compatible API on port 10000 by default.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

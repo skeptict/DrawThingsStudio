@@ -187,6 +187,7 @@ enum LLMError: LocalizedError {
 enum LLMProviderType: String, CaseIterable, Identifiable {
     case ollama
     case lmStudio
+    case jan
     case mstyStudio
 
     var id: String { rawValue }
@@ -195,7 +196,8 @@ enum LLMProviderType: String, CaseIterable, Identifiable {
         switch self {
         case .ollama: return "Ollama"
         case .lmStudio: return "LM Studio"
-        case .mstyStudio: return "Msty Studio"
+        case .jan: return "Jan"
+        case .mstyStudio: return "Msty"
         }
     }
 
@@ -203,6 +205,7 @@ enum LLMProviderType: String, CaseIterable, Identifiable {
         switch self {
         case .ollama: return 11434
         case .lmStudio: return 1234
+        case .jan: return 1337
         case .mstyStudio: return 10000
         }
     }
@@ -211,7 +214,16 @@ enum LLMProviderType: String, CaseIterable, Identifiable {
         switch self {
         case .ollama: return "server.rack"
         case .lmStudio: return "desktopcomputer"
+        case .jan: return "bubble.left.and.bubble.right"
         case .mstyStudio: return "sparkle"
+        }
+    }
+
+    /// Whether this provider uses OpenAI-compatible API
+    var isOpenAICompatible: Bool {
+        switch self {
+        case .ollama: return false
+        case .lmStudio, .jan, .mstyStudio: return true
         }
     }
 }

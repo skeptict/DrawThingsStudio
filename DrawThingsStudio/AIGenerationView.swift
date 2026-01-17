@@ -80,6 +80,10 @@ class AIGenerationViewModel: ObservableObject {
             self.host = AppSettings.shared.lmStudioHost
             self.port = String(AppSettings.shared.lmStudioPort)
             self.selectedModel = "default"
+        case .jan:
+            self.host = AppSettings.shared.janHost
+            self.port = String(AppSettings.shared.janPort)
+            self.selectedModel = "default"
         case .mstyStudio:
             self.host = AppSettings.shared.mstyStudioHost
             self.port = String(AppSettings.shared.mstyStudioPort)
@@ -111,6 +115,10 @@ class AIGenerationViewModel: ObservableObject {
             host = settings.lmStudioHost
             port = String(settings.lmStudioPort)
             client = OpenAICompatibleClient(providerType: .lmStudio, host: host, port: Int(port) ?? 1234)
+        case .jan:
+            host = settings.janHost
+            port = String(settings.janPort)
+            client = OpenAICompatibleClient(providerType: .jan, host: host, port: Int(port) ?? 1337)
         case .mstyStudio:
             host = settings.mstyStudioHost
             port = String(settings.mstyStudioPort)
