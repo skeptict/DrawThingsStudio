@@ -15,8 +15,13 @@ final class AppSettings: ObservableObject {
 
     private let defaults = UserDefaults.standard
 
-    // MARK: - Ollama Settings
+    // MARK: - LLM Provider Settings
 
+    @Published var selectedProvider: String {
+        didSet { defaults.set(selectedProvider, forKey: "llm.provider") }
+    }
+
+    // Ollama Settings
     @Published var ollamaHost: String {
         didSet { defaults.set(ollamaHost, forKey: "ollama.host") }
     }
@@ -28,6 +33,22 @@ final class AppSettings: ObservableObject {
     }
     @Published var ollamaAutoConnect: Bool {
         didSet { defaults.set(ollamaAutoConnect, forKey: "ollama.autoConnect") }
+    }
+
+    // LM Studio Settings
+    @Published var lmStudioHost: String {
+        didSet { defaults.set(lmStudioHost, forKey: "lmstudio.host") }
+    }
+    @Published var lmStudioPort: Int {
+        didSet { defaults.set(lmStudioPort, forKey: "lmstudio.port") }
+    }
+
+    // Msty Studio Settings
+    @Published var mstyStudioHost: String {
+        didSet { defaults.set(mstyStudioHost, forKey: "mstystudio.host") }
+    }
+    @Published var mstyStudioPort: Int {
+        didSet { defaults.set(mstyStudioPort, forKey: "mstystudio.port") }
     }
 
     // MARK: - Default Generation Settings
@@ -70,10 +91,23 @@ final class AppSettings: ObservableObject {
 
     init() {
         // Load from defaults or use default values
+
+        // Provider selection
+        self.selectedProvider = defaults.string(forKey: "llm.provider") ?? LLMProviderType.ollama.rawValue
+
+        // Ollama
         self.ollamaHost = defaults.string(forKey: "ollama.host") ?? "localhost"
         self.ollamaPort = defaults.integer(forKey: "ollama.port") != 0 ? defaults.integer(forKey: "ollama.port") : 11434
         self.ollamaDefaultModel = defaults.string(forKey: "ollama.defaultModel") ?? "llama3.2"
         self.ollamaAutoConnect = defaults.object(forKey: "ollama.autoConnect") as? Bool ?? true
+
+        // LM Studio
+        self.lmStudioHost = defaults.string(forKey: "lmstudio.host") ?? "localhost"
+        self.lmStudioPort = defaults.integer(forKey: "lmstudio.port") != 0 ? defaults.integer(forKey: "lmstudio.port") : 1234
+
+        // Msty Studio
+        self.mstyStudioHost = defaults.string(forKey: "mstystudio.host") ?? "localhost"
+        self.mstyStudioPort = defaults.integer(forKey: "mstystudio.port") != 0 ? defaults.integer(forKey: "mstystudio.port") : 10000
 
         self.defaultWidth = defaults.integer(forKey: "defaults.width") != 0 ? defaults.integer(forKey: "defaults.width") : 1024
         self.defaultHeight = defaults.integer(forKey: "defaults.height") != 0 ? defaults.integer(forKey: "defaults.height") : 1024
@@ -105,13 +139,49 @@ final class AppSettings: ObservableObject {
         PromptStyle(rawValue: defaultStyle) ?? .creative
     }
 
+    var providerType: LLMProviderType {
+        LLMProviderType(rawValue: selectedProvider) ?? .ollama
+    }
+
+    /// Creates an LLM client based on current settings
+    func createLLMClient() -> any LLMProvider {
+        switch providerType {
+        case .ollama:
+            return OllamaClient(
+                host: ollamaHost,
+                port: ollamaPort,
+                defaultModel: ollamaDefaultModel
+            )
+        case .lmStudio:
+            return OpenAICompatibleClient(
+                providerType: .lmStudio,
+                host: lmStudioHost,
+                port: lmStudioPort
+            )
+        case .mstyStudio:
+            return OpenAICompatibleClient(
+                providerType: .mstyStudio,
+                host: mstyStudioHost,
+                port: mstyStudioPort
+            )
+        }
+    }
+
     // MARK: - Methods
 
     func resetToDefaults() {
+        selectedProvider = LLMProviderType.ollama.rawValue
+
         ollamaHost = "localhost"
         ollamaPort = 11434
         ollamaDefaultModel = "llama3.2"
         ollamaAutoConnect = true
+
+        lmStudioHost = "localhost"
+        lmStudioPort = 1234
+
+        mstyStudioHost = "localhost"
+        mstyStudioPort = 10000
 
         defaultWidth = 1024
         defaultHeight = 1024
@@ -136,18 +206,18 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            // Ollama Section
-            Section("Ollama Connection") {
-                TextField("Host", text: $settings.ollamaHost)
-                    .textFieldStyle(.roundedBorder)
-
-                TextField("Port", value: $settings.ollamaPort, format: .number)
-                    .textFieldStyle(.roundedBorder)
-
-                TextField("Default Model", text: $settings.ollamaDefaultModel)
-                    .textFieldStyle(.roundedBorder)
-
-                Toggle("Auto-connect on launch", isOn: $settings.ollamaAutoConnect)
+            // Provider Selection
+            Section("LLM Provider") {
+                Picker("Provider", selection: $settings.selectedProvider) {
+                    ForEach(LLMProviderType.allCases) { provider in
+                        Label(provider.displayName, systemImage: provider.icon)
+                            .tag(provider.rawValue)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                .onChange(of: settings.selectedProvider) { _, _ in
+                    connectionResult = nil
+                }
 
                 HStack {
                     Button("Test Connection") {
@@ -165,6 +235,50 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundColor(result.contains("Success") ? .green : .red)
                     }
+                }
+            }
+
+            // Provider-specific settings
+            if settings.providerType == .ollama {
+                Section("Ollama Settings") {
+                    TextField("Host", text: $settings.ollamaHost)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Port", value: $settings.ollamaPort, format: .number)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Default Model", text: $settings.ollamaDefaultModel)
+                        .textFieldStyle(.roundedBorder)
+
+                    Toggle("Auto-connect on launch", isOn: $settings.ollamaAutoConnect)
+                }
+            }
+
+            if settings.providerType == .lmStudio {
+                Section("LM Studio Settings") {
+                    TextField("Host", text: $settings.lmStudioHost)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Port", value: $settings.lmStudioPort, format: .number)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("LM Studio uses OpenAI-compatible API on port 1234 by default.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if settings.providerType == .mstyStudio {
+                Section("Msty Studio Settings") {
+                    TextField("Host", text: $settings.mstyStudioHost)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("Port", value: $settings.mstyStudioPort, format: .number)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("Msty Studio uses OpenAI-compatible API on port 10000 by default.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
 
@@ -249,17 +363,13 @@ struct SettingsView: View {
         connectionResult = nil
 
         Task {
-            let client = OllamaClient(
-                host: settings.ollamaHost,
-                port: settings.ollamaPort,
-                defaultModel: settings.ollamaDefaultModel
-            )
-
+            let client = settings.createLLMClient()
             let success = await client.checkConnection()
+            let providerName = settings.providerType.displayName
 
             await MainActor.run {
                 testingConnection = false
-                connectionResult = success ? "Success! Connected to Ollama" : "Failed to connect"
+                connectionResult = success ? "Success! Connected to \(providerName)" : "Failed to connect"
             }
         }
     }

@@ -1414,7 +1414,7 @@ struct SaveToLibrarySheet: View {
                                     Circle()
                                         .fill(Color.accentColor)
                                         .frame(width: 6, height: 6)
-                                    Text(instruction.type.title)
+                                    Text(instruction.title)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -1473,7 +1473,7 @@ struct SaveToLibrarySheet: View {
         }
 
         let preview = viewModel.instructions.prefix(3).map { instruction in
-            instruction.type.title
+            instruction.title
         }.joined(separator: ", ")
 
         let workflow = SavedWorkflow(

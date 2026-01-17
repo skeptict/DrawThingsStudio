@@ -317,7 +317,7 @@ struct SavedWorkflowsView: View {
         }
 
         let preview = viewModel.instructions.prefix(3).map { instruction in
-            instruction.type.title
+            instruction.title
         }.joined(separator: ", ")
 
         let workflow = SavedWorkflow(

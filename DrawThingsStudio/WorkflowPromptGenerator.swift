@@ -16,7 +16,7 @@ class WorkflowPromptGenerator: ObservableObject {
 
     private let logger = Logger(subsystem: "com.drawthingsstudio", category: "promptgen")
 
-    let ollamaClient: OllamaClient
+    let llmClient: any LLMProvider
 
     @Published var isGenerating: Bool = false
     @Published var currentProgress: String = ""
@@ -24,8 +24,13 @@ class WorkflowPromptGenerator: ObservableObject {
 
     // MARK: - Initialization
 
-    init(ollamaClient: OllamaClient) {
-        self.ollamaClient = ollamaClient
+    init(llmClient: any LLMProvider) {
+        self.llmClient = llmClient
+    }
+
+    /// Convenience initializer for backwards compatibility with OllamaClient
+    convenience init(ollamaClient: OllamaClient) {
+        self.init(llmClient: ollamaClient)
     }
 
     // MARK: - Story Scene Generation
@@ -54,9 +59,9 @@ class WorkflowPromptGenerator: ObservableObject {
         Output ONLY the prompts, one per line, no numbering, no explanations, no extra text.
         """
 
-        let response = try await ollamaClient.generateText(
+        let response = try await llmClient.generateText(
             prompt: prompt,
-            model: ollamaClient.defaultModel,
+            model: llmClient.defaultModel,
             options: .creative
         )
 
@@ -96,9 +101,9 @@ class WorkflowPromptGenerator: ObservableObject {
         Generate \(variationCount) variations now:
         """
 
-        let response = try await ollamaClient.generateText(
+        let response = try await llmClient.generateText(
             prompt: prompt,
-            model: ollamaClient.defaultModel,
+            model: llmClient.defaultModel,
             options: .creative
         )
 
@@ -155,9 +160,9 @@ class WorkflowPromptGenerator: ObservableObject {
         Output ONLY the character description, no explanations.
         """
 
-        let response = try await ollamaClient.generateText(
+        let response = try await llmClient.generateText(
             prompt: prompt,
-            model: ollamaClient.defaultModel,
+            model: llmClient.defaultModel,
             options: LLMGenerationOptions(temperature: 0.7, topP: 0.9, maxTokens: 300)
         )
 
@@ -194,9 +199,9 @@ class WorkflowPromptGenerator: ObservableObject {
         IMPORTANT: Output ONLY the prompt text itself. Do not include any introduction, explanation, or phrases like "Here is" or "The prompt is". Start directly with the image description.
         """
 
-        let response = try await ollamaClient.generateText(
+        let response = try await llmClient.generateText(
             prompt: prompt,
-            model: ollamaClient.defaultModel,
+            model: llmClient.defaultModel,
             options: .creative
         )
 
@@ -276,9 +281,9 @@ class WorkflowPromptGenerator: ObservableObject {
         Output ONLY the improved prompt, nothing else.
         """
 
-        let response = try await ollamaClient.generateText(
+        let response = try await llmClient.generateText(
             prompt: prompt,
-            model: ollamaClient.defaultModel,
+            model: llmClient.defaultModel,
             options: .creative
         )
 
@@ -319,9 +324,9 @@ class WorkflowPromptGenerator: ObservableObject {
         Output ONLY the negative prompt as a comma-separated list, nothing else.
         """
 
-        let response = try await ollamaClient.generateText(
+        let response = try await llmClient.generateText(
             prompt: prompt,
-            model: ollamaClient.defaultModel,
+            model: llmClient.defaultModel,
             options: .precise
         )
 

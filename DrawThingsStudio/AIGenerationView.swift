@@ -62,14 +62,29 @@ class AIGenerationViewModel: ObservableObject {
     @Published var connectionStatus: LLMConnectionStatus = .disconnected
     @Published var availableModels: [LLMModel] = []
     @Published var selectedModel: String
+    @Published var currentProvider: LLMProviderType
 
     private let settings = AppSettings.shared
 
     init() {
-        // Initialize from saved settings
-        self.host = settings.ollamaHost
-        self.port = String(settings.ollamaPort)
-        self.selectedModel = settings.ollamaDefaultModel
+        // Initialize from saved settings based on selected provider
+        let providerType = AppSettings.shared.providerType
+        self.currentProvider = providerType
+
+        switch providerType {
+        case .ollama:
+            self.host = AppSettings.shared.ollamaHost
+            self.port = String(AppSettings.shared.ollamaPort)
+            self.selectedModel = AppSettings.shared.ollamaDefaultModel
+        case .lmStudio:
+            self.host = AppSettings.shared.lmStudioHost
+            self.port = String(AppSettings.shared.lmStudioPort)
+            self.selectedModel = "default"
+        case .mstyStudio:
+            self.host = AppSettings.shared.mstyStudioHost
+            self.port = String(AppSettings.shared.mstyStudioPort)
+            self.selectedModel = "default"
+        }
     }
 
     // Generation state
@@ -77,43 +92,54 @@ class AIGenerationViewModel: ObservableObject {
     @Published var generationProgress: String = ""
     @Published var errorMessage: String?
 
-    // Ollama client and generator
-    private var ollamaClient: OllamaClient?
+    // LLM client and generator
+    private var llmClient: (any LLMProvider)?
     private var promptGenerator: WorkflowPromptGenerator?
 
     func checkConnection() async {
         connectionStatus = .connecting
+        currentProvider = settings.providerType
 
-        let client = OllamaClient(host: host, port: Int(port) ?? 11434, defaultModel: selectedModel)
+        // Create client based on provider type
+        let client: any LLMProvider
+        switch currentProvider {
+        case .ollama:
+            host = settings.ollamaHost
+            port = String(settings.ollamaPort)
+            client = OllamaClient(host: host, port: Int(port) ?? 11434, defaultModel: selectedModel)
+        case .lmStudio:
+            host = settings.lmStudioHost
+            port = String(settings.lmStudioPort)
+            client = OpenAICompatibleClient(providerType: .lmStudio, host: host, port: Int(port) ?? 1234)
+        case .mstyStudio:
+            host = settings.mstyStudioHost
+            port = String(settings.mstyStudioPort)
+            client = OpenAICompatibleClient(providerType: .mstyStudio, host: host, port: Int(port) ?? 10000)
+        }
+
         let connected = await client.checkConnection()
 
         if connected {
             connectionStatus = .connected
-            ollamaClient = client
-            promptGenerator = WorkflowPromptGenerator(ollamaClient: client)
-
-            // Save successful connection settings
-            settings.ollamaHost = host
-            settings.ollamaPort = Int(port) ?? 11434
+            llmClient = client
+            promptGenerator = WorkflowPromptGenerator(llmClient: client)
 
             // Load models
             do {
                 availableModels = try await client.listModels()
                 if let firstModel = availableModels.first {
                     selectedModel = firstModel.name
-                    client.defaultModel = firstModel.name
-                    settings.ollamaDefaultModel = firstModel.name
                 }
             } catch {
                 errorMessage = "Failed to load models: \(error.localizedDescription)"
             }
         } else {
-            connectionStatus = .error("Could not connect to Ollama")
+            connectionStatus = .error("Could not connect to \(currentProvider.displayName)")
         }
     }
 
     func disconnect() {
-        ollamaClient = nil
+        llmClient = nil
         promptGenerator = nil
         connectionStatus = .disconnected
         availableModels = []
