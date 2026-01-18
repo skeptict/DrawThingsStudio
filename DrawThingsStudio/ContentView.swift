@@ -27,9 +27,6 @@ struct ContentView: View {
 
                     Label("Templates", systemImage: "doc.on.doc")
                         .tag(SidebarItem.templates)
-
-                    Label("Model Configs", systemImage: "gearshape.2")
-                        .tag(SidebarItem.modelConfigs)
                 }
 
                 Section("Settings") {
@@ -57,8 +54,6 @@ struct ContentView: View {
                         viewModel: workflowViewModel,
                         selectedItem: $selectedItem
                     )
-                } else if selectedItem == .modelConfigs {
-                    ModelConfigsView()
                 } else if selectedItem == .settings {
                     SettingsView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -73,7 +68,6 @@ enum SidebarItem: String, Identifiable {
     case workflow
     case library
     case templates
-    case modelConfigs
     case settings
 
     var id: String { rawValue }

@@ -813,6 +813,9 @@ struct NumberEditor: View {
 }
 
 struct ConfigEditor: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \ModelConfig.name) private var savedConfigs: [ModelConfig]
+
     let config: DrawThingsConfig
     let onChange: (DrawThingsConfig) -> Void
 
@@ -826,8 +829,43 @@ struct ConfigEditor: View {
     @State private var editSampler: String = ""
     @State private var editShift: Float = 0
 
+    @State private var selectedPresetID: UUID?
+    @State private var showingSaveSheet = false
+    @State private var showingManageSheet = false
+    @State private var hasInitialized = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Preset selector
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Config Preset")
+                    .font(.headline)
+
+                HStack {
+                    Picker("Preset", selection: $selectedPresetID) {
+                        Text("Custom").tag(nil as UUID?)
+                        Divider()
+                        ForEach(savedConfigs) { preset in
+                            Text(preset.name).tag(preset.id as UUID?)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
+
+                    Button(action: { showingSaveSheet = true }) {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                    .help("Save current settings as preset")
+
+                    Button(action: { showingManageSheet = true }) {
+                        Image(systemName: "gearshape")
+                    }
+                    .help("Manage presets")
+                }
+            }
+
+            Divider()
+
             Text("Generation Settings")
                 .font(.headline)
 
@@ -900,7 +938,43 @@ struct ConfigEditor: View {
             }
             .onChange(of: editSeed) { _, _ in updateConfig() }
         }
-        .onAppear { loadConfig() }
+        .onAppear {
+            initializeBuiltInPresetsIfNeeded()
+            loadConfig()
+        }
+        .onChange(of: selectedPresetID) { _, newValue in
+            if let presetID = newValue,
+               let preset = savedConfigs.first(where: { $0.id == presetID }) {
+                loadFromPreset(preset)
+            }
+        }
+        .sheet(isPresented: $showingSaveSheet) {
+            SaveConfigPresetSheet(
+                width: editWidth,
+                height: editHeight,
+                steps: editSteps,
+                guidanceScale: editGuidanceScale,
+                samplerName: editSampler,
+                shift: editShift,
+                strength: editStrength
+            )
+        }
+        .sheet(isPresented: $showingManageSheet) {
+            ManageConfigPresetsSheet()
+        }
+    }
+
+    private func initializeBuiltInPresetsIfNeeded() {
+        guard !hasInitialized else { return }
+        hasInitialized = true
+
+        let builtInCount = savedConfigs.filter { $0.isBuiltIn }.count
+        if builtInCount == 0 {
+            for preset in BuiltInModelConfigs.all {
+                let config = BuiltInModelConfigs.createBuiltInConfig(from: preset)
+                modelContext.insert(config)
+            }
+        }
     }
 
     private func loadConfig() {
@@ -915,7 +989,23 @@ struct ConfigEditor: View {
         editShift = config.shift ?? 0
     }
 
+    private func loadFromPreset(_ preset: ModelConfig) {
+        editWidth = preset.width
+        editHeight = preset.height
+        editSteps = preset.steps
+        editGuidanceScale = preset.guidanceScale
+        editSampler = preset.samplerName
+        editShift = preset.shift ?? 0
+        editStrength = preset.strength ?? 1.0
+        updateConfig()
+    }
+
     private func updateConfig() {
+        // When user manually edits, clear the preset selection
+        if hasInitialized {
+            selectedPresetID = nil
+        }
+
         let newConfig = DrawThingsConfig(
             width: editWidth,
             height: editHeight,
@@ -928,6 +1018,239 @@ struct ConfigEditor: View {
             shift: editShift > 0 ? editShift : nil
         )
         onChange(newConfig)
+    }
+}
+
+// MARK: - Save Config Preset Sheet
+
+struct SaveConfigPresetSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let width: Int
+    let height: Int
+    let steps: Int
+    let guidanceScale: Float
+    let samplerName: String
+    let shift: Float
+    let strength: Float
+
+    @State private var name = ""
+    @State private var modelType = "Custom"
+    @State private var description = ""
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Save Config Preset")
+                    .font(.headline)
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Save") { savePreset() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(name.isEmpty)
+            }
+            .padding()
+
+            Divider()
+
+            Form {
+                TextField("Preset Name", text: $name)
+                TextField("Model Type (e.g., SDXL, Flux)", text: $modelType)
+                TextField("Description (optional)", text: $description)
+
+                Section("Settings to Save") {
+                    LabeledContent("Dimensions", value: "\(width) x \(height)")
+                    LabeledContent("Steps", value: "\(steps)")
+                    LabeledContent("Guidance", value: String(format: "%.1f", guidanceScale))
+                    if !samplerName.isEmpty {
+                        LabeledContent("Sampler", value: samplerName)
+                    }
+                    if shift > 0 {
+                        LabeledContent("Shift", value: String(format: "%.1f", shift))
+                    }
+                    if strength < 1.0 {
+                        LabeledContent("Strength", value: String(format: "%.2f", strength))
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .padding()
+        }
+        .frame(width: 400, height: 350)
+    }
+
+    private func savePreset() {
+        let preset = ModelConfig(
+            name: name,
+            modelName: modelType,
+            description: description,
+            width: width,
+            height: height,
+            steps: steps,
+            guidanceScale: guidanceScale,
+            samplerName: samplerName,
+            shift: shift > 0 ? shift : nil,
+            strength: strength < 1.0 ? strength : nil,
+            isBuiltIn: false
+        )
+        modelContext.insert(preset)
+        dismiss()
+    }
+}
+
+// MARK: - Manage Config Presets Sheet
+
+struct ManageConfigPresetsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \ModelConfig.name) private var configs: [ModelConfig]
+
+    @State private var selectedConfig: ModelConfig?
+    @State private var editingName = ""
+    @State private var showingRenameAlert = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Manage Presets")
+                    .font(.headline)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding()
+
+            Divider()
+
+            HSplitView {
+                // List
+                List(selection: $selectedConfig) {
+                    Section("Built-in") {
+                        ForEach(configs.filter { $0.isBuiltIn }) { config in
+                            HStack {
+                                Text(config.name)
+                                Spacer()
+                                Text(config.modelName)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .tag(config)
+                        }
+                    }
+
+                    Section("Custom") {
+                        ForEach(configs.filter { !$0.isBuiltIn }) { config in
+                            HStack {
+                                Text(config.name)
+                                Spacer()
+                                Text(config.modelName)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .tag(config)
+                            .contextMenu {
+                                Button("Rename") {
+                                    editingName = config.name
+                                    showingRenameAlert = true
+                                }
+                                Button("Delete", role: .destructive) {
+                                    modelContext.delete(config)
+                                }
+                            }
+                        }
+                        .onDelete { offsets in
+                            let customConfigs = configs.filter { !$0.isBuiltIn }
+                            for index in offsets {
+                                modelContext.delete(customConfigs[index])
+                            }
+                        }
+                    }
+                }
+                .listStyle(.inset)
+                .frame(minWidth: 200)
+
+                // Detail
+                if let config = selectedConfig {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(config.name)
+                            .font(.title3)
+                            .fontWeight(.semibold)
+
+                        Text(config.modelName)
+                            .foregroundColor(.secondary)
+
+                        if !config.configDescription.isEmpty {
+                            Text(config.configDescription)
+                                .font(.caption)
+                        }
+
+                        Divider()
+
+                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                            GridRow {
+                                Text("Dimensions:").foregroundColor(.secondary)
+                                Text("\(config.width) x \(config.height)")
+                            }
+                            GridRow {
+                                Text("Steps:").foregroundColor(.secondary)
+                                Text("\(config.steps)")
+                            }
+                            GridRow {
+                                Text("Guidance:").foregroundColor(.secondary)
+                                Text(String(format: "%.1f", config.guidanceScale))
+                            }
+                            GridRow {
+                                Text("Sampler:").foregroundColor(.secondary)
+                                Text(config.samplerName)
+                            }
+                            if let shift = config.shift {
+                                GridRow {
+                                    Text("Shift:").foregroundColor(.secondary)
+                                    Text(String(format: "%.1f", shift))
+                                }
+                            }
+                            if let strength = config.strength {
+                                GridRow {
+                                    Text("Strength:").foregroundColor(.secondary)
+                                    Text(String(format: "%.2f", strength))
+                                }
+                            }
+                        }
+
+                        Spacer()
+
+                        if !config.isBuiltIn {
+                            HStack {
+                                Button("Rename") {
+                                    editingName = config.name
+                                    showingRenameAlert = true
+                                }
+                                Button("Delete", role: .destructive) {
+                                    modelContext.delete(config)
+                                    selectedConfig = nil
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .frame(minWidth: 250)
+                } else {
+                    Text("Select a preset")
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
+        .frame(width: 550, height: 400)
+        .alert("Rename Preset", isPresented: $showingRenameAlert) {
+            TextField("Name", text: $editingName)
+            Button("Cancel", role: .cancel) { }
+            Button("Rename") {
+                selectedConfig?.name = editingName
+            }
+        }
     }
 }
 
