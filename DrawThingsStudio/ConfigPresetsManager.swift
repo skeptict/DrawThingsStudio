@@ -363,7 +363,10 @@ class ConfigPresetsManager {
 
     /// Open Finder at presets directory
     func revealPresetsInFinder() {
-        NSWorkspace.shared.selectFile(presetsFilePath.path, inFileViewerRootedAtPath: presetsDirectory.path)
+        // Ensure directory exists
+        try? fileManager.createDirectory(at: presetsDirectory, withIntermediateDirectories: true)
+        // Open the directory in Finder
+        NSWorkspace.shared.open(presetsDirectory)
     }
 }
 

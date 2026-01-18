@@ -832,15 +832,8 @@ struct ConfigEditor: View {
 
     @State private var selectedPresetID: UUID?
     @State private var showingSaveSheet = false
-    @State private var showingEditSheet = false
     @State private var showingManageSheet = false
     @State private var hasInitialized = false
-    @State private var isLoadingPreset = false
-
-    private var selectedPreset: ModelConfig? {
-        guard let id = selectedPresetID else { return nil }
-        return savedConfigs.first { $0.id == id }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -860,21 +853,15 @@ struct ConfigEditor: View {
                     .labelsHidden()
                     .frame(maxWidth: .infinity)
 
-                    Button(action: { showingEditSheet = true }) {
-                        Image(systemName: "pencil")
-                    }
-                    .help("Edit selected preset")
-                    .disabled(selectedPreset == nil || selectedPreset?.isBuiltIn == true)
-
                     Button(action: { showingSaveSheet = true }) {
-                        Image(systemName: "square.and.arrow.down")
+                        Image(systemName: "plus.circle")
                     }
                     .help("Save current settings as new preset")
 
                     Button(action: { showingManageSheet = true }) {
-                        Image(systemName: "list.bullet")
+                        Image(systemName: "slider.horizontal.3")
                     }
-                    .help("Manage all presets")
+                    .help("Manage presets (edit, delete, import, export)")
                 }
             }
 
@@ -973,14 +960,6 @@ struct ConfigEditor: View {
                 strength: editStrength
             )
         }
-        .sheet(isPresented: $showingEditSheet) {
-            if let preset = selectedPreset {
-                EditConfigPresetSheet(config: preset) {
-                    // Reload after edit
-                    loadFromPreset(preset)
-                }
-            }
-        }
         .sheet(isPresented: $showingManageSheet) {
             ManageConfigPresetsSheet()
         }
@@ -1012,7 +991,7 @@ struct ConfigEditor: View {
     }
 
     private func loadFromPreset(_ preset: ModelConfig) {
-        isLoadingPreset = true
+        let idToRestore = preset.id
         editWidth = preset.width
         editHeight = preset.height
         editSteps = preset.steps
@@ -1020,14 +999,31 @@ struct ConfigEditor: View {
         editSampler = preset.samplerName
         editShift = preset.shift ?? 0
         editStrength = preset.strength ?? 1.0
-        updateConfig()
-        isLoadingPreset = false
+
+        // Build config directly without triggering selectedPresetID = nil
+        let newConfig = DrawThingsConfig(
+            width: editWidth,
+            height: editHeight,
+            steps: editSteps,
+            guidanceScale: editGuidanceScale,
+            seed: editSeed == -1 ? nil : editSeed,
+            model: editModel.isEmpty ? nil : editModel,
+            samplerName: editSampler.isEmpty ? nil : editSampler,
+            strength: editStrength < 1.0 ? editStrength : nil,
+            shift: editShift > 0 ? editShift : nil
+        )
+        onChange(newConfig)
+
+        // Restore selection after a brief delay to let SwiftUI settle
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            selectedPresetID = idToRestore
+        }
     }
 
     private func updateConfig() {
         // When user manually edits, clear the preset selection
-        // But not when we're loading from a preset
-        if hasInitialized && !isLoadingPreset {
+        if hasInitialized {
             selectedPresetID = nil
         }
 
@@ -1475,6 +1471,14 @@ struct ManageConfigPresetsSheet: View {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
+
+            // Security-scoped URL access for sandboxed apps
+            guard url.startAccessingSecurityScopedResource() else {
+                importMessage = "Import failed: Cannot access file"
+                return
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+
             do {
                 let presets = try presetsManager.importPresets(from: url)
                 for preset in presets {
