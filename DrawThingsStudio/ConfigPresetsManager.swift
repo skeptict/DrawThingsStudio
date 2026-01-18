@@ -8,6 +8,7 @@
 import Foundation
 import SwiftData
 import OSLog
+import AppKit
 
 // MARK: - Draw Things Config Format
 
@@ -40,6 +41,34 @@ struct DrawThingsConfigData: Codable {
         case targetImageWidth, targetImageHeight, steps, guidanceScale
         case sampler, shift, strength, clipSkip, seed, model
         case batchCount, batchSize
+    }
+
+    init(
+        targetImageWidth: Int? = nil,
+        targetImageHeight: Int? = nil,
+        steps: Int? = nil,
+        guidanceScale: Double? = nil,
+        sampler: Int? = nil,
+        shift: Double? = nil,
+        strength: Double? = nil,
+        clipSkip: Int? = nil,
+        seed: Int? = nil,
+        model: String? = nil,
+        batchCount: Int? = nil,
+        batchSize: Int? = nil
+    ) {
+        self.targetImageWidth = targetImageWidth
+        self.targetImageHeight = targetImageHeight
+        self.steps = steps
+        self.guidanceScale = guidanceScale
+        self.sampler = sampler
+        self.shift = shift
+        self.strength = strength
+        self.clipSkip = clipSkip
+        self.seed = seed
+        self.model = model
+        self.batchCount = batchCount
+        self.batchSize = batchSize
     }
 
     init(from decoder: Decoder) throws {
@@ -94,6 +123,40 @@ struct StudioConfigPreset: Codable, Identifiable {
     var isBuiltIn: Bool
     var createdAt: Date
     var modifiedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        modelName: String,
+        description: String,
+        width: Int,
+        height: Int,
+        steps: Int,
+        guidanceScale: Float,
+        samplerName: String,
+        shift: Float? = nil,
+        clipSkip: Int? = nil,
+        strength: Float? = nil,
+        isBuiltIn: Bool,
+        createdAt: Date = Date(),
+        modifiedAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.modelName = modelName
+        self.description = description
+        self.width = width
+        self.height = height
+        self.steps = steps
+        self.guidanceScale = guidanceScale
+        self.samplerName = samplerName
+        self.shift = shift
+        self.clipSkip = clipSkip
+        self.strength = strength
+        self.isBuiltIn = isBuiltIn
+        self.createdAt = createdAt
+        self.modifiedAt = modifiedAt
+    }
 
     init(from modelConfig: ModelConfig) {
         self.id = modelConfig.id
