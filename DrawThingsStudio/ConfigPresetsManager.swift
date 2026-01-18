@@ -231,7 +231,7 @@ enum SamplerMapping {
 // MARK: - Config Presets Manager
 
 @MainActor
-class ConfigPresetsManager: ObservableObject {
+class ConfigPresetsManager {
     static let shared = ConfigPresetsManager()
 
     private let logger = Logger(subsystem: "com.drawthingsstudio", category: "presets")
