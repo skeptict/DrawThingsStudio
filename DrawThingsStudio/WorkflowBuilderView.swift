@@ -831,8 +831,14 @@ struct ConfigEditor: View {
 
     @State private var selectedPresetID: UUID?
     @State private var showingSaveSheet = false
+    @State private var showingEditSheet = false
     @State private var showingManageSheet = false
     @State private var hasInitialized = false
+
+    private var selectedPreset: ModelConfig? {
+        guard let id = selectedPresetID else { return nil }
+        return savedConfigs.first { $0.id == id }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -852,15 +858,21 @@ struct ConfigEditor: View {
                     .labelsHidden()
                     .frame(maxWidth: .infinity)
 
+                    Button(action: { showingEditSheet = true }) {
+                        Image(systemName: "pencil")
+                    }
+                    .help("Edit selected preset")
+                    .disabled(selectedPreset == nil || selectedPreset?.isBuiltIn == true)
+
                     Button(action: { showingSaveSheet = true }) {
                         Image(systemName: "square.and.arrow.down")
                     }
-                    .help("Save current settings as preset")
+                    .help("Save current settings as new preset")
 
                     Button(action: { showingManageSheet = true }) {
-                        Image(systemName: "gearshape")
+                        Image(systemName: "list.bullet")
                     }
-                    .help("Manage presets")
+                    .help("Manage all presets")
                 }
             }
 
@@ -958,6 +970,14 @@ struct ConfigEditor: View {
                 shift: editShift,
                 strength: editStrength
             )
+        }
+        .sheet(isPresented: $showingEditSheet) {
+            if let preset = selectedPreset {
+                EditConfigPresetSheet(config: preset) {
+                    // Reload after edit
+                    loadFromPreset(preset)
+                }
+            }
         }
         .sheet(isPresented: $showingManageSheet) {
             ManageConfigPresetsSheet()
@@ -1096,6 +1116,144 @@ struct SaveConfigPresetSheet: View {
             isBuiltIn: false
         )
         modelContext.insert(preset)
+        dismiss()
+    }
+}
+
+// MARK: - Edit Config Preset Sheet
+
+struct EditConfigPresetSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let config: ModelConfig
+    let onSave: () -> Void
+
+    @State private var name: String = ""
+    @State private var modelType: String = ""
+    @State private var description: String = ""
+    @State private var width: Int = 1024
+    @State private var height: Int = 1024
+    @State private var steps: Int = 30
+    @State private var guidanceScale: Float = 7.5
+    @State private var samplerName: String = ""
+    @State private var shift: Float = 0
+    @State private var strength: Float = 1.0
+    @State private var clipSkip: Int = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Edit Preset")
+                    .font(.headline)
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Save") { saveChanges() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(name.isEmpty)
+            }
+            .padding()
+
+            Divider()
+
+            Form {
+                Section("Preset Info") {
+                    TextField("Name", text: $name)
+                    TextField("Model Type", text: $modelType)
+                    TextField("Description", text: $description)
+                }
+
+                Section("Dimensions") {
+                    HStack {
+                        Text("Width")
+                        Spacer()
+                        TextField("", value: $width, format: .number)
+                            .frame(width: 80)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    HStack {
+                        Text("Height")
+                        Spacer()
+                        TextField("", value: $height, format: .number)
+                            .frame(width: 80)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+
+                Section("Generation") {
+                    HStack {
+                        Text("Steps")
+                        Spacer()
+                        TextField("", value: $steps, format: .number)
+                            .frame(width: 80)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    HStack {
+                        Text("Guidance Scale")
+                        Spacer()
+                        TextField("", value: $guidanceScale, format: .number)
+                            .frame(width: 80)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    TextField("Sampler", text: $samplerName)
+                }
+
+                Section("Optional") {
+                    HStack {
+                        Text("Shift (0 = not used)")
+                        Spacer()
+                        TextField("", value: $shift, format: .number)
+                            .frame(width: 80)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    HStack {
+                        Text("Strength (1.0 = not used)")
+                        Spacer()
+                        TextField("", value: $strength, format: .number)
+                            .frame(width: 80)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    HStack {
+                        Text("CLIP Skip (0 = not used)")
+                        Spacer()
+                        TextField("", value: $clipSkip, format: .number)
+                            .frame(width: 80)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+        }
+        .frame(width: 450, height: 500)
+        .onAppear {
+            name = config.name
+            modelType = config.modelName
+            description = config.configDescription
+            width = config.width
+            height = config.height
+            steps = config.steps
+            guidanceScale = config.guidanceScale
+            samplerName = config.samplerName
+            shift = config.shift ?? 0
+            strength = config.strength ?? 1.0
+            clipSkip = config.clipSkip ?? 0
+        }
+    }
+
+    private func saveChanges() {
+        config.name = name
+        config.modelName = modelType
+        config.configDescription = description
+        config.width = width
+        config.height = height
+        config.steps = steps
+        config.guidanceScale = guidanceScale
+        config.samplerName = samplerName
+        config.shift = shift > 0 ? shift : nil
+        config.strength = strength < 1.0 ? strength : nil
+        config.clipSkip = clipSkip > 0 ? clipSkip : nil
+        config.modifiedAt = Date()
+        onSave()
         dismiss()
     }
 }
