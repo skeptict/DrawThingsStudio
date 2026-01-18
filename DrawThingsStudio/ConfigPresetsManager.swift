@@ -333,21 +333,57 @@ class ConfigPresetsManager {
         return presets
     }
 
-    /// Auto-detect format and import
+    /// Auto-detect format and import from URL
     func importPresets(from url: URL) throws -> [StudioConfigPreset] {
         let data = try Data(contentsOf: url)
+        return try importPresetsFromData(data)
+    }
+
+    /// Auto-detect format and import from Data
+    func importPresetsFromData(_ data: Data) throws -> [StudioConfigPreset] {
 
         // Try our native format first
-        if let _ = try? JSONDecoder().decode([StudioConfigPreset].self, from: data) {
-            return try importNativePresets(from: url)
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let presets = try decoder.decode([StudioConfigPreset].self, from: data)
+            logger.info("Imported \(presets.count) native presets")
+            return presets
+        } catch {
+            logger.debug("Not native format: \(error.localizedDescription)")
         }
 
         // Try Draw Things format
-        if let _ = try? JSONDecoder().decode([DrawThingsConfigFile].self, from: data) {
-            return try importDrawThingsConfigs(from: url)
-        }
+        do {
+            let decoder = JSONDecoder()
+            let dtConfigs = try decoder.decode([DrawThingsConfigFile].self, from: data)
 
-        throw ConfigPresetsError.unknownFormat
+            let presets = dtConfigs.map { dt -> StudioConfigPreset in
+                StudioConfigPreset(
+                    id: UUID(),
+                    name: dt.name,
+                    modelName: "Imported",
+                    description: "Imported from Draw Things",
+                    width: dt.configuration.targetImageWidth ?? 1024,
+                    height: dt.configuration.targetImageHeight ?? 1024,
+                    steps: dt.configuration.steps ?? 30,
+                    guidanceScale: Float(dt.configuration.guidanceScale ?? 7.5),
+                    samplerName: SamplerMapping.name(for: dt.configuration.sampler ?? 2),
+                    shift: dt.configuration.shift.map { Float($0) },
+                    clipSkip: dt.configuration.clipSkip,
+                    strength: dt.configuration.strength.map { Float($0) },
+                    isBuiltIn: false,
+                    createdAt: Date(),
+                    modifiedAt: Date()
+                )
+            }
+
+            logger.info("Imported \(presets.count) presets from Draw Things format")
+            return presets
+        } catch {
+            logger.error("Draw Things format parse failed: \(error.localizedDescription)")
+            throw ConfigPresetsError.importFailed("Could not parse file: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Sync to SwiftData

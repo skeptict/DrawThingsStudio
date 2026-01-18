@@ -1473,14 +1473,19 @@ struct ManageConfigPresetsSheet: View {
             guard let url = urls.first else { return }
 
             // Security-scoped URL access for sandboxed apps
-            guard url.startAccessingSecurityScopedResource() else {
-                importMessage = "Import failed: Cannot access file"
-                return
+            let hasAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if hasAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
             }
-            defer { url.stopAccessingSecurityScopedResource() }
 
             do {
-                let presets = try presetsManager.importPresets(from: url)
+                // Read data while we have security access
+                let data = try Data(contentsOf: url)
+
+                // Parse using the manager
+                let presets = try presetsManager.importPresetsFromData(data)
                 for preset in presets {
                     let config = preset.toModelConfig()
                     modelContext.insert(config)
