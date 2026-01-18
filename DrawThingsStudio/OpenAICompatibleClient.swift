@@ -22,6 +22,7 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
     var host: String
     var port: Int
     var defaultModel: String
+    var apiKey: String?
     let providerType: LLMProviderType
 
     private var baseURL: URL {
@@ -42,12 +43,14 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
         providerType: LLMProviderType = .lmStudio,
         host: String = "localhost",
         port: Int? = nil,
-        defaultModel: String = "default"
+        defaultModel: String = "default",
+        apiKey: String? = nil
     ) {
         self.providerType = providerType
         self.host = host
         self.port = port ?? providerType.defaultPort
         self.defaultModel = defaultModel
+        self.apiKey = apiKey
 
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 120
@@ -61,13 +64,17 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
     }
 
     /// Convenience initializer for Jan
-    static func jan(host: String = "localhost", port: Int = 1337) -> OpenAICompatibleClient {
-        OpenAICompatibleClient(providerType: .jan, host: host, port: port)
+    static func jan(host: String = "localhost", port: Int = 1337, apiKey: String? = nil) -> OpenAICompatibleClient {
+        OpenAICompatibleClient(providerType: .jan, host: host, port: port, apiKey: apiKey)
     }
 
-    /// Convenience initializer for Msty Studio
-    static func mstyStudio(host: String = "localhost", port: Int = 10000) -> OpenAICompatibleClient {
-        OpenAICompatibleClient(providerType: .mstyStudio, host: host, port: port)
+    // MARK: - Request Helper
+
+    /// Add authorization header if API key is set
+    private func addAuthHeader(to request: inout URLRequest) {
+        if let apiKey = apiKey, !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
     }
 
     // MARK: - Connection Check
@@ -79,7 +86,10 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
 
         do {
             let url = baseURL.appendingPathComponent("models")
-            let (_, response) = try await session.data(from: url)
+            var request = URLRequest(url: url)
+            addAuthHeader(to: &request)
+
+            let (_, response) = try await session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse,
                   httpResponse.statusCode == 200 else {
@@ -107,8 +117,10 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
 
     func listModels() async throws -> [LLMModel] {
         let url = baseURL.appendingPathComponent("models")
+        var request = URLRequest(url: url)
+        addAuthHeader(to: &request)
 
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
@@ -154,6 +166,7 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         let body: [String: Any] = [
             "model": model,
@@ -212,6 +225,7 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         let body: [String: Any] = [
             "model": model,
@@ -276,6 +290,7 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
 
         let body: [String: Any] = [
             "model": model ?? defaultModel,

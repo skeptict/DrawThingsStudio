@@ -50,13 +50,8 @@ final class AppSettings: ObservableObject {
     @Published var janPort: Int {
         didSet { defaults.set(janPort, forKey: "jan.port") }
     }
-
-    // Msty Studio Settings
-    @Published var mstyStudioHost: String {
-        didSet { defaults.set(mstyStudioHost, forKey: "mstystudio.host") }
-    }
-    @Published var mstyStudioPort: Int {
-        didSet { defaults.set(mstyStudioPort, forKey: "mstystudio.port") }
+    @Published var janAPIKey: String {
+        didSet { defaults.set(janAPIKey, forKey: "jan.apiKey") }
     }
 
     // MARK: - Default Generation Settings
@@ -116,10 +111,7 @@ final class AppSettings: ObservableObject {
         // Jan
         self.janHost = defaults.string(forKey: "jan.host") ?? "localhost"
         self.janPort = defaults.integer(forKey: "jan.port") != 0 ? defaults.integer(forKey: "jan.port") : 1337
-
-        // Msty Studio
-        self.mstyStudioHost = defaults.string(forKey: "mstystudio.host") ?? "localhost"
-        self.mstyStudioPort = defaults.integer(forKey: "mstystudio.port") != 0 ? defaults.integer(forKey: "mstystudio.port") : 10000
+        self.janAPIKey = defaults.string(forKey: "jan.apiKey") ?? ""
 
         self.defaultWidth = defaults.integer(forKey: "defaults.width") != 0 ? defaults.integer(forKey: "defaults.width") : 1024
         self.defaultHeight = defaults.integer(forKey: "defaults.height") != 0 ? defaults.integer(forKey: "defaults.height") : 1024
@@ -174,13 +166,8 @@ final class AppSettings: ObservableObject {
             return OpenAICompatibleClient(
                 providerType: .jan,
                 host: janHost,
-                port: janPort
-            )
-        case .mstyStudio:
-            return OpenAICompatibleClient(
-                providerType: .mstyStudio,
-                host: mstyStudioHost,
-                port: mstyStudioPort
+                port: janPort,
+                apiKey: janAPIKey.isEmpty ? nil : janAPIKey
             )
         }
     }
@@ -200,9 +187,7 @@ final class AppSettings: ObservableObject {
 
         janHost = "localhost"
         janPort = 1337
-
-        mstyStudioHost = "localhost"
-        mstyStudioPort = 10000
+        janAPIKey = ""
 
         defaultWidth = 1024
         defaultHeight = 1024
@@ -297,21 +282,10 @@ struct SettingsView: View {
                     TextField("Port", value: $settings.janPort, format: .number)
                         .textFieldStyle(.roundedBorder)
 
-                    Text("Jan uses OpenAI-compatible API on port 1337 by default.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            if settings.providerType == .mstyStudio {
-                Section("Msty Settings") {
-                    TextField("Host", text: $settings.mstyStudioHost)
+                    SecureField("API Key", text: $settings.janAPIKey)
                         .textFieldStyle(.roundedBorder)
 
-                    TextField("Port", value: $settings.mstyStudioPort, format: .number)
-                        .textFieldStyle(.roundedBorder)
-
-                    Text("Msty uses OpenAI-compatible API on port 10000 by default.")
+                    Text("Jan requires an API key. Set one in Jan's API Server settings, then enter it here.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
