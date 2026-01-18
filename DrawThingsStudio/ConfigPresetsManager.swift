@@ -359,10 +359,20 @@ class ConfigPresetsManager {
             let dtConfigs = try decoder.decode([DrawThingsConfigFile].self, from: data)
 
             let presets = dtConfigs.map { dt -> StudioConfigPreset in
-                StudioConfigPreset(
+                // Extract model name, removing file extension if present
+                let modelName: String
+                if let model = dt.configuration.model, !model.isEmpty {
+                    // Remove common extensions like .ckpt, .safetensors
+                    let name = (model as NSString).deletingPathExtension
+                    modelName = name.isEmpty ? model : name
+                } else {
+                    modelName = "Unknown"
+                }
+
+                return StudioConfigPreset(
                     id: UUID(),
                     name: dt.name,
-                    modelName: "Imported",
+                    modelName: modelName,
                     description: "Imported from Draw Things",
                     width: dt.configuration.targetImageWidth ?? 1024,
                     height: dt.configuration.targetImageHeight ?? 1024,
