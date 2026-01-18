@@ -480,7 +480,7 @@ class WorkflowBuilderViewModel: ObservableObject {
 
         addInstruction(.note("Batch folder processing - processes all images in a folder"))
         addInstruction(.config(config))
-        addInstruction(.loopLoad("input_folder"))
+        addInstruction(.loopLoad("Input_Img"))
         addInstruction(.prompt("Enhancement prompt applied to each image"))
         addInstruction(.loopSave("output_"))
         addInstruction(.loopEnd)

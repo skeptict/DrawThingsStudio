@@ -27,6 +27,9 @@ struct ContentView: View {
 
                     Label("Templates", systemImage: "doc.on.doc")
                         .tag(SidebarItem.templates)
+
+                    Label("Model Configs", systemImage: "gearshape.2")
+                        .tag(SidebarItem.modelConfigs)
                 }
 
                 Section("Settings") {
@@ -54,6 +57,8 @@ struct ContentView: View {
                         viewModel: workflowViewModel,
                         selectedItem: $selectedItem
                     )
+                } else if selectedItem == .modelConfigs {
+                    ModelConfigsView()
                 } else if selectedItem == .settings {
                     SettingsView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -68,6 +73,7 @@ enum SidebarItem: String, Identifiable {
     case workflow
     case library
     case templates
+    case modelConfigs
     case settings
 
     var id: String { rawValue }
@@ -1106,7 +1112,7 @@ struct WorkflowTemplate: Identifiable {
                 "Consistent edits across images"
             ],
             tips: [
-                "Create input_folder in Pictures with your images",
+                "Create Input_Img folder in Pictures with your images",
                 "Use consistent naming for easy organization",
                 "Test on one image first before batch"
             ]

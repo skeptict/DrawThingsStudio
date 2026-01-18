@@ -27,7 +27,8 @@ extension FocusedValues {
 struct DrawThingsStudioApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            SavedWorkflow.self
+            SavedWorkflow.self,
+            ModelConfig.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
