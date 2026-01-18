@@ -209,6 +209,7 @@ struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
     @State private var testingConnection = false
     @State private var connectionResult: String?
+    @State private var showAPIKey = false
 
     var body: some View {
         Form {
@@ -282,8 +283,20 @@ struct SettingsView: View {
                     TextField("Port", value: $settings.janPort, format: .number)
                         .textFieldStyle(.roundedBorder)
 
-                    SecureField("API Key", text: $settings.janAPIKey)
-                        .textFieldStyle(.roundedBorder)
+                    HStack {
+                        if showAPIKey {
+                            TextField("API Key", text: $settings.janAPIKey)
+                                .textFieldStyle(.roundedBorder)
+                        } else {
+                            SecureField("API Key", text: $settings.janAPIKey)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        Button(action: { showAPIKey.toggle() }) {
+                            Image(systemName: showAPIKey ? "eye.slash" : "eye")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     Text("Jan requires an API key. Set one in Jan's API Server settings, then enter it here.")
                         .font(.caption)
