@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 /// Main view for building StoryFlow workflows
 struct WorkflowBuilderView: View {
@@ -834,6 +835,7 @@ struct ConfigEditor: View {
     @State private var showingEditSheet = false
     @State private var showingManageSheet = false
     @State private var hasInitialized = false
+    @State private var isLoadingPreset = false
 
     private var selectedPreset: ModelConfig? {
         guard let id = selectedPresetID else { return nil }
@@ -1010,6 +1012,7 @@ struct ConfigEditor: View {
     }
 
     private func loadFromPreset(_ preset: ModelConfig) {
+        isLoadingPreset = true
         editWidth = preset.width
         editHeight = preset.height
         editSteps = preset.steps
@@ -1018,11 +1021,13 @@ struct ConfigEditor: View {
         editShift = preset.shift ?? 0
         editStrength = preset.strength ?? 1.0
         updateConfig()
+        isLoadingPreset = false
     }
 
     private func updateConfig() {
         // When user manually edits, clear the preset selection
-        if hasInitialized {
+        // But not when we're loading from a preset
+        if hasInitialized && !isLoadingPreset {
             selectedPresetID = nil
         }
 
@@ -1268,17 +1273,55 @@ struct ManageConfigPresetsSheet: View {
     @State private var selectedConfig: ModelConfig?
     @State private var editingName = ""
     @State private var showingRenameAlert = false
+    @State private var showingImportPicker = false
+    @State private var showingExportPicker = false
+    @State private var importMessage: String?
+
+    private let presetsManager = ConfigPresetsManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("Manage Presets")
                     .font(.headline)
+
                 Spacer()
+
+                Button(action: { showingImportPicker = true }) {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
+                .help("Import presets from JSON file")
+
+                Button(action: exportPresets) {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .help("Export custom presets to JSON file")
+
+                Button(action: { presetsManager.revealPresetsInFinder() }) {
+                    Image(systemName: "folder")
+                }
+                .help("Reveal presets folder in Finder")
+
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
             .padding()
+
+            if let message = importMessage {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text(message)
+                        .font(.caption)
+                    Spacer()
+                    Button(action: { importMessage = nil }) {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            }
 
             Divider()
 
@@ -1401,7 +1444,7 @@ struct ManageConfigPresetsSheet: View {
                 }
             }
         }
-        .frame(width: 550, height: 400)
+        .frame(width: 600, height: 450)
         .alert("Rename Preset", isPresented: $showingRenameAlert) {
             TextField("Name", text: $editingName)
             Button("Cancel", role: .cancel) { }
@@ -1409,6 +1452,71 @@ struct ManageConfigPresetsSheet: View {
                 selectedConfig?.name = editingName
             }
         }
+        .fileImporter(
+            isPresented: $showingImportPicker,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            handleImport(result)
+        }
+        .fileExporter(
+            isPresented: $showingExportPicker,
+            document: ConfigPresetsDocument(configs: configs.filter { !$0.isBuiltIn }),
+            contentType: .json,
+            defaultFilename: "config_presets.json"
+        ) { result in
+            if case .success = result {
+                importMessage = "Exported \(configs.filter { !$0.isBuiltIn }.count) presets"
+            }
+        }
+    }
+
+    private func handleImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            do {
+                let presets = try presetsManager.importPresets(from: url)
+                for preset in presets {
+                    let config = preset.toModelConfig()
+                    modelContext.insert(config)
+                }
+                importMessage = "Imported \(presets.count) presets"
+            } catch {
+                importMessage = "Import failed: \(error.localizedDescription)"
+            }
+        case .failure(let error):
+            importMessage = "Import failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func exportPresets() {
+        showingExportPicker = true
+    }
+}
+
+// MARK: - Config Presets Document (for file export)
+
+struct ConfigPresetsDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+
+    let configs: [ModelConfig]
+
+    init(configs: [ModelConfig]) {
+        self.configs = configs
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        configs = []
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        let presets = configs.map { StudioConfigPreset(from: $0) }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(presets)
+        return FileWrapper(regularFileWithContents: data)
     }
 }
 
