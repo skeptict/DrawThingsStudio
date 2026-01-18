@@ -2,14 +2,14 @@
 //  OpenAICompatibleClient.swift
 //  DrawThingsStudio
 //
-//  HTTP client for OpenAI-compatible APIs (LM Studio, Msty Studio, etc.)
+//  HTTP client for OpenAI-compatible APIs (LM Studio, Jan, etc.)
 //
 
 import Foundation
 import Combine
 import OSLog
 
-/// Client for OpenAI-compatible HTTP APIs (LM Studio, Msty Studio, etc.)
+/// Client for OpenAI-compatible HTTP APIs (LM Studio, Jan, etc.)
 class OpenAICompatibleClient: LLMProvider, ObservableObject {
 
     // MARK: - Properties
