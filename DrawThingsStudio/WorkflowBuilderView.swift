@@ -1461,7 +1461,7 @@ struct ManageConfigPresetsSheet: View {
         }
         .fileExporter(
             isPresented: $showingExportPicker,
-            document: ConfigPresetsDocument(configs: configs.filter { !$0.isBuiltIn }),
+            document: ConfigPresetsDocument(presets: configs.filter { !$0.isBuiltIn }.map { StudioConfigPreset(from: $0) }),
             contentType: .json,
             defaultFilename: "config_presets.json"
         ) { result in
@@ -1500,18 +1500,17 @@ struct ManageConfigPresetsSheet: View {
 struct ConfigPresetsDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
 
-    let configs: [ModelConfig]
+    let presets: [StudioConfigPreset]
 
-    init(configs: [ModelConfig]) {
-        self.configs = configs
+    init(presets: [StudioConfigPreset]) {
+        self.presets = presets
     }
 
     init(configuration: ReadConfiguration) throws {
-        configs = []
+        presets = []
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        let presets = configs.map { StudioConfigPreset(from: $0) }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
