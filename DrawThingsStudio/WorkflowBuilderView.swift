@@ -834,6 +834,26 @@ struct ConfigEditor: View {
     @State private var showingSaveSheet = false
     @State private var showingManageSheet = false
     @State private var hasInitialized = false
+    @State private var showingPresetPicker = false
+    @State private var presetSearchText = ""
+
+    private var filteredPresets: [ModelConfig] {
+        if presetSearchText.isEmpty {
+            return savedConfigs
+        }
+        return savedConfigs.filter { preset in
+            preset.name.localizedCaseInsensitiveContains(presetSearchText) ||
+            preset.modelName.localizedCaseInsensitiveContains(presetSearchText)
+        }
+    }
+
+    private var selectedPresetName: String {
+        if let id = selectedPresetID,
+           let preset = savedConfigs.first(where: { $0.id == id }) {
+            return preset.name
+        }
+        return "Custom"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -843,15 +863,110 @@ struct ConfigEditor: View {
                     .font(.headline)
 
                 HStack {
-                    Picker("Preset", selection: $selectedPresetID) {
-                        Text("Custom").tag(nil as UUID?)
-                        Divider()
-                        ForEach(savedConfigs) { preset in
-                            Text(preset.name).tag(preset.id as UUID?)
+                    // Searchable preset picker
+                    Button(action: { showingPresetPicker.toggle() }) {
+                        HStack {
+                            Text(selectedPresetName)
+                                .lineLimit(1)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                        )
                     }
-                    .labelsHidden()
+                    .buttonStyle(.plain)
                     .frame(maxWidth: .infinity)
+                    .popover(isPresented: $showingPresetPicker, arrowEdge: .bottom) {
+                        VStack(spacing: 0) {
+                            // Search field
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundColor(.secondary)
+                                TextField("Search presets...", text: $presetSearchText)
+                                    .textFieldStyle(.plain)
+                                if !presetSearchText.isEmpty {
+                                    Button(action: { presetSearchText = "" }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(8)
+
+                            Divider()
+
+                            // Preset list
+                            ScrollView {
+                                LazyVStack(alignment: .leading, spacing: 0) {
+                                    // Custom option
+                                    Button(action: {
+                                        selectedPresetID = nil
+                                        showingPresetPicker = false
+                                        presetSearchText = ""
+                                    }) {
+                                        HStack {
+                                            Text("Custom")
+                                                .foregroundColor(.primary)
+                                            Spacer()
+                                            if selectedPresetID == nil {
+                                                Image(systemName: "checkmark")
+                                                    .foregroundColor(.accentColor)
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if !filteredPresets.isEmpty {
+                                        Divider()
+                                            .padding(.vertical, 4)
+
+                                        // Group: Built-in
+                                        let builtIn = filteredPresets.filter { $0.isBuiltIn }
+                                        if !builtIn.isEmpty {
+                                            Text("Built-in")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .padding(.horizontal, 12)
+                                                .padding(.top, 4)
+
+                                            ForEach(builtIn) { preset in
+                                                presetRow(preset)
+                                            }
+                                        }
+
+                                        // Group: Custom
+                                        let custom = filteredPresets.filter { !$0.isBuiltIn }
+                                        if !custom.isEmpty {
+                                            Text("Custom")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .padding(.horizontal, 12)
+                                                .padding(.top, 8)
+
+                                            ForEach(custom) { preset in
+                                                presetRow(preset)
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            .frame(maxHeight: 300)
+                        }
+                        .frame(width: 280)
+                    }
 
                     Button(action: { showingSaveSheet = true }) {
                         Image(systemName: "plus.circle")
@@ -999,6 +1114,7 @@ struct ConfigEditor: View {
         editSampler = preset.samplerName
         editShift = preset.shift ?? 0
         editStrength = preset.strength ?? 1.0
+        editModel = preset.modelName  // Populate model field from preset
 
         // Build config directly without triggering selectedPresetID = nil
         let newConfig = DrawThingsConfig(
@@ -1019,6 +1135,34 @@ struct ConfigEditor: View {
             try? await Task.sleep(nanoseconds: 50_000_000)
             selectedPresetID = idToRestore
         }
+    }
+
+    @ViewBuilder
+    private func presetRow(_ preset: ModelConfig) -> some View {
+        Button(action: {
+            selectedPresetID = preset.id
+            showingPresetPicker = false
+            presetSearchText = ""
+        }) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(preset.name)
+                        .foregroundColor(.primary)
+                    Text(preset.modelName)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                if selectedPresetID == preset.id {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(.accentColor)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func updateConfig() {
@@ -1266,14 +1410,27 @@ struct ManageConfigPresetsSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ModelConfig.name) private var configs: [ModelConfig]
 
-    @State private var selectedConfig: ModelConfig?
+    @State private var selectedConfigIDs: Set<UUID> = []
     @State private var editingName = ""
     @State private var showingRenameAlert = false
     @State private var showingImportPicker = false
     @State private var showingExportPicker = false
+    @State private var showingDeleteConfirmation = false
     @State private var importMessage: String?
 
     private let presetsManager = ConfigPresetsManager.shared
+
+    private var selectedConfigs: [ModelConfig] {
+        configs.filter { selectedConfigIDs.contains($0.id) }
+    }
+
+    private var selectedCustomConfigs: [ModelConfig] {
+        selectedConfigs.filter { !$0.isBuiltIn }
+    }
+
+    private var singleSelectedConfig: ModelConfig? {
+        selectedConfigs.count == 1 ? selectedConfigs.first : nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1322,54 +1479,89 @@ struct ManageConfigPresetsSheet: View {
             Divider()
 
             HSplitView {
-                // List
-                List(selection: $selectedConfig) {
-                    Section("Built-in") {
-                        ForEach(configs.filter { $0.isBuiltIn }) { config in
-                            HStack {
-                                Text(config.name)
-                                Spacer()
-                                Text(config.modelName)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                // List with multiple selection (Cmd+click, Shift+click)
+                VStack(spacing: 0) {
+                    List(selection: $selectedConfigIDs) {
+                        Section("Built-in") {
+                            ForEach(configs.filter { $0.isBuiltIn }) { config in
+                                HStack {
+                                    Text(config.name)
+                                    Spacer()
+                                    Text(config.modelName)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .tag(config.id)
                             }
-                            .tag(config)
+                        }
+
+                        Section("Custom (\(configs.filter { !$0.isBuiltIn }.count))") {
+                            ForEach(configs.filter { !$0.isBuiltIn }) { config in
+                                HStack {
+                                    Text(config.name)
+                                    Spacer()
+                                    Text(config.modelName)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .tag(config.id)
+                                .contextMenu {
+                                    Button("Rename") {
+                                        selectedConfigIDs = [config.id]
+                                        editingName = config.name
+                                        showingRenameAlert = true
+                                    }
+                                    Button("Delete", role: .destructive) {
+                                        modelContext.delete(config)
+                                        selectedConfigIDs.remove(config.id)
+                                    }
+                                }
+                            }
                         }
                     }
+                    .listStyle(.inset)
 
-                    Section("Custom") {
-                        ForEach(configs.filter { !$0.isBuiltIn }) { config in
-                            HStack {
-                                Text(config.name)
-                                Spacer()
-                                Text(config.modelName)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                    // Bottom toolbar for multi-select actions
+                    if !selectedCustomConfigs.isEmpty {
+                        Divider()
+                        HStack {
+                            Text("\(selectedConfigIDs.count) selected")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("Delete Selected", role: .destructive) {
+                                showingDeleteConfirmation = true
                             }
-                            .tag(config)
-                            .contextMenu {
-                                Button("Rename") {
-                                    editingName = config.name
-                                    showingRenameAlert = true
-                                }
-                                Button("Delete", role: .destructive) {
-                                    modelContext.delete(config)
-                                }
-                            }
+                            .disabled(selectedCustomConfigs.isEmpty)
                         }
-                        .onDelete { offsets in
-                            let customConfigs = configs.filter { !$0.isBuiltIn }
-                            for index in offsets {
-                                modelContext.delete(customConfigs[index])
-                            }
-                        }
+                        .padding(8)
                     }
                 }
-                .listStyle(.inset)
-                .frame(minWidth: 200)
+                .frame(minWidth: 220)
 
                 // Detail
-                if let config = selectedConfig {
+                if selectedConfigs.count > 1 {
+                    // Multiple selection
+                    VStack(spacing: 16) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 36))
+                            .foregroundColor(.secondary)
+                        Text("\(selectedConfigs.count) presets selected")
+                            .font(.headline)
+                        Text("\(selectedCustomConfigs.count) can be deleted")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        if !selectedCustomConfigs.isEmpty {
+                            Button("Delete \(selectedCustomConfigs.count) Presets", role: .destructive) {
+                                showingDeleteConfirmation = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.red)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let config = singleSelectedConfig {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(config.name)
                             .font(.title3)
@@ -1426,7 +1618,7 @@ struct ManageConfigPresetsSheet: View {
                                 }
                                 Button("Delete", role: .destructive) {
                                     modelContext.delete(config)
-                                    selectedConfig = nil
+                                    selectedConfigIDs.remove(config.id)
                                 }
                             }
                         }
@@ -1434,19 +1626,39 @@ struct ManageConfigPresetsSheet: View {
                     .padding()
                     .frame(minWidth: 250)
                 } else {
-                    Text("Select a preset")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack {
+                        Image(systemName: "gearshape.2")
+                            .font(.system(size: 36))
+                            .foregroundColor(.secondary)
+                        Text("Select presets")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text("⌘+click for multiple, ⇧+click for range")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
-        .frame(width: 600, height: 450)
+        .frame(width: 650, height: 500)
         .alert("Rename Preset", isPresented: $showingRenameAlert) {
             TextField("Name", text: $editingName)
             Button("Cancel", role: .cancel) { }
             Button("Rename") {
-                selectedConfig?.name = editingName
+                singleSelectedConfig?.name = editingName
             }
+        }
+        .alert("Delete Presets", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete \(selectedCustomConfigs.count)", role: .destructive) {
+                for config in selectedCustomConfigs {
+                    modelContext.delete(config)
+                }
+                selectedConfigIDs.removeAll()
+            }
+        } message: {
+            Text("Are you sure you want to delete \(selectedCustomConfigs.count) preset(s)? This cannot be undone.")
         }
         .fileImporter(
             isPresented: $showingImportPicker,
