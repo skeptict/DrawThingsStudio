@@ -194,31 +194,31 @@ class PromptStyleManager: ObservableObject {
 
     @Published private(set) var styles: [CustomPromptStyle] = []
 
-    private let fileManager = FileManager.default
-
     /// Directory for storing styles
-    var stylesDirectory: URL {
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    nonisolated var stylesDirectory: URL {
+        let fm = FileManager.default
+        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = appSupport.appendingPathComponent("DrawThingsStudio", isDirectory: true)
-        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
 
     /// Path to the styles JSON file
-    var stylesFilePath: URL {
+    nonisolated var stylesFilePath: URL {
         stylesDirectory.appendingPathComponent("enhance_styles.json")
     }
 
     init() {
-        loadStyles()
+        loadStylesSync()
     }
 
-    /// Load styles from JSON file, with built-in fallbacks
-    func loadStyles() {
+    /// Load styles synchronously (for init)
+    private func loadStylesSync() {
         var loadedStyles: [CustomPromptStyle] = []
+        let fm = FileManager.default
 
         // Try to load custom styles from file
-        if fileManager.fileExists(atPath: stylesFilePath.path) {
+        if fm.fileExists(atPath: stylesFilePath.path) {
             do {
                 let data = try Data(contentsOf: stylesFilePath)
                 let decoder = JSONDecoder()
@@ -246,6 +246,11 @@ class PromptStyleManager: ObservableObject {
             }
             return lhs.name < rhs.name
         }
+    }
+
+    /// Reload styles from file (public method for UI)
+    func loadStyles() {
+        loadStylesSync()
     }
 
     /// Save current styles to JSON file (only custom ones)
@@ -288,7 +293,7 @@ class PromptStyleManager: ObservableObject {
     /// Open styles file in default editor
     func openStylesFile() {
         // Create file with defaults if it doesn't exist
-        if !fileManager.fileExists(atPath: stylesFilePath.path) {
+        if !FileManager.default.fileExists(atPath: stylesFilePath.path) {
             createStylesFileWithDefaults()
         }
 
@@ -300,7 +305,7 @@ class PromptStyleManager: ObservableObject {
     /// Reveal styles file in Finder
     func revealStylesInFinder() {
         #if os(macOS)
-        if !fileManager.fileExists(atPath: stylesFilePath.path) {
+        if !FileManager.default.fileExists(atPath: stylesFilePath.path) {
             createStylesFileWithDefaults()
         }
         NSWorkspace.shared.activateFileViewerSelecting([stylesFilePath])

@@ -630,11 +630,12 @@ struct PromptEditor: View {
     let onChange: (String) -> Void
     var viewModel: WorkflowBuilderViewModel? = nil
 
-    @StateObject private var styleManager = PromptStyleManager.shared
     @State private var editText: String = ""
     @State private var isEnhancing: Bool = false
     @State private var showStylePicker: Bool = false
     @State private var enhanceError: String?
+
+    private var styleManager: PromptStyleManager { PromptStyleManager.shared }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
