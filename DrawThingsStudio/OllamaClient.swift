@@ -156,6 +156,11 @@ class OllamaClient: LLMProvider, ObservableObject {
 
         logger.debug("Generated \(result.response.count) characters")
 
+        if result.response.isEmpty {
+            logger.warning("Model '\(model)' returned empty response. Vision models (VL) require image input.")
+            throw LLMError.requestFailed("Model returned empty response. If using a vision model (VL), try a text-only model instead.")
+        }
+
         return result.response
     }
 
