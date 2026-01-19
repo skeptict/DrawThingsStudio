@@ -6,3 +6,5 @@ xcuserdata/
 # Swift Package Manager
 .build/
 .swiftpm/
+# Local working files for Claude Code
+misc/
