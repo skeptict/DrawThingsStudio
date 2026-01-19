@@ -596,38 +596,32 @@ class WorkflowBuilderViewModel: ObservableObject {
     /// Whether prompt enhancement is in progress
     @Published var isEnhancing: Bool = false
 
-    /// Ollama client for prompt enhancement
-    private var ollamaClient: OllamaClient?
-
-    /// Get or create Ollama client from settings
-    private func getOllamaClient() -> OllamaClient {
-        if let client = ollamaClient {
-            return client
-        }
-        let settings = AppSettings.shared
-        let client = OllamaClient(
-            host: settings.ollamaHost,
-            port: settings.ollamaPort,
-            defaultModel: settings.ollamaDefaultModel
-        )
-        ollamaClient = client
-        return client
+    /// Enhance a prompt using AI with the selected LLM provider
+    func enhancePrompt(_ prompt: String, style: PromptStyle = .creative) async throws -> String {
+        try await enhancePrompt(prompt, systemPrompt: style.systemPrompt)
     }
 
-    /// Enhance a prompt using AI
-    func enhancePrompt(_ prompt: String, style: PromptStyle = .creative) async throws -> String {
+    /// Enhance a prompt using AI with a custom system prompt
+    func enhancePrompt(_ prompt: String, customStyle: CustomPromptStyle) async throws -> String {
+        try await enhancePrompt(prompt, systemPrompt: customStyle.systemPrompt)
+    }
+
+    /// Enhance a prompt using AI with a specific system prompt
+    func enhancePrompt(_ prompt: String, systemPrompt: String) async throws -> String {
         isEnhancing = true
         defer { isEnhancing = false }
 
-        let client = getOllamaClient()
+        let settings = AppSettings.shared
+        let client = settings.createLLMClient()
         let connected = await client.checkConnection()
 
+        let providerName = settings.providerType.displayName
         guard connected else {
-            throw LLMError.connectionFailed("Could not connect to Ollama. Check settings.")
+            throw LLMError.connectionFailed("Could not connect to \(providerName). Check settings.")
         }
 
-        let generator = WorkflowPromptGenerator(ollamaClient: client)
-        return try await generator.enhancePrompt(concept: prompt, style: style)
+        let generator = WorkflowPromptGenerator(llmClient: client)
+        return try await generator.enhancePrompt(concept: prompt, systemPrompt: systemPrompt)
     }
 }
 

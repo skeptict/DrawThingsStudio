@@ -180,12 +180,20 @@ class WorkflowPromptGenerator: ObservableObject {
         concept: String,
         style: PromptStyle = .creative
     ) async throws -> String {
+        try await enhancePrompt(concept: concept, systemPrompt: style.systemPrompt)
+    }
+
+    /// Enhance a simple concept into a detailed prompt using a custom system prompt
+    func enhancePrompt(
+        concept: String,
+        systemPrompt: String
+    ) async throws -> String {
         await setGenerating(true, progress: "Enhancing prompt...")
 
         defer { Task { await setGenerating(false) } }
 
         let prompt = """
-        \(style.systemPrompt)
+        \(systemPrompt)
 
         Transform this concept into a detailed AI image generation prompt: "\(concept)"
 

@@ -630,10 +630,10 @@ struct PromptEditor: View {
     let onChange: (String) -> Void
     var viewModel: WorkflowBuilderViewModel? = nil
 
+    @StateObject private var styleManager = PromptStyleManager.shared
     @State private var editText: String = ""
     @State private var isEnhancing: Bool = false
     @State private var showStylePicker: Bool = false
-    @State private var selectedStyle: PromptStyle = .creative
     @State private var enhanceError: String?
 
     var body: some View {
@@ -698,42 +698,94 @@ struct PromptEditor: View {
     }
 
     private var stylePickerPopover: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Enhance Style")
                 .font(.headline)
 
-            ForEach(PromptStyle.allCases) { style in
-                Button {
-                    selectedStyle = style
-                    showStylePicker = false
-                    enhancePrompt(style: style)
-                } label: {
-                    HStack {
-                        Image(systemName: style.icon)
-                            .frame(width: 24)
-                        Text(style.displayName)
-                        Spacer()
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(styleManager.styles) { style in
+                        Button {
+                            showStylePicker = false
+                            enhancePrompt(style: style)
+                        } label: {
+                            HStack {
+                                Image(systemName: style.icon)
+                                    .frame(width: 24)
+                                Text(style.name)
+                                Spacer()
+                                if style.isBuiltIn {
+                                    Text("built-in")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 4)
                     }
                 }
-                .buttonStyle(.plain)
             }
+            .frame(maxHeight: 200)
+
+            Divider()
+
+            Button {
+                showStylePicker = false
+                styleManager.openStylesFile()
+            } label: {
+                HStack {
+                    Image(systemName: "pencil")
+                        .frame(width: 24)
+                    Text("Edit Styles...")
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 4)
+
+            Button {
+                styleManager.loadStyles()
+            } label: {
+                HStack {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 24)
+                    Text("Reload Styles")
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 4)
         }
         .padding()
-        .frame(width: 180)
+        .frame(width: 220)
     }
 
-    private func enhancePrompt(style: PromptStyle) {
+    private func enhancePrompt(style: CustomPromptStyle) {
         guard let viewModel = viewModel else { return }
+
+        // Capture current text before async work to avoid race conditions
+        let originalText = editText
+        guard !originalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         isEnhancing = true
         enhanceError = nil
 
         Task {
             do {
-                let enhanced = try await viewModel.enhancePrompt(editText, style: style)
+                let enhanced = try await viewModel.enhancePrompt(originalText, customStyle: style)
                 await MainActor.run {
-                    editText = enhanced
-                    onChange(enhanced)
+                    // Only update if we got a non-empty result
+                    let trimmed = enhanced.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        editText = trimmed
+                        onChange(trimmed)
+                    } else {
+                        enhanceError = "Enhancement returned empty result"
+                    }
                     isEnhancing = false
                 }
             } catch {

@@ -6,6 +6,9 @@
 //
 
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 
 // MARK: - LLM Provider Protocol
 
@@ -77,7 +80,7 @@ struct LLMGenerationOptions {
 
 // MARK: - Prompt Styles
 
-/// Predefined prompt styles for different generation needs
+/// Predefined prompt styles for different generation needs (built-in enum for backwards compatibility)
 enum PromptStyle: String, CaseIterable, Identifiable {
     case creative
     case technical
@@ -149,6 +152,178 @@ enum PromptStyle: String, CaseIterable, Identifiable {
         case .cinematic: return "film"
         case .anime: return "sparkles"
         }
+    }
+
+    /// Convert to CustomPromptStyle for use with the manager
+    var asCustomStyle: CustomPromptStyle {
+        CustomPromptStyle(
+            id: rawValue,
+            name: displayName,
+            systemPrompt: systemPrompt,
+            icon: icon,
+            isBuiltIn: true
+        )
+    }
+}
+
+// MARK: - Custom Prompt Style
+
+/// A customizable prompt style that can be loaded from JSON
+struct CustomPromptStyle: Codable, Identifiable, Equatable {
+    var id: String
+    var name: String
+    var systemPrompt: String
+    var icon: String
+    var isBuiltIn: Bool
+
+    init(id: String, name: String, systemPrompt: String, icon: String = "sparkles", isBuiltIn: Bool = false) {
+        self.id = id
+        self.name = name
+        self.systemPrompt = systemPrompt
+        self.icon = icon
+        self.isBuiltIn = isBuiltIn
+    }
+}
+
+// MARK: - Prompt Style Manager
+
+/// Manages prompt styles, including loading custom styles from JSON
+@MainActor
+class PromptStyleManager: ObservableObject {
+    static let shared = PromptStyleManager()
+
+    @Published private(set) var styles: [CustomPromptStyle] = []
+
+    private let fileManager = FileManager.default
+
+    /// Directory for storing styles
+    var stylesDirectory: URL {
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = appSupport.appendingPathComponent("DrawThingsStudio", isDirectory: true)
+        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// Path to the styles JSON file
+    var stylesFilePath: URL {
+        stylesDirectory.appendingPathComponent("enhance_styles.json")
+    }
+
+    init() {
+        loadStyles()
+    }
+
+    /// Load styles from JSON file, with built-in fallbacks
+    func loadStyles() {
+        var loadedStyles: [CustomPromptStyle] = []
+
+        // Try to load custom styles from file
+        if fileManager.fileExists(atPath: stylesFilePath.path) {
+            do {
+                let data = try Data(contentsOf: stylesFilePath)
+                let decoder = JSONDecoder()
+                let customStyles = try decoder.decode([CustomPromptStyle].self, from: data)
+                loadedStyles = customStyles
+            } catch {
+                print("Failed to load custom styles: \(error)")
+            }
+        }
+
+        // Add built-in styles that aren't overridden
+        let builtInStyles = PromptStyle.allCases.map { $0.asCustomStyle }
+        let customIDs = Set(loadedStyles.map { $0.id })
+
+        for builtIn in builtInStyles {
+            if !customIDs.contains(builtIn.id) {
+                loadedStyles.append(builtIn)
+            }
+        }
+
+        // Sort: custom styles first, then built-in
+        styles = loadedStyles.sorted { lhs, rhs in
+            if lhs.isBuiltIn != rhs.isBuiltIn {
+                return !lhs.isBuiltIn  // Custom first
+            }
+            return lhs.name < rhs.name
+        }
+    }
+
+    /// Save current styles to JSON file (only custom ones)
+    func saveStyles() {
+        let customStyles = styles.filter { !$0.isBuiltIn }
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(customStyles)
+            try data.write(to: stylesFilePath)
+        } catch {
+            print("Failed to save styles: \(error)")
+        }
+    }
+
+    /// Create initial styles file with all built-in styles (for user reference)
+    func createStylesFileWithDefaults() {
+        let allStyles = PromptStyle.allCases.map { style -> CustomPromptStyle in
+            CustomPromptStyle(
+                id: style.rawValue,
+                name: style.displayName,
+                systemPrompt: style.systemPrompt,
+                icon: style.icon,
+                isBuiltIn: false  // Mark as custom so they can be edited
+            )
+        }
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(allStyles)
+            try data.write(to: stylesFilePath)
+            loadStyles()
+        } catch {
+            print("Failed to create styles file: \(error)")
+        }
+    }
+
+    /// Open styles file in default editor
+    func openStylesFile() {
+        // Create file with defaults if it doesn't exist
+        if !fileManager.fileExists(atPath: stylesFilePath.path) {
+            createStylesFileWithDefaults()
+        }
+
+        #if os(macOS)
+        NSWorkspace.shared.open(stylesFilePath)
+        #endif
+    }
+
+    /// Reveal styles file in Finder
+    func revealStylesInFinder() {
+        #if os(macOS)
+        if !fileManager.fileExists(atPath: stylesFilePath.path) {
+            createStylesFileWithDefaults()
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([stylesFilePath])
+        #endif
+    }
+
+    /// Add a new custom style
+    func addStyle(_ style: CustomPromptStyle) {
+        var newStyle = style
+        newStyle.isBuiltIn = false
+        styles.insert(newStyle, at: 0)
+        saveStyles()
+    }
+
+    /// Remove a custom style (built-in styles cannot be removed)
+    func removeStyle(id: String) {
+        styles.removeAll { $0.id == id && !$0.isBuiltIn }
+        saveStyles()
+    }
+
+    /// Get a style by ID
+    func style(for id: String) -> CustomPromptStyle? {
+        styles.first { $0.id == id }
     }
 }
 
