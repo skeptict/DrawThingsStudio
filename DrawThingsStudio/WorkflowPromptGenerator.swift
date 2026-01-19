@@ -213,9 +213,16 @@ class WorkflowPromptGenerator: ObservableObject {
             options: LLMGenerationOptions.creative
         )
 
+        logger.info("Raw LLM response (\(response.count) chars): '\(response.prefix(200))...'")
+
         let enhanced = cleanPromptResponse(response)
 
         logger.info("Enhanced prompt from '\(concept)' to '\(enhanced.prefix(50))...'")
+
+        if enhanced.isEmpty && !response.isEmpty {
+            logger.warning("Clean response was empty but raw response had content - returning raw response")
+            return response.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
 
         return enhanced
     }
