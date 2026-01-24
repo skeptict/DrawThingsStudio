@@ -78,6 +78,24 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(defaultStyle, forKey: "defaults.style") }
     }
 
+    // MARK: - Draw Things Settings
+
+    @Published var drawThingsHost: String {
+        didSet { defaults.set(drawThingsHost, forKey: "drawthings.host") }
+    }
+    @Published var drawThingsHTTPPort: Int {
+        didSet { defaults.set(drawThingsHTTPPort, forKey: "drawthings.httpPort") }
+    }
+    @Published var drawThingsGRPCPort: Int {
+        didSet { defaults.set(drawThingsGRPCPort, forKey: "drawthings.grpcPort") }
+    }
+    @Published var drawThingsTransport: String {
+        didSet { defaults.set(drawThingsTransport, forKey: "drawthings.transport") }
+    }
+    @Published var drawThingsSharedSecret: String {
+        didSet { defaults.set(drawThingsSharedSecret, forKey: "drawthings.sharedSecret") }
+    }
+
     // MARK: - UI Settings
 
     @Published var showValidationWarnings: Bool {
@@ -113,6 +131,13 @@ final class AppSettings: ObservableObject {
         self.janPort = defaults.integer(forKey: "jan.port") != 0 ? defaults.integer(forKey: "jan.port") : 1337
         self.janAPIKey = defaults.string(forKey: "jan.apiKey") ?? ""
 
+        // Draw Things
+        self.drawThingsHost = defaults.string(forKey: "drawthings.host") ?? "127.0.0.1"
+        self.drawThingsHTTPPort = defaults.integer(forKey: "drawthings.httpPort") != 0 ? defaults.integer(forKey: "drawthings.httpPort") : 7860
+        self.drawThingsGRPCPort = defaults.integer(forKey: "drawthings.grpcPort") != 0 ? defaults.integer(forKey: "drawthings.grpcPort") : 7859
+        self.drawThingsTransport = defaults.string(forKey: "drawthings.transport") ?? DrawThingsTransport.http.rawValue
+        self.drawThingsSharedSecret = defaults.string(forKey: "drawthings.sharedSecret") ?? ""
+
         self.defaultWidth = defaults.integer(forKey: "defaults.width") != 0 ? defaults.integer(forKey: "defaults.width") : 1024
         self.defaultHeight = defaults.integer(forKey: "defaults.height") != 0 ? defaults.integer(forKey: "defaults.height") : 1024
         self.defaultSteps = defaults.integer(forKey: "defaults.steps") != 0 ? defaults.integer(forKey: "defaults.steps") : 30
@@ -145,6 +170,29 @@ final class AppSettings: ObservableObject {
 
     var providerType: LLMProviderType {
         LLMProviderType(rawValue: selectedProvider) ?? .ollama
+    }
+
+    var drawThingsTransportType: DrawThingsTransport {
+        DrawThingsTransport(rawValue: drawThingsTransport) ?? .http
+    }
+
+    /// Creates a Draw Things client based on current settings
+    func createDrawThingsClient() -> any DrawThingsProvider {
+        switch drawThingsTransportType {
+        case .http:
+            return DrawThingsHTTPClient(
+                host: drawThingsHost,
+                port: drawThingsHTTPPort,
+                sharedSecret: drawThingsSharedSecret
+            )
+        case .grpc:
+            // gRPC not yet implemented, fall back to HTTP
+            return DrawThingsHTTPClient(
+                host: drawThingsHost,
+                port: drawThingsHTTPPort,
+                sharedSecret: drawThingsSharedSecret
+            )
+        }
     }
 
     /// Creates an LLM client based on current settings
@@ -197,6 +245,12 @@ final class AppSettings: ObservableObject {
         defaultSampler = ""
         defaultStyle = "creative"
 
+        drawThingsHost = "127.0.0.1"
+        drawThingsHTTPPort = 7860
+        drawThingsGRPCPort = 7859
+        drawThingsTransport = DrawThingsTransport.http.rawValue
+        drawThingsSharedSecret = ""
+
         showValidationWarnings = true
         autoPreviewJSON = false
         compactJSON = false
@@ -210,174 +264,187 @@ struct SettingsView: View {
     @State private var testingConnection = false
     @State private var connectionResult: String?
     @State private var showAPIKey = false
+    @State private var testingDTConnection = false
+    @State private var dtConnectionResult: String?
+    @State private var showSharedSecret = false
 
     var body: some View {
-        Form {
-            // Provider Selection
-            Section("LLM Provider") {
-                Picker("Provider", selection: $settings.selectedProvider) {
-                    ForEach(LLMProviderType.allCases) { provider in
-                        Label(provider.displayName, systemImage: provider.icon)
-                            .tag(provider.rawValue)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 20) {
+                // LLM Provider
+                neuSettingsSection("LLM Provider", icon: "brain") {
+                    Picker("Provider", selection: $settings.selectedProvider) {
+                        ForEach(LLMProviderType.allCases) { provider in
+                            Label(provider.displayName, systemImage: provider.icon)
+                                .tag(provider.rawValue)
+                        }
                     }
-                }
-                .pickerStyle(.radioGroup)
-                .onChange(of: settings.selectedProvider) { _, _ in
-                    connectionResult = nil
-                }
-
-                HStack {
-                    Button("Test Connection") {
-                        testConnection()
+                    .pickerStyle(.radioGroup)
+                    .onChange(of: settings.selectedProvider) { _, _ in
+                        connectionResult = nil
                     }
-                    .disabled(testingConnection)
-
-                    if testingConnection {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    }
-
-                    if let result = connectionResult {
-                        Text(result)
-                            .font(.caption)
-                            .foregroundColor(result.contains("Success") ? .green : .red)
-                    }
-                }
-            }
-
-            // Provider-specific settings
-            if settings.providerType == .ollama {
-                Section("Ollama Settings") {
-                    TextField("Host", text: $settings.ollamaHost)
-                        .textFieldStyle(.roundedBorder)
-
-                    TextField("Port", value: $settings.ollamaPort, format: .number)
-                        .textFieldStyle(.roundedBorder)
-
-                    TextField("Default Model", text: $settings.ollamaDefaultModel)
-                        .textFieldStyle(.roundedBorder)
-
-                    Toggle("Auto-connect on launch", isOn: $settings.ollamaAutoConnect)
-                }
-            }
-
-            if settings.providerType == .lmStudio {
-                Section("LM Studio Settings") {
-                    TextField("Host", text: $settings.lmStudioHost)
-                        .textFieldStyle(.roundedBorder)
-
-                    TextField("Port", value: $settings.lmStudioPort, format: .number)
-                        .textFieldStyle(.roundedBorder)
-
-                    Text("LM Studio uses OpenAI-compatible API on port 1234 by default.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            if settings.providerType == .jan {
-                Section("Jan Settings") {
-                    TextField("Host", text: $settings.janHost)
-                        .textFieldStyle(.roundedBorder)
-
-                    TextField("Port", value: $settings.janPort, format: .number)
-                        .textFieldStyle(.roundedBorder)
 
                     HStack {
-                        if showAPIKey {
-                            TextField("API Key", text: $settings.janAPIKey)
-                                .textFieldStyle(.roundedBorder)
-                        } else {
-                            SecureField("API Key", text: $settings.janAPIKey)
-                                .textFieldStyle(.roundedBorder)
+                        Button("Test Connection") { testConnection() }
+                            .buttonStyle(NeumorphicButtonStyle())
+                            .disabled(testingConnection)
+
+                        if testingConnection {
+                            ProgressView().scaleEffect(0.7)
                         }
-                        Button(action: { showAPIKey.toggle() }) {
-                            Image(systemName: showAPIKey ? "eye.slash" : "eye")
-                                .foregroundColor(.secondary)
+                        if let result = connectionResult {
+                            Text(result)
+                                .font(.caption)
+                                .foregroundColor(result.contains("Success") ? .green : .red)
                         }
-                        .buttonStyle(.plain)
-                    }
-
-                    Text("Jan requires an API key. Set one in Jan's API Server settings, then enter it here.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            // Default Generation Settings
-            Section("Default Generation Settings") {
-                HStack {
-                    Text("Width")
-                    Spacer()
-                    TextField("", value: $settings.defaultWidth, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                }
-
-                HStack {
-                    Text("Height")
-                    Spacer()
-                    TextField("", value: $settings.defaultHeight, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                }
-
-                HStack {
-                    Text("Steps")
-                    Spacer()
-                    TextField("", value: $settings.defaultSteps, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                }
-
-                HStack {
-                    Text("Guidance Scale")
-                    Spacer()
-                    TextField("", value: $settings.defaultGuidanceScale, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                }
-
-                HStack {
-                    Text("Shift (0 = not set)")
-                    Spacer()
-                    TextField("", value: $settings.defaultShift, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                }
-
-                HStack {
-                    Text("Sampler")
-                    Spacer()
-                    TextField("e.g., DPM++ 2M Karras", text: $settings.defaultSampler)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 180)
-                }
-
-                Picker("Default Style", selection: $settings.defaultStyle) {
-                    ForEach(PromptStyle.allCases) { style in
-                        Text(style.displayName).tag(style.rawValue)
                     }
                 }
-            }
 
-            // UI Settings
-            Section("Interface") {
-                Toggle("Show validation warnings", isOn: $settings.showValidationWarnings)
-                Toggle("Use compact JSON format", isOn: $settings.compactJSON)
-            }
+                // Provider-specific settings
+                if settings.providerType == .ollama {
+                    neuSettingsSection("Ollama Settings", icon: "server.rack") {
+                        neuSettingsRow("Host") { TextField("", text: $settings.ollamaHost).textFieldStyle(NeumorphicTextFieldStyle()) }
+                        neuSettingsRow("Port") { TextField("", value: $settings.ollamaPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
+                        neuSettingsRow("Model") { TextField("", text: $settings.ollamaDefaultModel).textFieldStyle(NeumorphicTextFieldStyle()) }
+                        Toggle("Auto-connect on launch", isOn: $settings.ollamaAutoConnect)
+                            .tint(Color.neuAccent)
+                    }
+                }
 
-            // Reset
-            Section {
+                if settings.providerType == .lmStudio {
+                    neuSettingsSection("LM Studio Settings", icon: "desktopcomputer") {
+                        neuSettingsRow("Host") { TextField("", text: $settings.lmStudioHost).textFieldStyle(NeumorphicTextFieldStyle()) }
+                        neuSettingsRow("Port") { TextField("", value: $settings.lmStudioPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
+                        Text("OpenAI-compatible API on port 1234 by default.")
+                            .font(.caption).foregroundColor(.neuTextSecondary)
+                    }
+                }
+
+                if settings.providerType == .jan {
+                    neuSettingsSection("Jan Settings", icon: "bubble.left.and.bubble.right") {
+                        neuSettingsRow("Host") { TextField("", text: $settings.janHost).textFieldStyle(NeumorphicTextFieldStyle()) }
+                        neuSettingsRow("Port") { TextField("", value: $settings.janPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
+                        neuSettingsRow("API Key") {
+                            HStack {
+                                if showAPIKey {
+                                    TextField("", text: $settings.janAPIKey).textFieldStyle(NeumorphicTextFieldStyle())
+                                } else {
+                                    SecureField("", text: $settings.janAPIKey).textFieldStyle(NeumorphicTextFieldStyle())
+                                }
+                                Button(action: { showAPIKey.toggle() }) {
+                                    Image(systemName: showAPIKey ? "eye.slash" : "eye").foregroundColor(.neuTextSecondary)
+                                }.buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+
+                // Draw Things Connection
+                neuSettingsSection("Draw Things Connection", icon: "paintbrush.pointed") {
+                    neuSettingsRow("Host") { TextField("", text: $settings.drawThingsHost).textFieldStyle(NeumorphicTextFieldStyle()) }
+                    neuSettingsRow("HTTP Port") { TextField("", value: $settings.drawThingsHTTPPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
+                    neuSettingsRow("gRPC Port") { TextField("", value: $settings.drawThingsGRPCPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
+
+                    Picker("Transport", selection: $settings.drawThingsTransport) {
+                        ForEach(DrawThingsTransport.allCases) { transport in
+                            Text(transport.displayName).tag(transport.rawValue)
+                        }
+                    }
+
+                    neuSettingsRow("Secret") {
+                        HStack {
+                            if showSharedSecret {
+                                TextField("", text: $settings.drawThingsSharedSecret).textFieldStyle(NeumorphicTextFieldStyle())
+                            } else {
+                                SecureField("", text: $settings.drawThingsSharedSecret).textFieldStyle(NeumorphicTextFieldStyle())
+                            }
+                            Button(action: { showSharedSecret.toggle() }) {
+                                Image(systemName: showSharedSecret ? "eye.slash" : "eye").foregroundColor(.neuTextSecondary)
+                            }.buttonStyle(.plain)
+                        }
+                    }
+
+                    Text("Enable API in Draw Things: Settings > API Server")
+                        .font(.caption).foregroundColor(.neuTextSecondary)
+
+                    HStack {
+                        Button("Test Connection") { testDTConnection() }
+                            .buttonStyle(NeumorphicButtonStyle())
+                            .disabled(testingDTConnection)
+
+                        if testingDTConnection {
+                            ProgressView().scaleEffect(0.7)
+                        }
+                        if let result = dtConnectionResult {
+                            Text(result)
+                                .font(.caption)
+                                .foregroundColor(result.contains("Success") ? .green : .red)
+                        }
+                    }
+                }
+
+                // Default Generation Settings
+                neuSettingsSection("Default Generation", icon: "slider.horizontal.3") {
+                    HStack(spacing: 12) {
+                        neuSettingsRow("Width") { TextField("", value: $settings.defaultWidth, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 80) }
+                        neuSettingsRow("Height") { TextField("", value: $settings.defaultHeight, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 80) }
+                    }
+                    HStack(spacing: 12) {
+                        neuSettingsRow("Steps") { TextField("", value: $settings.defaultSteps, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 80) }
+                        neuSettingsRow("Guidance") { TextField("", value: $settings.defaultGuidanceScale, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 80) }
+                    }
+                    neuSettingsRow("Shift") { TextField("", value: $settings.defaultShift, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 80) }
+                    neuSettingsRow("Sampler") { TextField("e.g., DPM++ 2M Karras", text: $settings.defaultSampler).textFieldStyle(NeumorphicTextFieldStyle()) }
+
+                    Picker("Style", selection: $settings.defaultStyle) {
+                        ForEach(PromptStyle.allCases) { style in
+                            Text(style.displayName).tag(style.rawValue)
+                        }
+                    }
+                }
+
+                // Interface
+                neuSettingsSection("Interface", icon: "paintpalette") {
+                    Toggle("Show validation warnings", isOn: $settings.showValidationWarnings)
+                        .tint(Color.neuAccent)
+                    Toggle("Compact JSON format", isOn: $settings.compactJSON)
+                        .tint(Color.neuAccent)
+                }
+
+                // Reset
                 Button("Reset to Defaults") {
                     settings.resetToDefaults()
                 }
                 .foregroundColor(.red)
+                .buttonStyle(NeumorphicButtonStyle())
             }
+            .padding(24)
         }
-        .formStyle(.grouped)
-        .frame(width: 450, height: 500)
-        .navigationTitle("Settings")
+        .neuBackground()
+        .frame(width: 480, height: 700)
+    }
+
+    // MARK: - Neumorphic Settings Helpers
+
+    private func neuSettingsSection<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            NeuSectionHeader(title, icon: icon)
+            VStack(alignment: .leading, spacing: 10) {
+                content()
+            }
+            .padding(16)
+            .neuCard(cornerRadius: 16)
+        }
+    }
+
+    private func neuSettingsRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack {
+            Text(label)
+                .font(.body)
+                .foregroundColor(.primary)
+                .frame(width: 80, alignment: .leading)
+            content()
+        }
     }
 
     private func testConnection() {
@@ -392,6 +459,21 @@ struct SettingsView: View {
             await MainActor.run {
                 testingConnection = false
                 connectionResult = success ? "Success! Connected to \(providerName)" : "Failed to connect"
+            }
+        }
+    }
+
+    private func testDTConnection() {
+        testingDTConnection = true
+        dtConnectionResult = nil
+
+        Task {
+            let client = settings.createDrawThingsClient()
+            let success = await client.checkConnection()
+
+            await MainActor.run {
+                testingDTConnection = false
+                dtConnectionResult = success ? "Success! Connected to Draw Things" : "Failed to connect"
             }
         }
     }

@@ -24,15 +24,17 @@ struct WorkflowBuilderView: View {
     }
 
     var body: some View {
-        HSplitView {
+        HStack(spacing: 16) {
             // Left: Instruction list
             InstructionListView(viewModel: viewModel)
-                .frame(minWidth: 280, idealWidth: 320)
+                .frame(minWidth: 280, idealWidth: 320, maxWidth: 380)
 
             // Right: Instruction editor
             InstructionEditorView(viewModel: viewModel)
                 .frame(minWidth: 400)
         }
+        .padding(20)
+        .neuBackground()
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 // Open workflow
@@ -103,7 +105,7 @@ struct WorkflowBuilderView: View {
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                 .disabled(viewModel.instructions.isEmpty)
             }
         }
@@ -202,8 +204,7 @@ struct InstructionListView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("Instructions")
-                    .font(.headline)
+                NeuSectionHeader("Instructions", icon: "list.bullet")
                 Spacer()
 
                 // Validation button
@@ -214,38 +215,35 @@ struct InstructionListView: View {
                     Image(systemName: validationStatusIcon)
                         .foregroundColor(validationStatusColor)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .help("Validate workflow")
 
                 Text("\(viewModel.instructionCount)")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.neuTextSecondary)
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.2))
-                    .cornerRadius(4)
+                    .padding(.vertical, 4)
+                    .neuInset(cornerRadius: 6)
             }
-            .padding()
+            .padding(16)
 
             // Validation panel
             if showValidation, let result = validationResult {
                 ValidationPanel(result: result, isExpanded: $showValidation)
             }
 
-            Divider()
-
             // List
             if viewModel.instructions.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "doc.text")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 36))
+                        .foregroundColor(.neuTextSecondary.opacity(0.5))
                     Text("No Instructions")
                         .font(.headline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.neuTextSecondary)
                     Text("Add instructions using the + button\nor load a template to get started")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.neuTextSecondary.opacity(0.7))
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -263,9 +261,8 @@ struct InstructionListView: View {
                     }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
             }
-
-            Divider()
 
             // Footer actions
             HStack {
@@ -273,6 +270,7 @@ struct InstructionListView: View {
                     viewModel.deleteSelectedInstruction()
                 } label: {
                     Image(systemName: "trash")
+                        .foregroundColor(.neuTextSecondary)
                 }
                 .disabled(!viewModel.hasSelection)
                 .help("Delete selected instruction")
@@ -281,6 +279,7 @@ struct InstructionListView: View {
                     viewModel.duplicateSelectedInstruction()
                 } label: {
                     Image(systemName: "doc.on.doc")
+                        .foregroundColor(.neuTextSecondary)
                 }
                 .disabled(!viewModel.hasSelection)
                 .help("Duplicate selected instruction")
@@ -291,6 +290,7 @@ struct InstructionListView: View {
                     viewModel.moveSelectedUp()
                 } label: {
                     Image(systemName: "arrow.up")
+                        .foregroundColor(.neuTextSecondary)
                 }
                 .disabled(!viewModel.hasSelection)
                 .help("Move up")
@@ -299,14 +299,15 @@ struct InstructionListView: View {
                     viewModel.moveSelectedDown()
                 } label: {
                     Image(systemName: "arrow.down")
+                        .foregroundColor(.neuTextSecondary)
                 }
                 .disabled(!viewModel.hasSelection)
                 .help("Move down")
             }
-            .buttonStyle(.borderless)
-            .padding(8)
+            .buttonStyle(.plain)
+            .padding(12)
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .neuCard(cornerRadius: 24)
     }
 
     private var validationStatusIcon: String {
@@ -401,13 +402,15 @@ struct ValidationPanel: View {
             }
         }
         .padding(10)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(result.isValid ? (result.warnings.isEmpty ? Color.green : Color.orange) : Color.red, lineWidth: 1)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.neuBackground.opacity(0.6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(result.isValid ? (result.warnings.isEmpty ? Color.green : Color.orange) : Color.red, lineWidth: 1)
+                )
         )
-        .padding(.horizontal)
+        .padding(.horizontal, 16)
         .padding(.bottom, 8)
     }
 }
@@ -454,34 +457,32 @@ struct InstructionEditorView: View {
                         .fontWeight(.semibold)
                     Spacer()
                 }
-                .padding()
-
-                Divider()
+                .padding(16)
 
                 // Editor content
-                ScrollView {
+                ScrollView(showsIndicators: false) {
                     InstructionEditorContent(viewModel: viewModel, instruction: instruction)
-                        .padding()
+                        .padding(16)
                         .id(instruction.id)
                 }
             } else {
                 // No selection
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     Image(systemName: "square.and.pencil")
                         .font(.system(size: 48))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.neuTextSecondary.opacity(0.5))
                     Text("Select an Instruction")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
+                        .font(.title3)
+                        .foregroundColor(.neuTextSecondary)
                     Text("Choose an instruction from the list\nto edit its properties")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.callout)
+                        .foregroundColor(.neuTextSecondary.opacity(0.7))
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Color(NSColor.textBackgroundColor))
+        .neuCard(cornerRadius: 24)
     }
 }
 
@@ -610,10 +611,9 @@ struct NoteEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Note Text")
-                .font(.headline)
+            NeuSectionHeader("Note Text", icon: "note.text")
             TextField("Enter note...", text: $editText)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(NeumorphicTextFieldStyle())
                 .onChange(of: editText) { _, newValue in
                     onChange(newValue)
                 }
@@ -640,8 +640,7 @@ struct PromptEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(label)
-                    .font(.headline)
+                NeuSectionHeader(label, icon: "text.quote")
                 Spacer()
                 if viewModel != nil {
                     enhanceButton
@@ -650,9 +649,15 @@ struct PromptEditor: View {
             TextEditor(text: $editText)
                 .font(.body)
                 .frame(minHeight: 100)
+                .padding(8)
+                .scrollContentBackground(.hidden)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.neuBackground.opacity(0.6))
+                )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.neuShadowDark.opacity(0.1), lineWidth: 0.5)
                 )
                 .onChange(of: editText) { _, newValue in
                     onChange(newValue)
@@ -661,7 +666,7 @@ struct PromptEditor: View {
             HStack {
                 Text("\(editText.count) characters")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.neuTextSecondary)
 
                 if let error = enhanceError {
                     Spacer()
@@ -692,7 +697,7 @@ struct PromptEditor: View {
                 Label("Enhance", systemImage: "sparkles")
                     .font(.caption)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(NeumorphicButtonStyle())
             .disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .help("Enhance prompt with AI")
         }
@@ -814,7 +819,7 @@ struct FilePathEditor: View {
             Text(label)
                 .font(.headline)
             TextField(placeholder, text: $editPath)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(NeumorphicTextFieldStyle())
                 .onChange(of: editPath) { _, newValue in
                     onChange(newValue)
                 }
@@ -852,7 +857,7 @@ struct NumberEditor: View {
                 .font(.headline)
             HStack {
                 TextField("", value: $editValue, format: .number)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(NeumorphicTextFieldStyle())
                     .frame(width: 100)
                 Stepper("", value: $editValue, in: range)
                     .labelsHidden()
@@ -928,11 +933,13 @@ struct ConfigEditor: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.neuBackground.opacity(0.6))
+                        )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.neuShadowDark.opacity(0.1), lineWidth: 0.5)
                         )
                     }
                     .buttonStyle(.plain)
@@ -1043,13 +1050,13 @@ struct ConfigEditor: View {
                     Text("Width")
                         .font(.caption)
                     TextField("", value: $editWidth, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                 }
                 VStack(alignment: .leading) {
                     Text("Height")
                         .font(.caption)
                     TextField("", value: $editHeight, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                 }
             }
             .onChange(of: editWidth) { _, _ in updateConfig() }
@@ -1087,7 +1094,7 @@ struct ConfigEditor: View {
                 Text("Sampler")
                     .font(.caption)
                 TextField("e.g., DPM++ 2M Karras", text: $editSampler)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(NeumorphicTextFieldStyle())
             }
             .onChange(of: editSampler) { _, _ in updateConfig() }
 
@@ -1095,7 +1102,7 @@ struct ConfigEditor: View {
                 Text("Model")
                     .font(.caption)
                 TextField("model_name.ckpt", text: $editModel)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(NeumorphicTextFieldStyle())
             }
             .onChange(of: editModel) { _, _ in updateConfig() }
 
@@ -1103,7 +1110,7 @@ struct ConfigEditor: View {
                 Text("Seed (-1 for random)")
                     .font(.caption)
                 TextField("", value: $editSeed, format: .number)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(NeumorphicTextFieldStyle())
             }
             .onChange(of: editSeed) { _, _ in updateConfig() }
         }
@@ -1367,14 +1374,14 @@ struct EditConfigPresetSheet: View {
                         Spacer()
                         TextField("", value: $width, format: .number)
                             .frame(width: 80)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(NeumorphicTextFieldStyle())
                     }
                     HStack {
                         Text("Height")
                         Spacer()
                         TextField("", value: $height, format: .number)
                             .frame(width: 80)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(NeumorphicTextFieldStyle())
                     }
                 }
 
@@ -1384,14 +1391,14 @@ struct EditConfigPresetSheet: View {
                         Spacer()
                         TextField("", value: $steps, format: .number)
                             .frame(width: 80)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(NeumorphicTextFieldStyle())
                     }
                     HStack {
                         Text("Guidance Scale")
                         Spacer()
                         TextField("", value: $guidanceScale, format: .number)
                             .frame(width: 80)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(NeumorphicTextFieldStyle())
                     }
                     TextField("Sampler", text: $samplerName)
                 }
@@ -1402,21 +1409,21 @@ struct EditConfigPresetSheet: View {
                         Spacer()
                         TextField("", value: $shift, format: .number)
                             .frame(width: 80)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(NeumorphicTextFieldStyle())
                     }
                     HStack {
                         Text("Strength (1.0 = not used)")
                         Spacer()
                         TextField("", value: $strength, format: .number)
                             .frame(width: 80)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(NeumorphicTextFieldStyle())
                     }
                     HStack {
                         Text("CLIP Skip (0 = not used)")
                         Spacer()
                         TextField("", value: $clipSkip, format: .number)
                             .frame(width: 80)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(NeumorphicTextFieldStyle())
                     }
                 }
             }
@@ -1609,7 +1616,7 @@ struct ManageConfigPresetsSheet: View {
                             Button("Delete \(selectedCustomConfigs.count) Presets", role: .destructive) {
                                 showingDeleteConfirmation = true
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                             .tint(.red)
                         }
                     }
@@ -1811,7 +1818,7 @@ struct LoopEditor: View {
                     .font(.caption)
                 HStack {
                     TextField("", value: $editCount, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                         .frame(width: 100)
                     Stepper("", value: $editCount, in: 1...1000)
                         .labelsHidden()
@@ -1823,7 +1830,7 @@ struct LoopEditor: View {
                     .font(.caption)
                 HStack {
                     TextField("", value: $editStart, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                         .frame(width: 100)
                     Stepper("", value: $editStart, in: 0...999)
                         .labelsHidden()
@@ -1975,13 +1982,13 @@ struct MoveScaleEditor: View {
                     Text("X Position")
                         .font(.caption)
                     TextField("", value: $editX, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                 }
                 VStack(alignment: .leading) {
                     Text("Y Position")
                         .font(.caption)
                     TextField("", value: $editY, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                 }
             }
 
@@ -2025,13 +2032,13 @@ struct SizeEditor: View {
                     Text("Max Width")
                         .font(.caption)
                     TextField("", value: $editWidth, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                 }
                 VStack(alignment: .leading) {
                     Text("Max Height")
                         .font(.caption)
                     TextField("", value: $editHeight, format: .number)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                 }
             }
         }
@@ -2246,14 +2253,14 @@ struct SaveToLibrarySheet: View {
                     Text("Workflow Name")
                         .font(.headline)
                     TextField("Enter a name for this workflow", text: $name)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Description (optional)")
                         .font(.headline)
                     TextField("Brief description of what this workflow does", text: $description)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
                 }
 
                 // Summary
@@ -2289,8 +2296,7 @@ struct SaveToLibrarySheet: View {
                             }
                         }
                         .padding(12)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(8)
+                        .neuInset(cornerRadius: 10)
                     }
                 }
             }
@@ -2309,7 +2315,7 @@ struct SaveToLibrarySheet: View {
                 Button(action: saveWorkflow) {
                     Label("Save to Library", systemImage: "checkmark.circle.fill")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                 .keyboardShortcut(.defaultAction)
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
             }

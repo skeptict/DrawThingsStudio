@@ -14,37 +14,53 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            // Sidebar
-            List(selection: $selectedItem) {
-                Section("Create") {
-                    Label("Workflow Builder", systemImage: "hammer")
-                        .tag(SidebarItem.workflow)
-                }
+            // Sidebar with neumorphic styling
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Draw Things Studio")
+                    .font(.headline)
+                    .foregroundColor(.neuAccent)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
 
-                Section("Library") {
-                    Label("Saved Workflows", systemImage: "folder")
-                        .tag(SidebarItem.library)
+                NeuSectionHeader("Create", icon: "plus.circle")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
 
-                    Label("Templates", systemImage: "doc.on.doc")
-                        .tag(SidebarItem.templates)
-                }
+                sidebarButton("Workflow Builder", icon: "hammer", item: .workflow)
+                sidebarButton("Generate Image", icon: "photo.badge.plus", item: .generateImage)
 
-                Section("Settings") {
-                    Label("Preferences", systemImage: "gearshape")
-                        .tag(SidebarItem.settings)
-                }
+                NeuSectionHeader("Library", icon: "books.vertical")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                sidebarButton("Saved Workflows", icon: "folder", item: .library)
+                sidebarButton("Templates", icon: "doc.on.doc", item: .templates)
+
+                NeuSectionHeader("Settings", icon: "gearshape")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                sidebarButton("Preferences", icon: "gearshape", item: .settings)
+
+                Spacer()
             }
-            .listStyle(.sidebar)
-            .navigationTitle("Draw Things Studio")
+            .frame(minWidth: 200)
+            .neuBackground()
         } detail: {
             // Main content based on selection
             // Keep WorkflowBuilderView alive by using opacity instead of conditional
             ZStack {
+                Color.neuBackground
+                    .ignoresSafeArea()
+
                 WorkflowBuilderView(viewModel: workflowViewModel)
                     .opacity(selectedItem == .workflow || selectedItem == nil ? 1 : 0)
                     .allowsHitTesting(selectedItem == .workflow || selectedItem == nil)
 
-                if selectedItem == .library {
+                if selectedItem == .generateImage {
+                    ImageGenerationView()
+                } else if selectedItem == .library {
                     SavedWorkflowsView(
                         viewModel: workflowViewModel,
                         selectedItem: $selectedItem
@@ -62,10 +78,29 @@ struct ContentView: View {
         }
         .focusedSceneValue(\.workflowViewModel, workflowViewModel)
     }
+
+    private func sidebarButton(_ title: String, icon: String, item: SidebarItem) -> some View {
+        Button(action: { selectedItem = item }) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundColor(selectedItem == item ? .neuAccent : .neuTextSecondary)
+                    .frame(width: 20)
+                Text(title)
+                    .font(.body)
+                    .foregroundColor(selectedItem == item ? .primary : .neuTextSecondary)
+                Spacer()
+            }
+        }
+        .buttonStyle(.plain)
+        .neuSidebarItem(isSelected: selectedItem == item)
+        .padding(.horizontal, 8)
+    }
 }
 
 enum SidebarItem: String, Identifiable {
     case workflow
+    case generateImage
     case library
     case templates
     case settings
