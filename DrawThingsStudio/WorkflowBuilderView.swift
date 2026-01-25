@@ -431,7 +431,7 @@ struct InstructionRow: View {
                     .font(.system(.body, design: .default, weight: .medium))
                 Text(instruction.summary)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.neuTextSecondary)
                     .lineLimit(1)
             }
         }
@@ -593,7 +593,7 @@ struct InstructionEditorContent: View {
             default:
                 // Simple instructions with no editable parameters
                 Text("This instruction has no editable parameters.")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.neuTextSecondary)
             }
 
             Spacer()
@@ -725,7 +725,7 @@ struct PromptEditor: View {
                                 if style.isBuiltIn {
                                     Text("built-in")
                                         .font(.caption2)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(.neuTextSecondary)
                                 }
                             }
                             .contentShape(Rectangle())
@@ -827,15 +827,15 @@ struct FilePathEditor: View {
             if mustBePNG {
                 Text("Must end with .png")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.neuTextSecondary)
             } else if isFolder {
                 Text("Folder name in Pictures directory")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.neuTextSecondary)
             } else {
                 Text("Relative to Pictures folder (.png, .jpg, .webp)")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.neuTextSecondary)
             }
         }
         .onAppear { editPath = path }
@@ -929,7 +929,7 @@ struct ConfigEditor: View {
                             Spacer()
                             Image(systemName: "chevron.up.chevron.down")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.neuTextSecondary)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
@@ -949,13 +949,13 @@ struct ConfigEditor: View {
                             // Search field
                             HStack {
                                 Image(systemName: "magnifyingglass")
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.neuTextSecondary)
                                 TextField("Search presets...", text: $presetSearchText)
                                     .textFieldStyle(.plain)
                                 if !presetSearchText.isEmpty {
                                     Button(action: { presetSearchText = "" }) {
                                         Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(.neuTextSecondary)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -997,7 +997,7 @@ struct ConfigEditor: View {
                                         if !builtIn.isEmpty {
                                             Text("Built-in")
                                                 .font(.caption)
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(.neuTextSecondary)
                                                 .padding(.horizontal, 12)
                                                 .padding(.top, 4)
 
@@ -1011,7 +1011,7 @@ struct ConfigEditor: View {
                                         if !custom.isEmpty {
                                             Text("Custom")
                                                 .font(.caption)
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(.neuTextSecondary)
                                                 .padding(.horizontal, 12)
                                                 .padding(.top, 8)
 
@@ -1210,7 +1210,7 @@ struct ConfigEditor: View {
                         .foregroundColor(.primary)
                     Text(preset.modelName)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.neuTextSecondary)
                 }
                 Spacer()
                 if selectedPresetID == preset.id {
@@ -1549,7 +1549,7 @@ struct ManageConfigPresetsSheet: View {
                                     Spacer()
                                     Text(config.modelName)
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(.neuTextSecondary)
                                 }
                                 .tag(config.id)
                             }
@@ -1562,7 +1562,7 @@ struct ManageConfigPresetsSheet: View {
                                     Spacer()
                                     Text(config.modelName)
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(.neuTextSecondary)
                                 }
                                 .tag(config.id)
                                 .contextMenu {
@@ -1587,7 +1587,7 @@ struct ManageConfigPresetsSheet: View {
                         HStack {
                             Text("\(selectedConfigIDs.count) selected")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.neuTextSecondary)
                             Spacer()
                             Button("Delete Selected", role: .destructive) {
                                 showingDeleteConfirmation = true
@@ -1605,12 +1605,12 @@ struct ManageConfigPresetsSheet: View {
                     VStack(spacing: 16) {
                         Image(systemName: "doc.on.doc")
                             .font(.system(size: 36))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.neuTextSecondary)
                         Text("\(selectedConfigs.count) presets selected")
                             .font(.headline)
                         Text("\(selectedCustomConfigs.count) can be deleted")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.neuTextSecondary)
 
                         if !selectedCustomConfigs.isEmpty {
                             Button("Delete \(selectedCustomConfigs.count) Presets", role: .destructive) {
@@ -1628,7 +1628,7 @@ struct ManageConfigPresetsSheet: View {
                             .fontWeight(.semibold)
 
                         Text(config.modelName)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.neuTextSecondary)
 
                         if !config.configDescription.isEmpty {
                             Text(config.configDescription)
@@ -1639,30 +1639,30 @@ struct ManageConfigPresetsSheet: View {
 
                         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                             GridRow {
-                                Text("Dimensions:").foregroundColor(.secondary)
+                                Text("Dimensions:").foregroundColor(.neuTextSecondary)
                                 Text("\(config.width) x \(config.height)")
                             }
                             GridRow {
-                                Text("Steps:").foregroundColor(.secondary)
+                                Text("Steps:").foregroundColor(.neuTextSecondary)
                                 Text("\(config.steps)")
                             }
                             GridRow {
-                                Text("Guidance:").foregroundColor(.secondary)
+                                Text("Guidance:").foregroundColor(.neuTextSecondary)
                                 Text(String(format: "%.1f", config.guidanceScale))
                             }
                             GridRow {
-                                Text("Sampler:").foregroundColor(.secondary)
+                                Text("Sampler:").foregroundColor(.neuTextSecondary)
                                 Text(config.samplerName)
                             }
                             if let shift = config.shift {
                                 GridRow {
-                                    Text("Shift:").foregroundColor(.secondary)
+                                    Text("Shift:").foregroundColor(.neuTextSecondary)
                                     Text(String(format: "%.1f", shift))
                                 }
                             }
                             if let strength = config.strength {
                                 GridRow {
-                                    Text("Strength:").foregroundColor(.secondary)
+                                    Text("Strength:").foregroundColor(.neuTextSecondary)
                                     Text(String(format: "%.2f", strength))
                                 }
                             }
@@ -1689,13 +1689,13 @@ struct ManageConfigPresetsSheet: View {
                     VStack {
                         Image(systemName: "gearshape.2")
                             .font(.system(size: 36))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.neuTextSecondary)
                         Text("Select presets")
                             .font(.headline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.neuTextSecondary)
                         Text("⌘+click for multiple, ⇧+click for range")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.neuTextSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -2069,14 +2069,14 @@ struct TemplatesSheet: View {
 
             Text("Choose a template to get started quickly")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(.neuTextSecondary)
 
             ScrollView {
                 VStack(spacing: 10) {
                     // Basic Templates
                     Text("Basic")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.neuTextSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 4)
 
@@ -2110,7 +2110,7 @@ struct TemplatesSheet: View {
                     // Image Processing
                     Text("Image Processing")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.neuTextSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 4)
                         .padding(.top, 8)
@@ -2145,7 +2145,7 @@ struct TemplatesSheet: View {
                     // Batch Processing
                     Text("Batch Processing")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.neuTextSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 4)
                         .padding(.top, 8)
@@ -2208,17 +2208,23 @@ struct TemplateButton: View {
                         .font(.headline)
                     Text(description)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.neuTextSecondary)
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.neuTextSecondary)
             }
             .padding(12)
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(8)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.neuBackground.opacity(0.6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.neuShadowDark.opacity(0.1), lineWidth: 0.5)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -2272,7 +2278,7 @@ struct SaveToLibrarySheet: View {
                         Label("\(viewModel.instructions.count) instructions", systemImage: "list.bullet")
                         Spacer()
                     }
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.neuTextSecondary)
                     .font(.subheadline)
 
                     // First few instructions preview
@@ -2285,13 +2291,13 @@ struct SaveToLibrarySheet: View {
                                         .frame(width: 6, height: 6)
                                     Text(instruction.title)
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(.neuTextSecondary)
                                 }
                             }
                             if viewModel.instructions.count > 3 {
                                 Text("... and \(viewModel.instructions.count - 3) more")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.neuTextSecondary)
                                     .padding(.leading, 12)
                             }
                         }
