@@ -200,4 +200,4 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 ## Acknowledgments
 
 - [Draw Things](https://drawthings.ai) by Liu Liu for the excellent image generation app
-- The StoryFlow scripting system that enables workflow automation
+- [StoryFlow Editor](https://cutsceneartist.com/DrawThings/StoryflowEditor_online.html) - the original web-based StoryFlow workflow editor that inspired this project
