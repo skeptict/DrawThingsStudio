@@ -8,7 +8,7 @@ DrawThingsStudio is a macOS native application (Swift/SwiftUI) that serves as a 
 
 **Platform:** macOS 14.0+
 **Architecture:** SwiftUI + SwiftData + MVVM
-**Current State:** Fully functional for workflow creation and LLM-assisted prompt enhancement
+**Current State:** Fully functional with HTTP and gRPC connectivity to Draw Things, workflow creation, and LLM-assisted prompt enhancement
 
 ## Build Commands
 
@@ -23,6 +23,13 @@ xcodebuild -project DrawThingsStudio.xcodeproj -scheme DrawThingsStudio -configu
 Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 
 ## Current Features (Working)
+
+### Draw Things Connectivity
+- **Dual Transport:** HTTP (port 7860) and gRPC (port 7859)
+- **gRPC Client:** Uses [DT-gRPC-Swift-Client](https://github.com/euphoriacyberware-ai/DT-gRPC-Swift-Client) library
+- **Image Generation:** Send prompts directly to Draw Things and receive generated images
+- **Full Configuration:** All generation parameters (dimensions, steps, guidance, sampler, seed, model, shift, strength, LoRAs)
+- **Image Gallery:** View, manage, and auto-save generated images with metadata
 
 ### Workflow Builder
 - Visual instruction list with drag-and-drop reordering
@@ -46,11 +53,16 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 ### Key Files Modified in Recent Sessions
 | File | Changes |
 |------|---------|
-| `WorkflowBuilderView.swift` | Searchable config preset picker, Enhance button with style picker |
-| `WorkflowBuilderViewModel.swift` | Fixed LLM provider selection (was hardcoded to Ollama) |
-| `LLMProvider.swift` | Added `PromptStyleManager` for editable enhancement styles |
-| `OllamaClient.swift` | Added error handling for empty responses (vision model hint) |
-| `AppSettings.swift` | LLM provider settings, createLLMClient() factory |
+| `DrawThingsGRPCClient.swift` | **NEW** - gRPC client implementing DrawThingsProvider |
+| `DrawThingsHTTPClient.swift` | HTTP client for Draw Things API |
+| `DrawThingsProvider.swift` | Protocol + shared types for Draw Things connectivity |
+| `ImageGenerationView.swift` | Neumorphic UI for image generation |
+| `ImageGenerationViewModel.swift` | State management for generation |
+| `ImageStorageManager.swift` | Auto-save generated images with metadata |
+| `AppSettings.swift` | Draw Things settings, createDrawThingsClient() factory |
+| `NeumorphicStyle.swift` | **NEW** - Design system (colors, modifiers, components) |
+| `ContentView.swift` | Neumorphic sidebar styling |
+| `WorkflowBuilderView.swift` | Neumorphic styling, searchable preset picker |
 
 ## Architecture
 
@@ -146,37 +158,37 @@ Protos/                     # gRPC proto files (not yet integrated)
 
 ---
 
-## Failed Attempt: gRPC Connectivity to Draw Things
+## Draw Things Connectivity
 
-### Goal
-Send prompts directly to Draw Things via gRPC instead of copy/paste.
+### Transport Options
+| Transport | Port | Library | Features |
+|-----------|------|---------|----------|
+| HTTP | 7860 | URLSession | Simple, works with shared secret auth |
+| gRPC | 7859 | DT-gRPC-Swift-Client | TLS, binary tensors, streaming |
 
-### What Was Tried
-1. Added grpc-swift 2.x packages → Required macOS 15+ (project targets 14+)
-2. Switched to grpc-swift 1.x (version 1.23.1) → Generated code with protoc
-3. Proto file source: `https://github.com/drawthingsai/draw-things-community/blob/main/Libraries/GRPC/Models/Sources/imageService/imageService.proto`
+### gRPC Implementation (Working)
+Uses [DT-gRPC-Swift-Client](https://github.com/euphoriacyberware-ai/DT-gRPC-Swift-Client) v1.2.2:
+- **Dependencies:** grpc-swift 1.27.1, swift-protobuf 1.33.3, flatbuffers 25.9.23
+- **TLS:** Enabled by default, handles Draw Things self-signed certs
+- **Tensor Decoding:** DTTensor format with Float16 RGB data
+- **Samplers:** 19 sampler types mapped from string names
 
-### Why It Failed
-- **Swift 6 Strict Concurrency:** Generated protobuf code has `_MessageImplementationBase` conformance errors
-- **Version Mismatches:** protoc-gen-swift version vs SwiftProtobuf library version conflicts
-- **Complex Dependencies:** grpc-swift brings NIO, NIOConcurrencyHelpers, etc. with MainActor isolation issues
+### Key Files
+| File | Purpose |
+|------|---------|
+| `DrawThingsProvider.swift` | Protocol + shared types (DrawThingsGenerationConfig, GenerationProgress) |
+| `DrawThingsHTTPClient.swift` | HTTP implementation using URLSession |
+| `DrawThingsGRPCClient.swift` | gRPC wrapper around DrawThingsClient |
+| `ImageStorageManager.swift` | Saves images to ~/Library/Application Support/DrawThingsStudio/GeneratedImages/ |
 
-### Files Created (Now Removed)
-- `DrawThingsStudio/DrawThingsClient.swift` - gRPC client wrapper
-- `DrawThingsStudio/Generated/imageService.pb.swift` - Protobuf messages
-- `DrawThingsStudio/Generated/imageService.grpc.swift` - gRPC stubs
-- `Protos/imageService.proto` - Service definition
-
-### To Retry gRPC Later
-1. Wait for grpc-swift to have better Swift 6 support
-2. Or try Draw Things HTTP API if available (default port 7860)
-3. Or lower Swift language version in build settings (not recommended)
-
-### Draw Things gRPC Details
-- **Default Port:** 7860
-- **Service:** `ImageGenerationService`
-- **Key RPCs:** `Echo` (connection test), `GenerateImage` (streaming response)
-- **Proto location:** See URL above
+### Configuration Mapping
+```swift
+DrawThingsGenerationConfig → DrawThingsConfiguration (gRPC)
+- width/height → Int32
+- sampler (string) → SamplerType enum
+- loras → [LoRAConfig]
+- seedMode → Int32 (0=Legacy, 1=TorchCPU, 2=ScaleAlike, 3=NvidiaTorch)
+```
 
 ---
 
@@ -193,18 +205,25 @@ Fixed: Selecting a preset now populates the Model field via `editModel = preset.
 
 ---
 
-## Next Steps (Suggested)
+## Next Steps (Roadmap)
 
-1. **Draw Things Connectivity (Alternative):** Research if Draw Things has an HTTP API as fallback to gRPC
-2. **Batch Operations:** Add ability to run multiple prompts in sequence
-3. **Template System:** Expand workflow templates
-4. **Image Preview:** Show generated images inline (requires DT connectivity)
+### Phase 2: Intelligent Image Analysis
+1. **Image Evaluation via LLM** - Connect vision-capable LLMs (LLaVA, Qwen-VL) via Ollama for quality assessment
+2. **Image Metadata Reading** - Extract generation metadata from images (Draw Things, A1111, ComfyUI formats)
+
+### Phase 1 Remaining
+3. **Direct StoryFlow Execution** - Send StoryFlow commands directly to Draw Things without scripts
+
+### Phase 3+
+4. **Conditional Logic** - If/else branching based on image analysis
+5. **Batch Processing** - Queue multiple workflows, parameter sweeps
+6. **Shortcuts Integration** - Expose workflows to macOS Shortcuts
 
 ---
 
 ## Session History Summary
 
-### Session 1 (Previous)
+### Session 1
 - Fixed config preset model field population
 - Added searchable config preset dropdown
 - Fixed LLM provider selection (was hardcoded to Ollama)
@@ -212,9 +231,23 @@ Fixed: Selecting a preset now populates the Model field via `editModel = preset.
 - Added empty response handling for vision models
 - Created README.md
 
-### Session 2 (Current - Jan 21, 2026)
-- Attempted gRPC setup for Draw Things connectivity
-- Created proto files, generated Swift code
-- Hit Swift 6 concurrency issues with protobuf generated code
-- Reverted to last working commit (efbb52a)
-- Updated this CLAUDE.md with comprehensive project state
+### Session 2 (Jan 21, 2026)
+- Attempted manual gRPC setup - hit Swift 6 concurrency issues
+- Reverted to last working commit
+
+### Session 3 (Jan 24-26, 2026)
+- Implemented HTTP connectivity to Draw Things (port 7860)
+- Created DrawThingsHTTPClient, ImageStorageManager, ImageGenerationView/ViewModel
+- Added Image Generation UI with gallery
+
+### Session 4 (Jan 26, 2026)
+- Applied neumorphic design system across entire app
+- Created NeumorphicStyle.swift with colors, modifiers, components
+- Updated all views with warm beige theme
+
+### Session 5 (Jan 26, 2026) - Current
+- **Successfully integrated gRPC** using DT-gRPC-Swift-Client library
+- Added package dependency via SPM
+- Created DrawThingsGRPCClient.swift wrapper
+- Both HTTP and gRPC transports now working
+- Updated README.md with comprehensive features and roadmap

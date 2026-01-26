@@ -186,11 +186,9 @@ final class AppSettings: ObservableObject {
                 sharedSecret: drawThingsSharedSecret
             )
         case .grpc:
-            // gRPC not yet implemented, fall back to HTTP
-            return DrawThingsHTTPClient(
+            return DrawThingsGRPCClient(
                 host: drawThingsHost,
-                port: drawThingsHTTPPort,
-                sharedSecret: drawThingsSharedSecret
+                port: drawThingsGRPCPort
             )
         }
     }

@@ -27,10 +27,11 @@ Build complex Draw Things automation workflows with a visual drag-and-drop inter
 
 ### Image Generation
 
-Generate images directly from Draw Things Studio via the Draw Things HTTP API:
+Generate images directly from Draw Things Studio via HTTP or gRPC:
 
-- **Direct Connection**: Connect to Draw Things running locally (default port 7860)
-- **Full Configuration**: All generation parameters (dimensions, steps, guidance, sampler, seed, model, shift, strength)
+- **Dual Transport**: Connect via HTTP (port 7860) or gRPC (port 7859)
+- **gRPC Benefits**: Native binary protocol with TLS, streaming progress, efficient tensor transfer
+- **Full Configuration**: All generation parameters (dimensions, steps, guidance, sampler, seed, model, shift, strength, LoRAs)
 - **Preset System**: Load configuration presets from saved ModelConfigs
 - **Progress Tracking**: Real-time progress indicator during generation
 - **Image Gallery**: View generated images with thumbnails and detail view
@@ -111,6 +112,7 @@ DrawThingsStudio/
 │   ├── ImageGenerationViewModel.swift
 │   ├── DrawThingsProvider.swift     # Provider protocol
 │   ├── DrawThingsHTTPClient.swift   # HTTP API client
+│   ├── DrawThingsGRPCClient.swift   # gRPC client (via DT-gRPC-Swift-Client)
 │   └── ImageStorageManager.swift    # Image persistence
 │
 ├── AI Integration
@@ -132,12 +134,12 @@ DrawThingsStudio/
 
 ### Phase 1: Enhanced Draw Things Connectivity
 
-- [ ] **gRPC Client Implementation**
+- [x] **gRPC Client Implementation** ✓
   - Native gRPC connection to Draw Things (port 7859)
-  - Streaming progress updates during generation
-  - Binary tensor decoding for image responses
   - TLS certificate handling for secure connection
-  - fpzip decompression for compressed tensors
+  - Binary tensor decoding for image responses
+  - Full configuration support (19 samplers, LoRAs, seed modes)
+  - Uses [DT-gRPC-Swift-Client](https://github.com/euphoriacyberware-ai/DT-gRPC-Swift-Client) library
 
 - [ ] **Direct StoryFlow Execution**
   - Send StoryFlow commands directly to Draw Things without running scripts
