@@ -18,6 +18,8 @@ struct WorkflowBuilderView: View {
     @State private var showTemplatesSheet = false
     @State private var showAIGeneration = false
     @State private var showSaveToLibrary = false
+    @State private var showExecutionSheet = false
+    @StateObject private var executionViewModel = WorkflowExecutionViewModel()
 
     init(viewModel: WorkflowBuilderViewModel? = nil) {
         self.viewModel = viewModel ?? WorkflowBuilderViewModel()
@@ -83,6 +85,13 @@ struct WorkflowBuilderView: View {
                 .disabled(viewModel.instructions.isEmpty)
 
                 Button {
+                    showExecutionSheet = true
+                } label: {
+                    Label("Execute", systemImage: "play.fill")
+                }
+                .disabled(viewModel.instructions.isEmpty)
+
+                Button {
                     viewModel.copyToClipboard()
                 } label: {
                     Label("Copy", systemImage: "doc.on.clipboard")
@@ -123,6 +132,13 @@ struct WorkflowBuilderView: View {
                 viewModel: viewModel,
                 modelContext: modelContext,
                 isPresented: $showSaveToLibrary
+            )
+        }
+        .sheet(isPresented: $showExecutionSheet) {
+            WorkflowExecutionView(
+                viewModel: executionViewModel,
+                instructions: viewModel.instructions,
+                onDismiss: { showExecutionSheet = false }
             )
         }
         .alert("Error", isPresented: .init(

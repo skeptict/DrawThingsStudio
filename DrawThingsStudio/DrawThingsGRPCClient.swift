@@ -42,6 +42,8 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
 
     func generateImage(
         prompt: String,
+        sourceImage: NSImage?,
+        mask: NSImage?,
         config: DrawThingsGenerationConfig,
         onProgress: ((GenerationProgress) -> Void)?
     ) async throws -> [NSImage] {
@@ -63,15 +65,22 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
 
         onProgress?(.starting)
 
+        let isImg2Img = sourceImage != nil
+        print("[gRPC] Starting \(isImg2Img ? "img2img" : "txt2img") generation")
+
         do {
-            // Generate the image
+            // Generate the image - pass source image and mask if provided
             let images = try await client.generateImage(
                 prompt: prompt,
                 negativePrompt: config.negativePrompt,
-                configuration: grpcConfig
+                configuration: grpcConfig,
+                image: sourceImage,
+                mask: mask
             )
 
             onProgress?(.complete)
+
+            print("[gRPC] Generated \(images.count) image(s) via \(isImg2Img ? "img2img" : "txt2img")")
 
             // PlatformImage is NSImage on macOS, so we can return directly
             return images

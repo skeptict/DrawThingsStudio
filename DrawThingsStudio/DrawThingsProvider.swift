@@ -242,9 +242,39 @@ enum DrawThingsError: LocalizedError {
 protocol DrawThingsProvider: AnyObject {
     var transport: DrawThingsTransport { get }
     func checkConnection() async -> Bool
+
+    /// Generate image(s) with optional source image for img2img
+    /// - Parameters:
+    ///   - prompt: The generation prompt
+    ///   - sourceImage: Optional source image for img2img (nil = txt2img)
+    ///   - mask: Optional mask for inpainting
+    ///   - config: Generation configuration
+    ///   - onProgress: Progress callback
+    /// - Returns: Array of generated images
+    func generateImage(
+        prompt: String,
+        sourceImage: NSImage?,
+        mask: NSImage?,
+        config: DrawThingsGenerationConfig,
+        onProgress: ((GenerationProgress) -> Void)?
+    ) async throws -> [NSImage]
+}
+
+// MARK: - Protocol Extension for Convenience
+
+extension DrawThingsProvider {
+    /// Convenience method for txt2img (no source image)
     func generateImage(
         prompt: String,
         config: DrawThingsGenerationConfig,
         onProgress: ((GenerationProgress) -> Void)?
-    ) async throws -> [NSImage]
+    ) async throws -> [NSImage] {
+        try await generateImage(
+            prompt: prompt,
+            sourceImage: nil,
+            mask: nil,
+            config: config,
+            onProgress: onProgress
+        )
+    }
 }

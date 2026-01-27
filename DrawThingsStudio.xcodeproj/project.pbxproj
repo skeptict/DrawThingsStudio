@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FDAE38B52F280DF30010FC04 /* DrawThingsClient in Frameworks */ = {isa = PBXBuildFile; productRef = FD31E3F02F1A0000003E0C4C /* DrawThingsClient */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		FD31E3D82F184A4D003E0C4C /* DrawThingsStudio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DrawThingsStudio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FDAE38B52F280DF30010FC04 /* DrawThingsClient in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -95,11 +100,11 @@
 			);
 			mainGroup = FD31E3CF2F184A4C003E0C4C;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
-			productRefGroup = FD31E3D92F184A4D003E0C4C /* Products */;
 			packageReferences = (
 				FD31E3EF2F1A0000003E0C4C /* XCRemoteSwiftPackageReference "DT-gRPC-Swift-Client" */,
 			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = FD31E3D92F184A4D003E0C4C /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

@@ -70,22 +70,44 @@ class DrawThingsHTTPClient: DrawThingsProvider {
 
     func generateImage(
         prompt: String,
+        sourceImage: NSImage?,
+        mask: NSImage?,
         config: DrawThingsGenerationConfig,
         onProgress: ((GenerationProgress) -> Void)?
     ) async throws -> [NSImage] {
         onProgress?(.starting)
 
-        let url = baseURL.appendingPathComponent("sdapi/v1/txt2img")
+        // Use img2img endpoint if source image provided, otherwise txt2img
+        let isImg2Img = sourceImage != nil
+        let endpoint = isImg2Img ? "sdapi/v1/img2img" : "sdapi/v1/txt2img"
+        let url = baseURL.appendingPathComponent(endpoint)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         applyAuth(&request)
 
-        let body = config.toRequestBody(prompt: prompt)
+        var body = config.toRequestBody(prompt: prompt)
+
+        // Add source image for img2img
+        if let sourceImage = sourceImage {
+            if let base64 = imageToBase64(sourceImage) {
+                body["init_images"] = [base64]
+                logger.debug("Using img2img with source image")
+            }
+        }
+
+        // Add mask for inpainting
+        if let mask = mask {
+            if let base64 = imageToBase64(mask) {
+                body["mask"] = base64
+                logger.debug("Using mask for inpainting")
+            }
+        }
+
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        logger.debug("Sending generation request: prompt=\(prompt.prefix(50))...")
+        logger.debug("Sending \(isImg2Img ? "img2img" : "txt2img") request: prompt=\(prompt.prefix(50))...")
 
         onProgress?(.sampling(step: 0, totalSteps: config.steps))
 
@@ -107,8 +129,20 @@ class DrawThingsHTTPClient: DrawThingsProvider {
 
         onProgress?(.complete)
 
-        logger.info("Generated \(images.count) image(s)")
+        logger.info("Generated \(images.count) image(s) via \(isImg2Img ? "img2img" : "txt2img")")
         return images
+    }
+
+    // MARK: - Image Encoding
+
+    private func imageToBase64(_ image: NSImage) -> String? {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            logger.warning("Failed to convert image to PNG for base64 encoding")
+            return nil
+        }
+        return pngData.base64EncodedString()
     }
 
     // MARK: - Private Helpers
