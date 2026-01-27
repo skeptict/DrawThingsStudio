@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import Combine
 import OSLog
 
 /// Shared manager for Draw Things assets like models and LoRAs
