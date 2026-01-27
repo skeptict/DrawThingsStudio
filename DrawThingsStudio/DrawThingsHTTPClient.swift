@@ -141,6 +141,8 @@ class DrawThingsHTTPClient: DrawThingsProvider {
         request.timeoutInterval = 10
         applyAuth(&request)
 
+        logger.debug("Fetching models from \(url.absoluteString)")
+
         let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -153,23 +155,41 @@ class DrawThingsHTTPClient: DrawThingsProvider {
             throw DrawThingsError.requestFailed(httpResponse.statusCode, errorMessage)
         }
 
-        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw DrawThingsError.invalidResponse
-        }
+        // Try to parse response - could be an array or object
+        let json = try JSONSerialization.jsonObject(with: data)
 
-        let models = jsonArray.compactMap { dict -> DrawThingsModel? in
-            // SD WebUI format: {"title": "model name", "model_name": "filename", "filename": "path"}
-            // Draw Things may use slightly different format
-            if let title = dict["title"] as? String {
-                let modelName = dict["model_name"] as? String ?? title
-                return DrawThingsModel(name: title, filename: modelName)
-            } else if let modelName = dict["model_name"] as? String {
-                return DrawThingsModel(filename: modelName)
-            } else if let name = dict["name"] as? String {
-                let filename = dict["filename"] as? String ?? name
-                return DrawThingsModel(name: name, filename: filename)
+        var models: [DrawThingsModel] = []
+
+        if let jsonArray = json as? [[String: Any]] {
+            // Array of model objects (SD WebUI format)
+            models = jsonArray.compactMap { dict -> DrawThingsModel? in
+                // SD WebUI format: {"title": "model name", "model_name": "filename", "filename": "path"}
+                if let title = dict["title"] as? String {
+                    let modelName = dict["model_name"] as? String ?? title
+                    return DrawThingsModel(name: title, filename: modelName)
+                } else if let modelName = dict["model_name"] as? String {
+                    return DrawThingsModel(filename: modelName)
+                } else if let name = dict["name"] as? String {
+                    let filename = dict["filename"] as? String ?? name
+                    return DrawThingsModel(name: name, filename: filename)
+                }
+                return nil
             }
-            return nil
+        } else if let stringArray = json as? [String] {
+            // Simple array of model names/filenames
+            models = stringArray.map { DrawThingsModel(filename: $0) }
+        } else if let jsonDict = json as? [String: Any] {
+            // Object with models array inside
+            if let modelList = jsonDict["models"] as? [String] {
+                models = modelList.map { DrawThingsModel(filename: $0) }
+            } else if let modelList = jsonDict["data"] as? [[String: Any]] {
+                models = modelList.compactMap { dict -> DrawThingsModel? in
+                    if let name = dict["name"] as? String {
+                        return DrawThingsModel(filename: name)
+                    }
+                    return nil
+                }
+            }
         }
 
         logger.info("Fetched \(models.count) models from Draw Things")
@@ -184,6 +204,8 @@ class DrawThingsHTTPClient: DrawThingsProvider {
         request.timeoutInterval = 10
         applyAuth(&request)
 
+        logger.debug("Fetching LoRAs from \(url.absoluteString)")
+
         let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -196,19 +218,37 @@ class DrawThingsHTTPClient: DrawThingsProvider {
             throw DrawThingsError.requestFailed(httpResponse.statusCode, errorMessage)
         }
 
-        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw DrawThingsError.invalidResponse
-        }
+        // Try to parse response - could be an array or object
+        let json = try JSONSerialization.jsonObject(with: data)
 
-        let loras = jsonArray.compactMap { dict -> DrawThingsLoRA? in
-            // SD WebUI format: {"name": "lora name", "alias": "alias", "path": "path"}
-            if let name = dict["name"] as? String {
-                let filename = dict["path"] as? String ?? name
-                return DrawThingsLoRA(name: name, filename: filename)
-            } else if let alias = dict["alias"] as? String {
-                return DrawThingsLoRA(filename: alias)
+        var loras: [DrawThingsLoRA] = []
+
+        if let jsonArray = json as? [[String: Any]] {
+            // Array of LoRA objects (SD WebUI format)
+            loras = jsonArray.compactMap { dict -> DrawThingsLoRA? in
+                if let name = dict["name"] as? String {
+                    let filename = dict["path"] as? String ?? name
+                    return DrawThingsLoRA(name: name, filename: filename)
+                } else if let alias = dict["alias"] as? String {
+                    return DrawThingsLoRA(filename: alias)
+                }
+                return nil
             }
-            return nil
+        } else if let stringArray = json as? [String] {
+            // Simple array of LoRA names/filenames
+            loras = stringArray.map { DrawThingsLoRA(filename: $0) }
+        } else if let jsonDict = json as? [String: Any] {
+            // Object with loras array inside
+            if let loraList = jsonDict["loras"] as? [String] {
+                loras = loraList.map { DrawThingsLoRA(filename: $0) }
+            } else if let loraList = jsonDict["data"] as? [[String: Any]] {
+                loras = loraList.compactMap { dict -> DrawThingsLoRA? in
+                    if let name = dict["name"] as? String {
+                        return DrawThingsLoRA(filename: name)
+                    }
+                    return nil
+                }
+            }
         }
 
         logger.info("Fetched \(loras.count) LoRAs from Draw Things")

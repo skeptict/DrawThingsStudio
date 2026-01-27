@@ -10,6 +10,7 @@ import SwiftData
 
 struct ImageGenerationView: View {
     @StateObject private var viewModel = ImageGenerationViewModel()
+    @StateObject private var assetManager = DrawThingsAssetManager.shared
     @Query(sort: \ModelConfig.name) private var modelConfigs: [ModelConfig]
     @State private var selectedPresetID: String = ""
 
@@ -27,6 +28,7 @@ struct ImageGenerationView: View {
         .neuBackground()
         .task {
             await viewModel.checkConnection()
+            await assetManager.fetchAssets()
         }
     }
 
@@ -152,18 +154,28 @@ struct ImageGenerationView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("Model").font(.caption).foregroundColor(.neuTextSecondary)
-                    if viewModel.isLoadingAssets {
+                    if assetManager.isLoading {
                         ProgressView()
                             .scaleEffect(0.5)
                     }
+                    Spacer()
+                    Button {
+                        Task { await assetManager.forceRefresh() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.neuTextSecondary)
+                    .help("Refresh models from Draw Things")
                 }
-                if viewModel.availableModels.isEmpty {
+                if assetManager.models.isEmpty {
                     TextField("e.g., z_image_turbo_1.0_q8p.ckpt", text: $viewModel.config.model)
                         .textFieldStyle(NeumorphicTextFieldStyle())
                 } else {
                     SearchableDropdown(
                         title: "Model",
-                        items: viewModel.availableModels,
+                        items: assetManager.models,
                         itemLabel: { $0.name },
                         selection: $viewModel.config.model,
                         placeholder: "Search models..."
@@ -222,12 +234,12 @@ struct ImageGenerationView: View {
             }
 
             // LoRAs
-            if !viewModel.availableLoRAs.isEmpty {
+            if !assetManager.loras.isEmpty {
                 Divider()
                     .padding(.vertical, 4)
 
                 LoRAConfigurationView(
-                    availableLoRAs: viewModel.availableLoRAs,
+                    availableLoRAs: assetManager.loras,
                     selectedLoRAs: $viewModel.config.loras
                 )
             }

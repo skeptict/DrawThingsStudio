@@ -890,6 +890,7 @@ struct NumberEditor: View {
 struct ConfigEditor: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ModelConfig.name) private var savedConfigs: [ModelConfig]
+    @StateObject private var assetManager = DrawThingsAssetManager.shared
 
     let config: DrawThingsConfig
     let onChange: (DrawThingsConfig) -> Void
@@ -1109,16 +1110,45 @@ struct ConfigEditor: View {
             VStack(alignment: .leading) {
                 Text("Sampler")
                     .font(.caption)
-                TextField("e.g., DPM++ 2M Karras", text: $editSampler)
-                    .textFieldStyle(NeumorphicTextFieldStyle())
+                SimpleSearchableDropdown(
+                    title: "Sampler",
+                    items: DrawThingsSampler.builtIn.map { $0.name },
+                    selection: $editSampler,
+                    placeholder: "Search samplers..."
+                )
             }
             .onChange(of: editSampler) { _, _ in updateConfig() }
 
             VStack(alignment: .leading) {
-                Text("Model")
-                    .font(.caption)
-                TextField("model_name.ckpt", text: $editModel)
-                    .textFieldStyle(NeumorphicTextFieldStyle())
+                HStack {
+                    Text("Model")
+                        .font(.caption)
+                    Spacer()
+                    if assetManager.isLoading {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                    }
+                    Button {
+                        Task { await assetManager.forceRefresh() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Refresh models from Draw Things")
+                }
+                if assetManager.models.isEmpty {
+                    TextField("model_name.ckpt", text: $editModel)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
+                } else {
+                    SearchableDropdown(
+                        title: "Model",
+                        items: assetManager.models,
+                        itemLabel: { $0.name },
+                        selection: $editModel,
+                        placeholder: "Search models..."
+                    )
+                }
             }
             .onChange(of: editModel) { _, _ in updateConfig() }
 
@@ -1133,6 +1163,10 @@ struct ConfigEditor: View {
         .onAppear {
             initializeBuiltInPresetsIfNeeded()
             loadConfig()
+            // Fetch assets if not already loaded
+            Task {
+                await assetManager.refreshIfNeeded()
+            }
         }
         .onChange(of: selectedPresetID) { _, newValue in
             if let presetID = newValue,
