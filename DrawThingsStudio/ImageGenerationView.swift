@@ -148,6 +148,40 @@ struct ImageGenerationView: View {
         VStack(alignment: .leading, spacing: 12) {
             NeuSectionHeader("Generation Settings", icon: "gearshape")
 
+            // Model (searchable dropdown)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Model").font(.caption).foregroundColor(.neuTextSecondary)
+                    if viewModel.isLoadingAssets {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                    }
+                }
+                if viewModel.availableModels.isEmpty {
+                    TextField("e.g., z_image_turbo_1.0_q8p.ckpt", text: $viewModel.config.model)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
+                } else {
+                    SearchableDropdown(
+                        title: "Model",
+                        items: viewModel.availableModels,
+                        itemLabel: { $0.name },
+                        selection: $viewModel.config.model,
+                        placeholder: "Search models..."
+                    )
+                }
+            }
+
+            // Sampler (searchable dropdown)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Sampler").font(.caption).foregroundColor(.neuTextSecondary)
+                SimpleSearchableDropdown(
+                    title: "Sampler",
+                    items: DrawThingsSampler.builtIn.map { $0.name },
+                    selection: $viewModel.config.sampler,
+                    placeholder: "Search samplers..."
+                )
+            }
+
             // Dimensions
             HStack(spacing: 12) {
                 neuConfigField("Width", value: $viewModel.config.width)
@@ -162,13 +196,6 @@ struct ImageGenerationView: View {
                 Spacer()
             }
 
-            // Sampler
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Sampler").font(.caption).foregroundColor(.neuTextSecondary)
-                TextField("e.g., UniPC Trailing", text: $viewModel.config.sampler)
-                    .textFieldStyle(NeumorphicTextFieldStyle())
-            }
-
             // Seed & Shift
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -179,13 +206,6 @@ struct ImageGenerationView: View {
                 }
                 neuConfigFieldDouble("Shift", value: $viewModel.config.shift)
                 Spacer()
-            }
-
-            // Model
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Model").font(.caption).foregroundColor(.neuTextSecondary)
-                TextField("e.g., z_image_turbo_1.0_q8p.ckpt", text: $viewModel.config.model)
-                    .textFieldStyle(NeumorphicTextFieldStyle())
             }
 
             // Strength
@@ -199,6 +219,17 @@ struct ImageGenerationView: View {
                         .foregroundColor(.neuTextSecondary)
                         .frame(width: 35)
                 }
+            }
+
+            // LoRAs
+            if !viewModel.availableLoRAs.isEmpty {
+                Divider()
+                    .padding(.vertical, 4)
+
+                LoRAConfigurationView(
+                    availableLoRAs: viewModel.availableLoRAs,
+                    selectedLoRAs: $viewModel.config.loras
+                )
             }
         }
     }

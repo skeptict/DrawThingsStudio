@@ -91,6 +91,26 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         }
     }
 
+    // MARK: - Fetch Models
+
+    func fetchModels() async throws -> [DrawThingsModel] {
+        // gRPC API returns model metadata in FlatBuffer format via Echo response
+        // For now, return empty array - use HTTP client for model discovery
+        // TODO: Implement FlatBuffer decoding for MetadataOverride.models
+        print("[gRPC] fetchModels not implemented - use HTTP transport for model discovery")
+        return []
+    }
+
+    // MARK: - Fetch LoRAs
+
+    func fetchLoRAs() async throws -> [DrawThingsLoRA] {
+        // gRPC API returns LoRA metadata in FlatBuffer format via Echo response
+        // For now, return empty array - use HTTP client for LoRA discovery
+        // TODO: Implement FlatBuffer decoding for MetadataOverride.loras
+        print("[gRPC] fetchLoRAs not implemented - use HTTP transport for LoRA discovery")
+        return []
+    }
+
     // MARK: - Config Conversion
 
     private func convertConfig(_ config: DrawThingsGenerationConfig) -> DrawThingsConfiguration {

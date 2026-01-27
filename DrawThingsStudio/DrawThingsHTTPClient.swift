@@ -133,6 +133,88 @@ class DrawThingsHTTPClient: DrawThingsProvider {
         return images
     }
 
+    // MARK: - Fetch Models
+
+    func fetchModels() async throws -> [DrawThingsModel] {
+        let url = baseURL.appendingPathComponent("sdapi/v1/sd-models")
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        applyAuth(&request)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw DrawThingsError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            logger.error("Failed to fetch models: \(httpResponse.statusCode) - \(errorMessage)")
+            throw DrawThingsError.requestFailed(httpResponse.statusCode, errorMessage)
+        }
+
+        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw DrawThingsError.invalidResponse
+        }
+
+        let models = jsonArray.compactMap { dict -> DrawThingsModel? in
+            // SD WebUI format: {"title": "model name", "model_name": "filename", "filename": "path"}
+            // Draw Things may use slightly different format
+            if let title = dict["title"] as? String {
+                let modelName = dict["model_name"] as? String ?? title
+                return DrawThingsModel(name: title, filename: modelName)
+            } else if let modelName = dict["model_name"] as? String {
+                return DrawThingsModel(filename: modelName)
+            } else if let name = dict["name"] as? String {
+                let filename = dict["filename"] as? String ?? name
+                return DrawThingsModel(name: name, filename: filename)
+            }
+            return nil
+        }
+
+        logger.info("Fetched \(models.count) models from Draw Things")
+        return models
+    }
+
+    // MARK: - Fetch LoRAs
+
+    func fetchLoRAs() async throws -> [DrawThingsLoRA] {
+        let url = baseURL.appendingPathComponent("sdapi/v1/loras")
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        applyAuth(&request)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw DrawThingsError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            logger.error("Failed to fetch LoRAs: \(httpResponse.statusCode) - \(errorMessage)")
+            throw DrawThingsError.requestFailed(httpResponse.statusCode, errorMessage)
+        }
+
+        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw DrawThingsError.invalidResponse
+        }
+
+        let loras = jsonArray.compactMap { dict -> DrawThingsLoRA? in
+            // SD WebUI format: {"name": "lora name", "alias": "alias", "path": "path"}
+            if let name = dict["name"] as? String {
+                let filename = dict["path"] as? String ?? name
+                return DrawThingsLoRA(name: name, filename: filename)
+            } else if let alias = dict["alias"] as? String {
+                return DrawThingsLoRA(filename: alias)
+            }
+            return nil
+        }
+
+        logger.info("Fetched \(loras.count) LoRAs from Draw Things")
+        return loras
+    }
+
     // MARK: - Image Encoding
 
     private func imageToBase64(_ image: NSImage) -> String? {

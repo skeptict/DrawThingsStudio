@@ -215,6 +215,90 @@ enum DrawThingsConnectionStatus: Equatable {
     }
 }
 
+// MARK: - Available Assets
+
+/// Model information from Draw Things
+struct DrawThingsModel: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let filename: String
+
+    init(name: String, filename: String) {
+        self.id = filename
+        self.name = name
+        self.filename = filename
+    }
+
+    init(filename: String) {
+        self.id = filename
+        self.filename = filename
+        // Extract display name from filename
+        self.name = filename
+            .replacingOccurrences(of: ".ckpt", with: "")
+            .replacingOccurrences(of: ".safetensors", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+    }
+}
+
+/// Sampler information
+struct DrawThingsSampler: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let displayName: String
+
+    init(name: String, displayName: String? = nil) {
+        self.id = name
+        self.name = name
+        self.displayName = displayName ?? name
+    }
+
+    /// Built-in samplers available in Draw Things
+    static let builtIn: [DrawThingsSampler] = [
+        DrawThingsSampler(name: "DPM++ 2M Karras", displayName: "DPM++ 2M Karras"),
+        DrawThingsSampler(name: "Euler a", displayName: "Euler Ancestral"),
+        DrawThingsSampler(name: "DDIM", displayName: "DDIM"),
+        DrawThingsSampler(name: "PLMS", displayName: "PLMS"),
+        DrawThingsSampler(name: "DPM++ SDE Karras", displayName: "DPM++ SDE Karras"),
+        DrawThingsSampler(name: "UniPC", displayName: "UniPC"),
+        DrawThingsSampler(name: "LCM", displayName: "LCM"),
+        DrawThingsSampler(name: "Euler a Substep", displayName: "Euler Ancestral Substep"),
+        DrawThingsSampler(name: "DPM++ SDE Substep", displayName: "DPM++ SDE Substep"),
+        DrawThingsSampler(name: "TCD", displayName: "TCD"),
+        DrawThingsSampler(name: "Euler a Trailing", displayName: "Euler Ancestral Trailing"),
+        DrawThingsSampler(name: "DPM++ SDE Trailing", displayName: "DPM++ SDE Trailing"),
+        DrawThingsSampler(name: "DPM++ 2M AYS", displayName: "DPM++ 2M AYS"),
+        DrawThingsSampler(name: "Euler a AYS", displayName: "Euler Ancestral AYS"),
+        DrawThingsSampler(name: "DPM++ SDE AYS", displayName: "DPM++ SDE AYS"),
+        DrawThingsSampler(name: "DPM++ 2M Trailing", displayName: "DPM++ 2M Trailing"),
+        DrawThingsSampler(name: "DDIM Trailing", displayName: "DDIM Trailing"),
+        DrawThingsSampler(name: "UniPC Trailing", displayName: "UniPC Trailing"),
+        DrawThingsSampler(name: "UniPC AYS", displayName: "UniPC AYS"),
+    ]
+}
+
+/// LoRA information from Draw Things
+struct DrawThingsLoRA: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let filename: String
+
+    init(filename: String) {
+        self.id = filename
+        self.filename = filename
+        // Extract display name from filename
+        self.name = filename
+            .replacingOccurrences(of: ".safetensors", with: "")
+            .replacingOccurrences(of: ".ckpt", with: "")
+            .replacingOccurrences(of: "_", with: " ")
+    }
+
+    init(name: String, filename: String) {
+        self.id = filename
+        self.name = name
+        self.filename = filename
+    }
+}
+
 // MARK: - Errors
 
 enum DrawThingsError: LocalizedError {
@@ -258,6 +342,12 @@ protocol DrawThingsProvider: AnyObject {
         config: DrawThingsGenerationConfig,
         onProgress: ((GenerationProgress) -> Void)?
     ) async throws -> [NSImage]
+
+    /// Fetch available models from Draw Things
+    func fetchModels() async throws -> [DrawThingsModel]
+
+    /// Fetch available LoRAs from Draw Things
+    func fetchLoRAs() async throws -> [DrawThingsLoRA]
 }
 
 // MARK: - Protocol Extension for Convenience

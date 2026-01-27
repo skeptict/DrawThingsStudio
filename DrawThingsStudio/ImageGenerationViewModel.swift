@@ -32,6 +32,11 @@ final class ImageGenerationViewModel: ObservableObject {
     @Published var connectionStatus: DrawThingsConnectionStatus = .disconnected
     @Published var errorMessage: String?
 
+    // Available assets from Draw Things
+    @Published var availableModels: [DrawThingsModel] = []
+    @Published var availableLoRAs: [DrawThingsLoRA] = []
+    @Published var isLoadingAssets = false
+
     // MARK: - Private
 
     private var client: (any DrawThingsProvider)?
@@ -58,6 +63,38 @@ final class ImageGenerationViewModel: ObservableObject {
 
         let connected = await client.checkConnection()
         connectionStatus = connected ? .connected : .error("Cannot reach Draw Things at configured address")
+
+        // Fetch available models and LoRAs after successful connection
+        if connected {
+            await fetchAvailableAssets()
+        }
+    }
+
+    /// Fetch available models and LoRAs from Draw Things
+    func fetchAvailableAssets() async {
+        guard let client = client else { return }
+
+        isLoadingAssets = true
+
+        // Fetch models
+        do {
+            availableModels = try await client.fetchModels()
+            logger.info("Loaded \(self.availableModels.count) models")
+        } catch {
+            logger.warning("Failed to fetch models: \(error.localizedDescription)")
+            // Keep existing models if fetch fails
+        }
+
+        // Fetch LoRAs
+        do {
+            availableLoRAs = try await client.fetchLoRAs()
+            logger.info("Loaded \(self.availableLoRAs.count) LoRAs")
+        } catch {
+            logger.warning("Failed to fetch LoRAs: \(error.localizedDescription)")
+            // Keep existing LoRAs if fetch fails
+        }
+
+        isLoadingAssets = false
     }
 
     // MARK: - Generation
