@@ -211,13 +211,66 @@ Fixed: Selecting a preset now populates the Model field via `editModel = preset.
 1. **Image Evaluation via LLM** - Connect vision-capable LLMs (LLaVA, Qwen-VL) via Ollama for quality assessment
 2. **Image Metadata Reading** - Extract generation metadata from images (Draw Things, A1111, ComfyUI formats)
 
-### Phase 1 Remaining
-3. **Direct StoryFlow Execution** - Send StoryFlow commands directly to Draw Things without scripts
-
 ### Phase 3+
-4. **Conditional Logic** - If/else branching based on image analysis
-5. **Batch Processing** - Queue multiple workflows, parameter sweeps
-6. **Shortcuts Integration** - Expose workflows to macOS Shortcuts
+3. **Conditional Logic** - If/else branching based on image analysis
+4. **Batch Processing** - Queue multiple workflows, parameter sweeps
+5. **Shortcuts Integration** - Expose workflows to macOS Shortcuts
+
+---
+
+## Direct StoryFlow Execution
+
+### Overview
+Direct execution allows running StoryFlow workflows without exporting to Draw Things scripts. The executor translates instructions to Draw Things API calls where possible.
+
+### Supported Instructions
+
+**Fully Supported:**
+| Instruction | Behavior |
+|-------------|----------|
+| `note` | Skipped (no-op) |
+| `loop`, `loopEnd` | Client-side iteration |
+| `end` | Stops execution |
+| `prompt`, `negativePrompt` | Sets generation parameters |
+| `config` | Merges with current config |
+| `frames` | Sets frame count |
+| `canvasLoad` | Loads image from Pictures folder |
+| `canvasSave` | Triggers generation and saves result |
+| `loopLoad`, `loopSave` | Iterates over folder files |
+
+**Partially Supported:**
+| Instruction | Limitation |
+|-------------|------------|
+| `maskLoad` | Loads mask but requires generation trigger |
+| `moodboardAdd` | Tracks image but API doesn't use moodboard |
+| `inpaintTools` | Only strength setting applied |
+
+**Not Supported (Skipped):**
+- Canvas manipulation: `canvasClear`, `moveScale`, `adaptSize`, `crop`
+- Moodboard operations: All moodboard instructions
+- Mask operations: `maskClear`, `maskGet`, `maskBackground`, `maskForeground`, `maskBody`, `maskAsk`
+- Depth/Pose: All depth and pose instructions
+- AI features: `removeBackground`, `faceZoom`, `askZoom`, `xlMagic`
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `StoryflowExecutor.swift` | Core execution engine with state management |
+| `WorkflowExecutionViewModel.swift` | ViewModel for execution UI |
+| `WorkflowExecutionView.swift` | Execution progress UI |
+
+### Execution Flow
+```
+Instructions → StoryflowExecutor
+                    ↓
+              ExecutionState (canvas, mask, config, prompt)
+                    ↓
+              canvasSave triggers generation
+                    ↓
+              DrawThingsProvider (HTTP/gRPC)
+                    ↓
+              Generated images saved to working directory
+```
 
 ---
 
@@ -245,9 +298,18 @@ Fixed: Selecting a preset now populates the Model field via `editModel = preset.
 - Created NeumorphicStyle.swift with colors, modifiers, components
 - Updated all views with warm beige theme
 
-### Session 5 (Jan 26, 2026) - Current
+### Session 5 (Jan 26, 2026)
 - **Successfully integrated gRPC** using DT-gRPC-Swift-Client library
 - Added package dependency via SPM
 - Created DrawThingsGRPCClient.swift wrapper
 - Both HTTP and gRPC transports now working
 - Updated README.md with comprehensive features and roadmap
+
+### Session 6 (Jan 27, 2026) - Current
+- **Implemented Direct StoryFlow Execution**
+- Created `StoryflowExecutor.swift` - Core execution engine with state management
+- Created `WorkflowExecutionViewModel.swift` - ViewModel for execution tracking
+- Created `WorkflowExecutionView.swift` - Execution UI with progress and generated images
+- Added "Execute" button to WorkflowBuilderView toolbar
+- Analyzed Draw Things API capabilities (HTTP and gRPC)
+- Documented supported/unsupported instructions for direct execution

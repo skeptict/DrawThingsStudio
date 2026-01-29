@@ -25,6 +25,17 @@ Build complex Draw Things automation workflows with a visual drag-and-drop inter
 - **Templates**: Built-in workflow templates for common use cases
 - **Copy/Paste**: Copy workflow JSON directly to clipboard
 
+#### Direct Workflow Execution
+
+Execute workflows directly from the app without exporting to Draw Things:
+
+- **Execute Button**: Run workflows directly via Draw Things API
+- **Progress Tracking**: Real-time execution log showing each instruction
+- **Support Analysis**: Shows which instructions are fully supported, partially supported, or will be skipped
+- **Generated Images**: View all images generated during execution
+- **Working Directory**: Configure output folder for saved images
+- **Cancel Support**: Stop execution at any time
+
 ### Image Generation
 
 Generate images directly from Draw Things Studio via HTTP or gRPC:
@@ -101,11 +112,14 @@ DrawThingsStudio/
 │   ├── WorkflowInstruction.swift    # Instruction model
 │   └── JSONPreviewView.swift        # JSON preview sheet
 │
-├── StoryFlow Export
+├── StoryFlow Export & Execution
 │   ├── StoryflowInstructions.swift  # Instruction type definitions
 │   ├── StoryflowExporter.swift      # JSON export
 │   ├── StoryflowValidator.swift     # Validation logic
-│   └── StoryflowInstructionGenerator.swift
+│   ├── StoryflowInstructionGenerator.swift
+│   ├── StoryflowExecutor.swift      # Direct execution engine
+│   ├── WorkflowExecutionView.swift  # Execution UI
+│   └── WorkflowExecutionViewModel.swift
 │
 ├── Image Generation
 │   ├── ImageGenerationView.swift    # Generation UI
@@ -141,11 +155,12 @@ DrawThingsStudio/
   - Full configuration support (19 samplers, LoRAs, seed modes)
   - Uses [DT-gRPC-Swift-Client](https://github.com/euphoriacyberware-ai/DT-gRPC-Swift-Client) library
 
-- [ ] **Direct StoryFlow Execution**
-  - Send StoryFlow commands directly to Draw Things without running scripts
-  - Real-time workflow execution with step-by-step progress
-  - Pause, resume, and cancel running workflows
-  - Live preview of intermediate results
+- [x] **Direct StoryFlow Execution** ✓
+  - Execute workflows directly from the app via Draw Things API
+  - Real-time execution progress with step-by-step logging
+  - Cancel running workflows
+  - Generated images displayed in execution panel
+  - **Note:** Some instructions (canvas manipulation, moodboard, AI features) require Draw Things internal state and are skipped during direct execution
 
 ### Phase 2: Intelligent Image Analysis
 
