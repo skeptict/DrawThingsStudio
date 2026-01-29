@@ -18,6 +18,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
     private let host: String
     private let port: Int
     private var client: DrawThingsClient?
+    private var service: DrawThingsService?
 
     init(host: String = "127.0.0.1", port: Int = 7859) {
         self.host = host
@@ -94,21 +95,60 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
     // MARK: - Fetch Models
 
     func fetchModels() async throws -> [DrawThingsModel] {
-        // gRPC API returns model metadata in FlatBuffer format via Echo response
-        // For now, return empty array - use HTTP client for model discovery
-        // TODO: Implement FlatBuffer decoding for MetadataOverride.models
-        print("[gRPC] fetchModels not implemented - use HTTP transport for model discovery")
-        return []
+        let files = try await fetchFileList()
+
+        // Filter for model files (not LoRAs, control nets, etc.)
+        let modelExtensions = [".ckpt", ".safetensors", ".bin"]
+        let loraIndicators = ["/loras/", "/lora/", "lora_", "_lora"]
+
+        let modelFiles = files.filter { file in
+            let lower = file.lowercased()
+            let hasModelExtension = modelExtensions.contains { lower.hasSuffix($0) }
+            let isLora = loraIndicators.contains { lower.contains($0) }
+            return hasModelExtension && !isLora
+        }
+
+        let models = modelFiles.map { DrawThingsModel(filename: $0) }
+        print("[gRPC] Found \(models.count) models from echo files (\(files.count) total files)")
+        return models
     }
 
     // MARK: - Fetch LoRAs
 
     func fetchLoRAs() async throws -> [DrawThingsLoRA] {
-        // gRPC API returns LoRA metadata in FlatBuffer format via Echo response
-        // For now, return empty array - use HTTP client for LoRA discovery
-        // TODO: Implement FlatBuffer decoding for MetadataOverride.loras
-        print("[gRPC] fetchLoRAs not implemented - use HTTP transport for LoRA discovery")
-        return []
+        let files = try await fetchFileList()
+
+        // Filter for LoRA files
+        let loraIndicators = ["/loras/", "/lora/", "lora_", "_lora"]
+        let modelExtensions = [".ckpt", ".safetensors", ".bin"]
+
+        let loraFiles = files.filter { file in
+            let lower = file.lowercased()
+            let hasModelExtension = modelExtensions.contains { lower.hasSuffix($0) }
+            let isLora = loraIndicators.contains { lower.contains($0) }
+            return hasModelExtension && isLora
+        }
+
+        let loras = loraFiles.map { DrawThingsLoRA(filename: $0) }
+        print("[gRPC] Found \(loras.count) LoRAs from echo files")
+        return loras
+    }
+
+    // MARK: - Echo File List
+
+    private func fetchFileList() async throws -> [String] {
+        let address = "\(host):\(port)"
+
+        if service == nil {
+            service = try DrawThingsService(address: address, useTLS: true)
+        }
+
+        guard let service = service else {
+            throw DrawThingsError.connectionFailed("Failed to create gRPC service")
+        }
+
+        let echoReply = try await service.echo()
+        return echoReply.files
     }
 
     // MARK: - Config Conversion

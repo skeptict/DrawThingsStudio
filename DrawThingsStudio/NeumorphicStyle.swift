@@ -105,7 +105,7 @@ struct NeumorphicTextFieldStyle: TextFieldStyle {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.neuBackground.opacity(0.6))
+                    .fill(Color.neuBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(Color.neuShadowDark.opacity(0.1), lineWidth: 0.5)

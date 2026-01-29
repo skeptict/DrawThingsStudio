@@ -32,15 +32,9 @@ final class DrawThingsAssetManager: ObservableObject {
 
     // MARK: - Fetch Assets
 
-    /// Fetch all available assets from Draw Things
+    /// Fetch all available assets from Draw Things using the configured transport
     func fetchAssets() async {
-        // Create HTTP client for fetching (HTTP has better support for asset listing)
-        let settings = AppSettings.shared
-        let client = DrawThingsHTTPClient(
-            host: settings.drawThingsHost,
-            port: settings.drawThingsHTTPPort,
-            sharedSecret: settings.drawThingsSharedSecret
-        )
+        let client = AppSettings.shared.createDrawThingsClient()
 
         isLoading = true
         lastError = nil
@@ -57,15 +51,14 @@ final class DrawThingsAssetManager: ObservableObject {
         do {
             let fetchedModels = try await client.fetchModels()
             if fetchedModels.isEmpty {
-                logger.info("Draw Things returned empty model list - endpoint may not be supported")
+                logger.info("Draw Things returned empty model list")
             } else {
                 models = fetchedModels
-                logger.info("Fetched \(self.models.count) models")
+                logger.info("Fetched \(self.models.count) models via \(client.transport.displayName)")
             }
         } catch let error as DrawThingsError {
-            // Check if it's a 404 or similar - endpoint might not exist
             if case .requestFailed(let code, _) = error, code == 404 {
-                logger.info("Draw Things doesn't support /sdapi/v1/sd-models endpoint (404)")
+                logger.info("Endpoint not supported (404)")
             } else {
                 logger.warning("Failed to fetch models: \(error.localizedDescription)")
                 lastError = "Model list unavailable - type model name manually"
@@ -78,14 +71,14 @@ final class DrawThingsAssetManager: ObservableObject {
         do {
             let fetchedLoRAs = try await client.fetchLoRAs()
             if fetchedLoRAs.isEmpty {
-                logger.info("Draw Things returned empty LoRA list - endpoint may not be supported")
+                logger.info("Draw Things returned empty LoRA list")
             } else {
                 loras = fetchedLoRAs
-                logger.info("Fetched \(self.loras.count) LoRAs")
+                logger.info("Fetched \(self.loras.count) LoRAs via \(client.transport.displayName)")
             }
         } catch let error as DrawThingsError {
             if case .requestFailed(let code, _) = error, code == 404 {
-                logger.info("Draw Things doesn't support /sdapi/v1/loras endpoint (404)")
+                logger.info("Endpoint not supported (404)")
             } else {
                 logger.warning("Failed to fetch LoRAs: \(error.localizedDescription)")
             }
