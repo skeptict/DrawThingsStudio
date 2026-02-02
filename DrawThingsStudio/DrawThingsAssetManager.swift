@@ -42,7 +42,7 @@ final class DrawThingsAssetManager: ObservableObject {
         // First check connection
         let connected = await client.checkConnection()
         guard connected else {
-            lastError = "Cannot connect to Draw Things"
+            lastError = "Cannot connect to Draw Things (\(client.transport.displayName))"
             isLoading = false
             return
         }
@@ -50,40 +50,26 @@ final class DrawThingsAssetManager: ObservableObject {
         // Fetch models
         do {
             let fetchedModels = try await client.fetchModels()
-            if fetchedModels.isEmpty {
-                logger.info("Draw Things returned empty model list")
-            } else {
+            if !fetchedModels.isEmpty {
                 models = fetchedModels
-                logger.info("Fetched \(self.models.count) models via \(client.transport.displayName)")
             }
-        } catch let error as DrawThingsError {
-            if case .requestFailed(let code, _) = error, code == 404 {
-                logger.info("Endpoint not supported (404)")
-            } else {
-                logger.warning("Failed to fetch models: \(error.localizedDescription)")
-                lastError = "Model list unavailable - type model name manually"
-            }
+            lastError = "Connected via \(client.transport.displayName) - \(fetchedModels.count) models found"
         } catch {
-            logger.warning("Failed to fetch models: \(error.localizedDescription)")
+            lastError = "Model fetch failed: \(error.localizedDescription)"
         }
 
         // Fetch LoRAs
         do {
             let fetchedLoRAs = try await client.fetchLoRAs()
-            if fetchedLoRAs.isEmpty {
-                logger.info("Draw Things returned empty LoRA list")
-            } else {
+            if !fetchedLoRAs.isEmpty {
                 loras = fetchedLoRAs
-                logger.info("Fetched \(self.loras.count) LoRAs via \(client.transport.displayName)")
             }
-        } catch let error as DrawThingsError {
-            if case .requestFailed(let code, _) = error, code == 404 {
-                logger.info("Endpoint not supported (404)")
-            } else {
-                logger.warning("Failed to fetch LoRAs: \(error.localizedDescription)")
-            }
+            let modelCount = models.count
+            let loraCount = fetchedLoRAs.count
+            lastError = "Connected via \(client.transport.displayName) - \(modelCount) models, \(loraCount) LoRAs"
         } catch {
-            logger.warning("Failed to fetch LoRAs: \(error.localizedDescription)")
+            let prev = lastError ?? ""
+            lastError = "\(prev) | LoRA fetch failed: \(error.localizedDescription)"
         }
 
         isLoading = false

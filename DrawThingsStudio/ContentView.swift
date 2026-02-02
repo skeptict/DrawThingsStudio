@@ -11,6 +11,8 @@ import SwiftData
 struct ContentView: View {
     @State private var selectedItem: SidebarItem? = .workflow
     @StateObject private var workflowViewModel = WorkflowBuilderViewModel()
+    @StateObject private var imageGenViewModel = ImageGenerationViewModel()
+    @StateObject private var imageInspectorViewModel = ImageInspectorViewModel()
 
     var body: some View {
         NavigationSplitView {
@@ -29,6 +31,7 @@ struct ContentView: View {
 
                 sidebarButton("Workflow Builder", icon: "hammer", item: .workflow)
                 sidebarButton("Generate Image", icon: "photo.badge.plus", item: .generateImage)
+                sidebarButton("Image Inspector", icon: "doc.text.magnifyingglass", item: .imageInspector)
 
                 NeuSectionHeader("Library", icon: "books.vertical")
                     .padding(.horizontal, 16)
@@ -58,9 +61,19 @@ struct ContentView: View {
                     .opacity(selectedItem == .workflow || selectedItem == nil ? 1 : 0)
                     .allowsHitTesting(selectedItem == .workflow || selectedItem == nil)
 
-                if selectedItem == .generateImage {
-                    ImageGenerationView()
-                } else if selectedItem == .library {
+                ImageGenerationView(viewModel: imageGenViewModel)
+                    .opacity(selectedItem == .generateImage ? 1 : 0)
+                    .allowsHitTesting(selectedItem == .generateImage)
+
+                ImageInspectorView(
+                    viewModel: imageInspectorViewModel,
+                    imageGenViewModel: imageGenViewModel,
+                    selectedSidebarItem: $selectedItem
+                )
+                .opacity(selectedItem == .imageInspector ? 1 : 0)
+                .allowsHitTesting(selectedItem == .imageInspector)
+
+                if selectedItem == .library {
                     SavedWorkflowsView(
                         viewModel: workflowViewModel,
                         selectedItem: $selectedItem
@@ -101,6 +114,7 @@ struct ContentView: View {
 enum SidebarItem: String, Identifiable {
     case workflow
     case generateImage
+    case imageInspector
     case library
     case templates
     case settings

@@ -1,0 +1,499 @@
+//
+//  PNGMetadataParser.swift
+//  DrawThingsStudio
+//
+//  Extracts AI generation metadata from PNG files (A1111, Draw Things, ComfyUI)
+//
+
+import Foundation
+import ImageIO
+
+// MARK: - Metadata Types
+
+enum PNGMetadataFormat: String {
+    case a1111 = "A1111 / Forge"
+    case drawThings = "Draw Things"
+    case comfyUI = "ComfyUI"
+    case unknown = "Unknown"
+}
+
+struct PNGMetadataLoRA {
+    var file: String
+    var weight: Double
+    var mode: String
+
+    init(file: String, weight: Double = 1.0, mode: String = "all") {
+        self.file = file
+        self.weight = weight
+        self.mode = mode
+    }
+}
+
+struct PNGMetadata {
+    var prompt: String?
+    var negativePrompt: String?
+    var width: Int?
+    var height: Int?
+    var steps: Int?
+    var guidanceScale: Double?
+    var seed: Int?
+    var sampler: String?
+    var model: String?
+    var strength: Double?
+    var shift: Double?
+    var seedMode: String?
+    var loras: [PNGMetadataLoRA] = []
+    var format: PNGMetadataFormat = .unknown
+
+    /// Raw text of the metadata chunk (for display/debugging)
+    var rawText: String?
+
+    var hasPrompt: Bool { prompt != nil && !(prompt?.isEmpty ?? true) }
+    var hasConfig: Bool { steps != nil || guidanceScale != nil || seed != nil || sampler != nil || model != nil }
+    var hasLoRAs: Bool { !loras.isEmpty }
+}
+
+// MARK: - Parser
+
+struct PNGMetadataParser {
+
+    // MARK: - Public API
+
+    static func parse(url: URL) -> PNGMetadata? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return parse(data: data, url: url)
+    }
+
+    static func parse(data: Data, url: URL? = nil) -> PNGMetadata? {
+        // Extract PNG text chunks via manual binary parsing
+        let chunks = extractTextChunks(from: data)
+
+        // Debug: dump all found chunk keys to /tmp for diagnostics
+        var debugInfo = "PNG chunk keys found: \(chunks.keys.sorted().joined(separator: ", "))\n"
+        debugInfo += "Total chunks: \(chunks.count)\n"
+        for (key, value) in chunks.sorted(by: { $0.key < $1.key }) {
+            debugInfo += "[\(key)] (\(value.count) chars): \(value)\n\n"
+        }
+
+        // Also try CGImageSource properties for diagnostics
+        if let url = url {
+            if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] {
+                debugInfo += "\nCGImageSource properties keys: \(props.keys.sorted().joined(separator: ", "))\n"
+                for (key, value) in props.sorted(by: { $0.key < $1.key }) {
+                    debugInfo += "CGI[\(key)]: \(String(describing: value))\n"
+                }
+            }
+        }
+
+        // Write to sandbox-safe location
+        if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let dir = appSupport.appendingPathComponent("DrawThingsStudio")
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try? debugInfo.write(to: dir.appendingPathComponent("png_debug.log"), atomically: true, encoding: .utf8)
+        }
+
+        // Try A1111 format: tEXt chunk with key "parameters"
+        if let parameters = chunks["parameters"] {
+            var meta = parseA1111(parameters)
+            meta.rawText = parameters
+            return meta
+        }
+
+        // Try ComfyUI format: tEXt chunk with key "prompt" (JSON)
+        if let promptJSON = chunks["prompt"] {
+            var meta = parseComfyUI(promptJSON: promptJSON, workflowJSON: chunks["workflow"])
+            meta.rawText = promptJSON
+            return meta
+        }
+
+        // Try Draw Things format: XMP metadata via CGImageSource
+        if let url = url {
+            if let meta = parseDrawThingsXMP(url: url) {
+                return meta
+            }
+        }
+
+        // Also check if XMP is in iTXt chunks we extracted
+        if let xmp = chunks["XML:com.adobe.xmp"] {
+            var meta = parseDrawThingsFromXMP(xmp)
+            if meta.hasPrompt || meta.hasConfig {
+                return meta
+            }
+        }
+
+        return nil
+    }
+
+    // MARK: - PNG Chunk Extraction
+
+    /// Extracts tEXt and iTXt chunks from raw PNG data.
+    /// PNG format: 8-byte signature, then chunks of [4-byte length (big-endian)][4-byte type][data][4-byte CRC]
+    private static func extractTextChunks(from data: Data) -> [String: String] {
+        let bytes = [UInt8](data)
+        var results: [String: String] = [:]
+
+        // Validate PNG signature: 137 80 78 71 13 10 26 10
+        guard bytes.count > 8,
+              bytes[0] == 0x89, bytes[1] == 0x50, bytes[2] == 0x4E, bytes[3] == 0x47,
+              bytes[4] == 0x0D, bytes[5] == 0x0A, bytes[6] == 0x1A, bytes[7] == 0x0A else {
+            return results
+        }
+
+        var offset = 8
+
+        while offset + 8 <= bytes.count {
+            // Read chunk length (big-endian)
+            let length = Int(bytes[offset]) << 24 | Int(bytes[offset + 1]) << 16 |
+                         Int(bytes[offset + 2]) << 8 | Int(bytes[offset + 3])
+            offset += 4
+
+            // Read chunk type
+            guard offset + 4 <= bytes.count else { break }
+            let typeBytes = Array(bytes[offset..<offset + 4])
+            let chunkType = String(bytes: typeBytes, encoding: .ascii) ?? ""
+            offset += 4
+
+            guard length >= 0, offset + length <= bytes.count else { break }
+
+            if chunkType == "tEXt" {
+                // tEXt: keyword\0text
+                let chunkData = Array(bytes[offset..<offset + length])
+                if let nullIndex = chunkData.firstIndex(of: 0) {
+                    let keyword = String(bytes: chunkData[0..<nullIndex], encoding: .isoLatin1) ?? ""
+                    let value = String(bytes: chunkData[(nullIndex + 1)...], encoding: .isoLatin1) ?? ""
+                    if !keyword.isEmpty {
+                        results[keyword] = value
+                    }
+                }
+            } else if chunkType == "iTXt" {
+                // iTXt: keyword\0 compressionFlag(1) compressionMethod(1) languageTag\0 translatedKeyword\0 text
+                let chunkData = Array(bytes[offset..<offset + length])
+                if let nullIndex = chunkData.firstIndex(of: 0) {
+                    let keyword = String(bytes: chunkData[0..<nullIndex], encoding: .utf8) ?? ""
+                    // Skip compression flag (1 byte) + compression method (1 byte)
+                    var textStart = nullIndex + 3
+                    // Skip language tag (null-terminated)
+                    if let langEnd = chunkData[textStart...].firstIndex(of: 0) {
+                        textStart = langEnd + 1
+                    }
+                    // Skip translated keyword (null-terminated)
+                    if textStart < chunkData.count, let transEnd = chunkData[textStart...].firstIndex(of: 0) {
+                        textStart = transEnd + 1
+                    }
+                    if textStart < chunkData.count {
+                        let text = String(bytes: chunkData[textStart...], encoding: .utf8) ?? ""
+                        if !keyword.isEmpty {
+                            results[keyword] = text
+                        }
+                    }
+                }
+            } else if chunkType == "IEND" {
+                break
+            }
+
+            // Skip chunk data + 4-byte CRC
+            offset += length + 4
+        }
+
+        return results
+    }
+
+    // MARK: - A1111 / Forge Parser
+
+    /// Parses A1111/Forge "parameters" text format:
+    /// ```
+    /// positive prompt text
+    /// Negative prompt: negative text
+    /// Steps: 50, Sampler: PLMS, CFG scale: 7, Seed: 158349270, Size: 512x512, Model: name
+    /// ```
+    private static func parseA1111(_ text: String) -> PNGMetadata {
+        var meta = PNGMetadata(format: .a1111)
+
+        // Split into prompt section and parameters line
+        let parts = text.components(separatedBy: "\nSteps: ")
+
+        if parts.count >= 2 {
+            let promptSection = parts[0]
+            let paramsLine = "Steps: " + parts[1...].joined(separator: "\nSteps: ")
+
+            // Split prompt section into positive and negative
+            let promptParts = promptSection.components(separatedBy: "\nNegative prompt: ")
+            meta.prompt = promptParts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            if promptParts.count > 1 {
+                meta.negativePrompt = promptParts[1...].joined(separator: "\nNegative prompt: ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            // Parse key-value parameters
+            parseA1111Params(paramsLine, into: &meta)
+        } else {
+            // No "Steps:" line — might just be a prompt
+            let promptParts = text.components(separatedBy: "\nNegative prompt: ")
+            meta.prompt = promptParts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            if promptParts.count > 1 {
+                meta.negativePrompt = promptParts[1...].joined(separator: "\nNegative prompt: ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        return meta
+    }
+
+    private static func parseA1111Params(_ line: String, into meta: inout PNGMetadata) {
+        if let match = line.firstMatch(of: /Steps:\s*(\d+)/) {
+            meta.steps = Int(match.1)
+        }
+        if let match = line.firstMatch(of: /Sampler:\s*([^,]+)/) {
+            meta.sampler = String(match.1).trimmingCharacters(in: .whitespaces)
+        }
+        if let match = line.firstMatch(of: /CFG scale:\s*([\d.]+)/) {
+            meta.guidanceScale = Double(match.1)
+        }
+        if let match = line.firstMatch(of: /Seed:\s*(-?\d+)/) {
+            meta.seed = Int(match.1)
+        }
+        if let match = line.firstMatch(of: /Size:\s*(\d+)x(\d+)/) {
+            meta.width = Int(match.1)
+            meta.height = Int(match.2)
+        }
+        if let match = line.firstMatch(of: /Model:\s*([^,]+)/) {
+            meta.model = String(match.1).trimmingCharacters(in: .whitespaces)
+        }
+        if let match = line.firstMatch(of: /Denoising strength:\s*([\d.]+)/) {
+            meta.strength = Double(match.1)
+        }
+    }
+
+    // MARK: - Draw Things XMP Parser
+
+    /// Uses CGImageSource to read Draw Things metadata.
+    /// Draw Things stores JSON in Exif.UserComment with short keys like "c" (prompt), "uc" (negative).
+    private static func parseDrawThingsXMP(url: URL) -> PNGMetadata? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else {
+            return nil
+        }
+
+        // Primary path: {Exif}.UserComment contains JSON
+        if let exifDict = properties[kCGImagePropertyExifDictionary as String] as? [String: Any],
+           let userComment = exifDict[kCGImagePropertyExifUserComment as String] as? String {
+            if let meta = parseDrawThingsJSON(userComment) {
+                return meta
+            }
+        }
+
+        // Fallback: check PNG Description
+        if let pngDict = properties[kCGImagePropertyPNGDictionary as String] as? [String: Any],
+           let desc = pngDict[kCGImagePropertyPNGDescription as String] as? String {
+            // Description is typically the human-readable prompt, not JSON
+            var meta = PNGMetadata(format: .drawThings)
+            meta.prompt = desc
+            meta.rawText = desc
+            // Try to get dimensions from properties
+            if let w = properties["PixelWidth"] as? Int { meta.width = w }
+            if let h = properties["PixelHeight"] as? Int { meta.height = h }
+            if meta.hasPrompt { return meta }
+        }
+
+        return nil
+    }
+
+    /// Public entry point for parsing Draw Things JSON directly (e.g. from CGImageSource Exif)
+    static func parseDrawThingsJSONPublic(_ jsonString: String) -> PNGMetadata? {
+        return parseDrawThingsJSON(jsonString)
+    }
+
+    /// Parse Draw Things JSON which uses short keys:
+    /// "c" = prompt, "uc" = negative prompt, "model", "sampler", "scale", "size", "lora", etc.
+    /// Full config is also available in "v2" with long key names.
+    private static func parseDrawThingsJSON(_ jsonString: String) -> PNGMetadata? {
+        guard let data = jsonString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        var meta = PNGMetadata(format: .drawThings)
+        meta.rawText = jsonString
+
+        // Draw Things short keys
+        meta.prompt = json["c"] as? String ?? json["prompt"] as? String
+        meta.negativePrompt = json["uc"] as? String ?? json["negative_prompt"] as? String
+        meta.model = json["model"] as? String ?? json["file"] as? String
+        meta.sampler = json["sampler"] as? String
+
+        // Size comes as "2048x1152" string
+        if let sizeStr = json["size"] as? String {
+            let parts = sizeStr.split(separator: "x")
+            if parts.count == 2, let w = Int(parts[0]), let h = Int(parts[1]) {
+                meta.width = w
+                meta.height = h
+            }
+        }
+        if meta.width == nil, let w = json["width"] as? Int { meta.width = w }
+        if meta.height == nil, let h = json["height"] as? Int { meta.height = h }
+
+        if let s = json["steps"] as? Int { meta.steps = s }
+        else if let s = json["steps"] as? Double { meta.steps = Int(s) }
+
+        // Guidance scale: "scale" in DT short format, or various long names
+        if let g = json["scale"] as? Double { meta.guidanceScale = g }
+        else if let g = json["scale"] as? Int { meta.guidanceScale = Double(g) }
+        else if let g = json["guidance_scale"] as? Double { meta.guidanceScale = g }
+        else if let g = json["guidanceScale"] as? Double { meta.guidanceScale = g }
+
+        if let seed = json["seed"] as? Int { meta.seed = seed }
+        else if let seed = json["seed"] as? UInt32 { meta.seed = Int(seed) }
+        else if let seed = json["seed"] as? Double { meta.seed = Int(seed) }
+
+        if let str = json["strength"] as? Double { meta.strength = str }
+        else if let str = json["strength"] as? Int { meta.strength = Double(str) }
+
+        if let sh = json["shift"] as? Double { meta.shift = sh }
+        if let sm = json["seed_mode"] as? String { meta.seedMode = sm }
+
+        // LoRAs: top-level "lora" array with "model" and "weight" keys
+        if let loraArray = json["lora"] as? [[String: Any]] {
+            for loraDict in loraArray {
+                let file = loraDict["model"] as? String ?? loraDict["file"] as? String ?? ""
+                let weight = loraDict["weight"] as? Double ?? 1.0
+                let mode = loraDict["mode"] as? String ?? "all"
+                if !file.isEmpty {
+                    meta.loras.append(PNGMetadataLoRA(file: file, weight: weight, mode: mode))
+                }
+            }
+        }
+
+        // "v2" contains the full config with long key names — use as fallback/enrichment
+        if let v2 = json["v2"] as? [String: Any] {
+            if meta.model == nil || meta.model?.isEmpty == true {
+                meta.model = v2["model"] as? String
+            }
+            if meta.shift == nil {
+                if let sh = v2["shift"] as? Double { meta.shift = sh }
+            }
+            if meta.guidanceScale == nil {
+                if let g = v2["guidanceScale"] as? Double { meta.guidanceScale = g }
+            }
+            // v2 loras with "file", "weight", "mode" keys
+            if meta.loras.isEmpty, let v2Loras = v2["loras"] as? [[String: Any]] {
+                for loraDict in v2Loras {
+                    let file = loraDict["file"] as? String ?? ""
+                    let weight = loraDict["weight"] as? Double ?? 1.0
+                    let mode = loraDict["mode"] as? String ?? "all"
+                    if !file.isEmpty {
+                        meta.loras.append(PNGMetadataLoRA(file: file, weight: weight, mode: mode))
+                    }
+                }
+            }
+        }
+
+        if meta.hasPrompt || meta.hasConfig {
+            return meta
+        }
+        return nil
+    }
+
+    /// Parses XMP XML to extract Draw Things generation parameters from exif:UserComment.
+    /// The JSON is nested inside: <exif:UserComment><rdf:Alt><rdf:li xml:lang="x-default">JSON</rdf:li></rdf:Alt></exif:UserComment>
+    private static func parseDrawThingsFromXMP(_ xmp: String) -> PNGMetadata {
+        // Find the JSON inside UserComment — it's within an rdf:li tag
+        // Look for JSON starting with { after "x-default">"
+        if xmp.contains("exif:UserComment") {
+            // Extract content between the innermost rdf:li tags within exif:UserComment
+            if let ucStart = xmp.range(of: "<exif:UserComment>"),
+               let ucEnd = xmp.range(of: "</exif:UserComment>") {
+                let ucContent = String(xmp[ucStart.upperBound..<ucEnd.lowerBound])
+                // Find JSON within rdf:li: look for { ... }
+                if let jsonStart = ucContent.firstIndex(of: "{"),
+                   let jsonEnd = ucContent.lastIndex(of: "}") {
+                    let jsonString = String(ucContent[jsonStart...jsonEnd])
+                    if let meta = parseDrawThingsJSON(jsonString) {
+                        return meta
+                    }
+                }
+            }
+        }
+
+        // Fallback: try dc:description for A1111-style text
+        var meta = PNGMetadata(format: .drawThings)
+        meta.rawText = xmp
+        if let descStart = xmp.range(of: "<dc:description>"),
+           let descEnd = xmp.range(of: "</dc:description>") {
+            let desc = String(xmp[descStart.upperBound..<descEnd.lowerBound])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleaned = desc.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                .replacingOccurrences(of: "&#xA;", with: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleaned.isEmpty {
+                // This looks like A1111 format: prompt\nSteps: X, Sampler: Y, ...
+                meta = parseA1111(cleaned)
+                meta.format = .drawThings
+            }
+        }
+        return meta
+    }
+
+    // MARK: - ComfyUI Parser
+
+    /// Parses ComfyUI "prompt" JSON to extract generation parameters.
+    /// ComfyUI stores a node graph — we look for CLIPTextEncode (prompts) and KSampler (config).
+    private static func parseComfyUI(promptJSON: String, workflowJSON: String?) -> PNGMetadata {
+        var meta = PNGMetadata(format: .comfyUI)
+
+        guard let data = promptJSON.data(using: .utf8),
+              let nodes = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return meta
+        }
+
+        var positivePrompts: [String] = []
+        var negativePrompts: [String] = []
+        var samplerNode: [String: Any]?
+
+        for (_, nodeValue) in nodes {
+            guard let node = nodeValue as? [String: Any],
+                  let classType = node["class_type"] as? String,
+                  let inputs = node["inputs"] as? [String: Any] else {
+                continue
+            }
+
+            switch classType {
+            case "CLIPTextEncode":
+                if let text = inputs["text"] as? String, !text.isEmpty {
+                    // Heuristic: check if this feeds into a negative conditioning input
+                    positivePrompts.append(text)
+                }
+
+            case "KSampler", "KSamplerAdvanced":
+                samplerNode = inputs
+
+            default:
+                break
+            }
+        }
+
+        // For ComfyUI, the first CLIPTextEncode is typically positive, second is negative
+        if positivePrompts.count >= 1 {
+            meta.prompt = positivePrompts[0]
+        }
+        if positivePrompts.count >= 2 {
+            meta.negativePrompt = positivePrompts[1]
+        }
+
+        // Extract sampler config
+        if let sampler = samplerNode {
+            if let steps = sampler["steps"] as? Int { meta.steps = steps }
+            else if let steps = sampler["steps"] as? Double { meta.steps = Int(steps) }
+
+            if let cfg = sampler["cfg"] as? Double { meta.guidanceScale = cfg }
+
+            if let seed = sampler["seed"] as? Int { meta.seed = seed }
+            else if let seed = sampler["seed"] as? Double { meta.seed = Int(seed) }
+
+            if let name = sampler["sampler_name"] as? String { meta.sampler = name }
+            if let denoise = sampler["denoise"] as? Double { meta.strength = denoise }
+        }
+
+        return meta
+    }
+}

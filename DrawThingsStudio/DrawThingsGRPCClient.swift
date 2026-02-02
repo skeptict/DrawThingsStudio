@@ -34,7 +34,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             await client?.connect()
             return client?.isConnected ?? false
         } catch {
-            print("[gRPC] Connection error: \(error)")
+            NSLog("[gRPC] Connection error: \(error)")
             return false
         }
     }
@@ -67,7 +67,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         onProgress?(.starting)
 
         let isImg2Img = sourceImage != nil
-        print("[gRPC] Starting \(isImg2Img ? "img2img" : "txt2img") generation")
+        NSLog("[gRPC] Starting \(isImg2Img ? "img2img" : "txt2img") generation")
 
         do {
             // Generate the image - pass source image and mask if provided
@@ -81,7 +81,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
 
             onProgress?(.complete)
 
-            print("[gRPC] Generated \(images.count) image(s) via \(isImg2Img ? "img2img" : "txt2img")")
+            NSLog("[gRPC] Generated \(images.count) image(s) via \(isImg2Img ? "img2img" : "txt2img")")
 
             // PlatformImage is NSImage on macOS, so we can return directly
             return images
@@ -95,60 +95,100 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
     // MARK: - Fetch Models
 
     func fetchModels() async throws -> [DrawThingsModel] {
-        let files = try await fetchFileList()
-
-        // Filter for model files (not LoRAs, control nets, etc.)
-        let modelExtensions = [".ckpt", ".safetensors", ".bin"]
-        let loraIndicators = ["/loras/", "/lora/", "lora_", "_lora"]
-
-        let modelFiles = files.filter { file in
-            let lower = file.lowercased()
-            let hasModelExtension = modelExtensions.contains { lower.hasSuffix($0) }
-            let isLora = loraIndicators.contains { lower.contains($0) }
-            return hasModelExtension && !isLora
-        }
-
-        let models = modelFiles.map { DrawThingsModel(filename: $0) }
-        print("[gRPC] Found \(models.count) models from echo files (\(files.count) total files)")
+        cachedEchoReply = nil // Force fresh fetch for debugging
+        let echoReply = try await fetchEchoReply()
+        let modelNames = extractStrings(from: echoReply.override.models, withExtensions: [".ckpt", ".safetensors"])
+        let models = modelNames.map { DrawThingsModel(filename: $0) }
+        NSLog("[gRPC] Found %d models from override (%d bytes)", models.count, echoReply.override.models.count)
         return models
     }
 
     // MARK: - Fetch LoRAs
 
     func fetchLoRAs() async throws -> [DrawThingsLoRA] {
-        let files = try await fetchFileList()
-
-        // Filter for LoRA files
-        let loraIndicators = ["/loras/", "/lora/", "lora_", "_lora"]
-        let modelExtensions = [".ckpt", ".safetensors", ".bin"]
-
-        let loraFiles = files.filter { file in
-            let lower = file.lowercased()
-            let hasModelExtension = modelExtensions.contains { lower.hasSuffix($0) }
-            let isLora = loraIndicators.contains { lower.contains($0) }
-            return hasModelExtension && isLora
-        }
-
-        let loras = loraFiles.map { DrawThingsLoRA(filename: $0) }
-        print("[gRPC] Found \(loras.count) LoRAs from echo files")
+        let echoReply = try await fetchEchoReply()
+        let loraNames = extractStrings(from: echoReply.override.loras, withExtensions: [".ckpt", ".safetensors"])
+        let loras = loraNames.map { DrawThingsLoRA(filename: $0) }
+        NSLog("[gRPC] Found %d LoRAs from override (%d bytes)", loras.count, echoReply.override.loras.count)
         return loras
     }
 
-    // MARK: - Echo File List
+    // MARK: - Echo
 
-    private func fetchFileList() async throws -> [String] {
+    private var cachedEchoReply: EchoReply?
+
+    private func fetchEchoReply() async throws -> EchoReply {
+        if let cached = cachedEchoReply {
+            return cached
+        }
+
         let address = "\(host):\(port)"
-
         if service == nil {
             service = try DrawThingsService(address: address, useTLS: true)
         }
-
         guard let service = service else {
             throw DrawThingsError.connectionFailed("Failed to create gRPC service")
         }
 
-        let echoReply = try await service.echo()
-        return echoReply.files
+        let reply = try await service.echo()
+        cachedEchoReply = reply
+
+        // Write debug info to file since NSLog may not appear in unified log
+        var debug = "[gRPC] Echo debug at \(Date())\n"
+        debug += "Message: \(reply.message)\n"
+        debug += "Files count: \(reply.files.count)\n"
+        if !reply.files.isEmpty {
+            debug += "Files: \(reply.files.joined(separator: ", "))\n"
+        }
+        debug += "hasOverride: \(reply.hasOverride)\n"
+        if reply.hasOverride {
+            let ov = reply.override
+            debug += "Override bytes - models: \(ov.models.count), loras: \(ov.loras.count), controlNets: \(ov.controlNets.count), TIs: \(ov.textualInversions.count), upscalers: \(ov.upscalers.count)\n"
+            // Dump first 200 bytes of models data as hex for analysis
+            if !ov.models.isEmpty {
+                let preview = ov.models.prefix(200).map { String(format: "%02x", $0) }.joined(separator: " ")
+                debug += "Models hex preview: \(preview)\n"
+            }
+            if !ov.loras.isEmpty {
+                let preview = ov.loras.prefix(200).map { String(format: "%02x", $0) }.joined(separator: " ")
+                debug += "LoRAs hex preview: \(preview)\n"
+            }
+        }
+        let debugURL = URL(fileURLWithPath: "/tmp/dts_grpc_debug.log")
+        try? debug.write(to: debugURL, atomically: true, encoding: .utf8)
+
+        return reply
+    }
+
+    // MARK: - FlatBuffer String Extraction
+
+    /// Extract readable filenames from FlatBuffer binary data.
+    /// FlatBuffer strings are stored as: [uint32 length][utf8 bytes][null terminator]
+    /// We scan for strings that end with known file extensions.
+    private func extractStrings(from data: Data, withExtensions extensions: [String]) -> [String] {
+        guard data.count > 4 else { return [] }
+
+        var results: [String] = []
+        let bytes = [UInt8](data)
+
+        // Scan for uint32 length-prefixed strings
+        var i = 0
+        while i < bytes.count - 4 {
+            let len = Int(bytes[i]) | (Int(bytes[i+1]) << 8) | (Int(bytes[i+2]) << 16) | (Int(bytes[i+3]) << 24)
+
+            // Reasonable string length (1-500 chars) and must fit in remaining data
+            if len > 0 && len < 500 && i + 4 + len <= bytes.count {
+                if let str = String(bytes: bytes[(i+4)..<(i+4+len)], encoding: .utf8) {
+                    let lower = str.lowercased()
+                    if extensions.contains(where: { lower.hasSuffix($0) }) && !results.contains(str) {
+                        results.append(str)
+                    }
+                }
+            }
+            i += 1
+        }
+
+        return results.sorted()
     }
 
     // MARK: - Config Conversion

@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct ImageGenerationView: View {
-    @StateObject private var viewModel = ImageGenerationViewModel()
+    @ObservedObject var viewModel: ImageGenerationViewModel
     @StateObject private var assetManager = DrawThingsAssetManager.shared
     @Query(sort: \ModelConfig.name) private var modelConfigs: [ModelConfig]
     @State private var selectedPresetID: String = ""
@@ -150,6 +150,12 @@ struct ImageGenerationView: View {
         VStack(alignment: .leading, spacing: 12) {
             NeuSectionHeader("Generation Settings", icon: "gearshape")
 
+            if let error = assetManager.lastError {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundColor(.neuTextSecondary)
+            }
+
             // Model (searchable dropdown)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -234,15 +240,13 @@ struct ImageGenerationView: View {
             }
 
             // LoRAs
-            if !assetManager.loras.isEmpty {
-                Divider()
-                    .padding(.vertical, 4)
+            Divider()
+                .padding(.vertical, 4)
 
-                LoRAConfigurationView(
-                    availableLoRAs: assetManager.loras,
-                    selectedLoRAs: $viewModel.config.loras
-                )
-            }
+            LoRAConfigurationView(
+                availableLoRAs: assetManager.loras,
+                selectedLoRAs: $viewModel.config.loras
+            )
         }
     }
 
