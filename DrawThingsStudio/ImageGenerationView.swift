@@ -158,39 +158,13 @@ struct ImageGenerationView: View {
                     .foregroundColor(.neuTextSecondary)
             }
 
-            // Model (searchable dropdown)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Model").font(.caption).foregroundColor(.neuTextSecondary)
-                    if assetManager.isLoading {
-                        ProgressView()
-                            .scaleEffect(0.5)
-                    }
-                    Spacer()
-                    Button {
-                        Task { await assetManager.forceRefresh() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.caption)
-                            .foregroundColor(.neuTextSecondary)
-                    }
-                    .buttonStyle(NeumorphicIconButtonStyle())
-                    .help("Refresh models from Draw Things")
-                    .accessibilityLabel("Refresh models from Draw Things")
-                }
-                if assetManager.models.isEmpty {
-                    TextField("e.g., z_image_turbo_1.0_q8p.ckpt", text: $viewModel.config.model)
-                        .textFieldStyle(NeumorphicTextFieldStyle())
-                } else {
-                    SearchableDropdown(
-                        title: "Model",
-                        items: assetManager.models,
-                        itemLabel: { $0.name },
-                        selection: $viewModel.config.model,
-                        placeholder: "Search models..."
-                    )
-                }
-            }
+            // Model selector with manual entry option
+            ModelSelectorView(
+                availableModels: assetManager.models,
+                selection: $viewModel.config.model,
+                isLoading: assetManager.isLoading,
+                onRefresh: { Task { await assetManager.forceRefresh() } }
+            )
 
             // Sampler (searchable dropdown)
             VStack(alignment: .leading, spacing: 4) {

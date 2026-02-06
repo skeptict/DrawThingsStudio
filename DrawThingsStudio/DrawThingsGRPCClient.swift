@@ -95,22 +95,65 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
     // MARK: - Fetch Models
 
     func fetchModels() async throws -> [DrawThingsModel] {
-        cachedEchoReply = nil // Force fresh fetch for debugging
+        cachedEchoReply = nil // Force fresh fetch
         let echoReply = try await fetchEchoReply()
-        let modelNames = extractStrings(from: echoReply.override.models, withExtensions: [".ckpt", ".safetensors"])
-        let models = modelNames.map { DrawThingsModel(filename: $0) }
-        NSLog("[gRPC] Found %d models from override (%d bytes)", models.count, echoReply.override.models.count)
-        return models
+
+        // Strategy 1: Check if files array contains model filenames
+        let modelExtensions = [".ckpt", ".safetensors"]
+        let filesModels = echoReply.files.filter { file in
+            let lower = file.lowercased()
+            return modelExtensions.contains(where: { lower.hasSuffix($0) }) &&
+                   !lower.contains("lora") // Exclude LoRAs from model list
+        }
+
+        if !filesModels.isEmpty {
+            NSLog("[gRPC] Found %d models from files array", filesModels.count)
+            return filesModels.map { DrawThingsModel(filename: $0) }
+        }
+
+        // Strategy 2: Parse binary override data
+        if echoReply.hasOverride && !echoReply.override.models.isEmpty {
+            let modelNames = extractStrings(from: echoReply.override.models, withExtensions: modelExtensions)
+            if !modelNames.isEmpty {
+                NSLog("[gRPC] Found %d models from override binary (%d bytes)", modelNames.count, echoReply.override.models.count)
+                return modelNames.map { DrawThingsModel(filename: $0) }
+            }
+        }
+
+        NSLog("[gRPC] No models found - files: %d, override.models: %d bytes",
+              echoReply.files.count, echoReply.override.models.count)
+        return []
     }
 
     // MARK: - Fetch LoRAs
 
     func fetchLoRAs() async throws -> [DrawThingsLoRA] {
         let echoReply = try await fetchEchoReply()
-        let loraNames = extractStrings(from: echoReply.override.loras, withExtensions: [".ckpt", ".safetensors"])
-        let loras = loraNames.map { DrawThingsLoRA(filename: $0) }
-        NSLog("[gRPC] Found %d LoRAs from override (%d bytes)", loras.count, echoReply.override.loras.count)
-        return loras
+
+        // Strategy 1: Check if files array contains LoRA filenames
+        let loraExtensions = [".safetensors", ".ckpt"]
+        let filesLoRAs = echoReply.files.filter { file in
+            let lower = file.lowercased()
+            return lower.contains("lora") && loraExtensions.contains(where: { lower.hasSuffix($0) })
+        }
+
+        if !filesLoRAs.isEmpty {
+            NSLog("[gRPC] Found %d LoRAs from files array", filesLoRAs.count)
+            return filesLoRAs.map { DrawThingsLoRA(filename: $0) }
+        }
+
+        // Strategy 2: Parse binary override data
+        if echoReply.hasOverride && !echoReply.override.loras.isEmpty {
+            let loraNames = extractStrings(from: echoReply.override.loras, withExtensions: loraExtensions)
+            if !loraNames.isEmpty {
+                NSLog("[gRPC] Found %d LoRAs from override binary (%d bytes)", loraNames.count, echoReply.override.loras.count)
+                return loraNames.map { DrawThingsLoRA(filename: $0) }
+            }
+        }
+
+        NSLog("[gRPC] No LoRAs found - files: %d, override.loras: %d bytes",
+              echoReply.files.count, echoReply.override.loras.count)
+        return []
     }
 
     // MARK: - Echo
@@ -138,24 +181,52 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         debug += "Message: \(reply.message)\n"
         debug += "Files count: \(reply.files.count)\n"
         if !reply.files.isEmpty {
-            debug += "Files: \(reply.files.joined(separator: ", "))\n"
+            debug += "Files:\n"
+            for file in reply.files.prefix(50) {
+                debug += "  - \(file)\n"
+            }
+            if reply.files.count > 50 {
+                debug += "  ... and \(reply.files.count - 50) more\n"
+            }
         }
         debug += "hasOverride: \(reply.hasOverride)\n"
         if reply.hasOverride {
             let ov = reply.override
             debug += "Override bytes - models: \(ov.models.count), loras: \(ov.loras.count), controlNets: \(ov.controlNets.count), TIs: \(ov.textualInversions.count), upscalers: \(ov.upscalers.count)\n"
-            // Dump first 200 bytes of models data as hex for analysis
+
+            // Try to extract strings and show what we found
+            let modelExts = [".ckpt", ".safetensors"]
             if !ov.models.isEmpty {
-                let preview = ov.models.prefix(200).map { String(format: "%02x", $0) }.joined(separator: " ")
-                debug += "Models hex preview: \(preview)\n"
+                let extracted = extractStrings(from: ov.models, withExtensions: modelExts)
+                debug += "Extracted \(extracted.count) model names from binary:\n"
+                for name in extracted.prefix(20) {
+                    debug += "  - \(name)\n"
+                }
+                if extracted.count > 20 {
+                    debug += "  ... and \(extracted.count - 20) more\n"
+                }
+                // Also show hex preview
+                let preview = ov.models.prefix(100).map { String(format: "%02x", $0) }.joined(separator: " ")
+                debug += "Models hex preview (first 100 bytes): \(preview)\n"
             }
+
             if !ov.loras.isEmpty {
-                let preview = ov.loras.prefix(200).map { String(format: "%02x", $0) }.joined(separator: " ")
-                debug += "LoRAs hex preview: \(preview)\n"
+                let extracted = extractStrings(from: ov.loras, withExtensions: modelExts)
+                debug += "Extracted \(extracted.count) LoRA names from binary:\n"
+                for name in extracted.prefix(20) {
+                    debug += "  - \(name)\n"
+                }
+                if extracted.count > 20 {
+                    debug += "  ... and \(extracted.count - 20) more\n"
+                }
+                // Also show hex preview
+                let preview = ov.loras.prefix(100).map { String(format: "%02x", $0) }.joined(separator: " ")
+                debug += "LoRAs hex preview (first 100 bytes): \(preview)\n"
             }
         }
         let debugURL = URL(fileURLWithPath: "/tmp/dts_grpc_debug.log")
         try? debug.write(to: debugURL, atomically: true, encoding: .utf8)
+        NSLog("[gRPC] Debug written to /tmp/dts_grpc_debug.log")
 
         return reply
     }
@@ -171,7 +242,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         var results: [String] = []
         let bytes = [UInt8](data)
 
-        // Scan for uint32 length-prefixed strings
+        // Strategy 1: Scan for uint32 length-prefixed strings (FlatBuffer format)
         var i = 0
         while i < bytes.count - 4 {
             let len = Int(bytes[i]) | (Int(bytes[i+1]) << 8) | (Int(bytes[i+2]) << 16) | (Int(bytes[i+3]) << 24)
@@ -182,10 +253,52 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
                     let lower = str.lowercased()
                     if extensions.contains(where: { lower.hasSuffix($0) }) && !results.contains(str) {
                         results.append(str)
+                        // Skip past this string to avoid re-matching
+                        i += 4 + len
+                        continue
                     }
                 }
             }
             i += 1
+        }
+
+        // Strategy 2: If no results, try scanning for null-terminated strings
+        if results.isEmpty {
+            var currentString = Data()
+            for byte in bytes {
+                if byte == 0 {
+                    if let str = String(data: currentString, encoding: .utf8), !str.isEmpty {
+                        let lower = str.lowercased()
+                        if extensions.contains(where: { lower.hasSuffix($0) }) && !results.contains(str) {
+                            results.append(str)
+                        }
+                    }
+                    currentString = Data()
+                } else if byte >= 32 && byte < 127 { // Printable ASCII
+                    currentString.append(byte)
+                } else {
+                    currentString = Data() // Reset on non-printable
+                }
+            }
+        }
+
+        // Strategy 3: If still no results, try to find extension patterns in raw bytes
+        if results.isEmpty {
+            let dataString = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) ?? ""
+            // Use regex to find potential filenames
+            let pattern = "[a-zA-Z0-9_\\-./]+\\.(?:safetensors|ckpt)"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let range = NSRange(dataString.startIndex..., in: dataString)
+                let matches = regex.matches(in: dataString, range: range)
+                for match in matches {
+                    if let swiftRange = Range(match.range, in: dataString) {
+                        let filename = String(dataString[swiftRange])
+                        if !results.contains(filename) {
+                            results.append(filename)
+                        }
+                    }
+                }
+            }
         }
 
         return results.sorted()
