@@ -93,7 +93,62 @@ struct NeumorphicButtonStyle: ButtonStyle {
             )
             .foregroundColor(isProminent ? .white : .primary)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Neumorphic Plain Button Style (for icon buttons and text links)
+
+struct NeumorphicPlainButtonStyle: ButtonStyle {
+    @State private var isHovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(
+                        configuration.isPressed
+                            ? Color.neuShadowDark.opacity(0.12)
+                            : isHovered
+                                ? Color.neuSurface.opacity(0.8)
+                                : Color.clear
+                    )
+            )
+            .scaleEffect(configuration.isPressed ? 0.95 : isHovered ? 1.02 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+    }
+}
+
+// MARK: - Neumorphic Icon Button Style (compact for toolbar icons)
+
+struct NeumorphicIconButtonStyle: ButtonStyle {
+    @State private var isHovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(
+                        configuration.isPressed
+                            ? Color.neuShadowDark.opacity(0.15)
+                            : isHovered
+                                ? Color.neuSurface
+                                : Color.clear
+                    )
+            )
+            .scaleEffect(configuration.isPressed ? 0.92 : isHovered ? 1.05 : 1.0)
+            .animation(.spring(response: 0.15, dampingFraction: 0.6), value: configuration.isPressed)
+            .animation(.spring(response: 0.15, dampingFraction: 0.6), value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
     }
 }
 
@@ -118,23 +173,36 @@ struct NeumorphicTextFieldStyle: TextFieldStyle {
 
 struct NeumorphicSidebarItem: ViewModifier {
     var isSelected: Bool
+    @State private var isHovered = false
 
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
-                Group {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.neuSurface)
-                            .shadow(color: Color.neuShadowDark.opacity(0.2), radius: 4, x: 2, y: 2)
-                            .shadow(color: Color.neuShadowLight.opacity(0.7), radius: 4, x: -2, y: -2)
-                    } else {
-                        Color.clear
-                    }
-                }
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? Color.neuSurface
+                            : isHovered
+                                ? Color.neuSurface.opacity(0.5)
+                                : Color.clear
+                    )
+                    .shadow(
+                        color: isSelected ? Color.neuShadowDark.opacity(0.2) : Color.clear,
+                        radius: 4, x: 2, y: 2
+                    )
+                    .shadow(
+                        color: isSelected ? Color.neuShadowLight.opacity(0.7) : Color.clear,
+                        radius: 4, x: -2, y: -2
+                    )
             )
+            .scaleEffect(isHovered && !isSelected ? 1.02 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isSelected)
+            .onHover { hovering in
+                isHovered = hovering
+            }
     }
 }
 

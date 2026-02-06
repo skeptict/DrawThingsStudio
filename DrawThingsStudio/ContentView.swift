@@ -59,13 +59,15 @@ struct ContentView: View {
 
                 WorkflowBuilderView(viewModel: workflowViewModel)
                     .opacity(selectedItem == .workflow || selectedItem == nil ? 1 : 0)
+                    .scaleEffect(selectedItem == .workflow || selectedItem == nil ? 1 : 0.98)
                     .allowsHitTesting(selectedItem == .workflow || selectedItem == nil)
-                    .neuAnimation(.easeInOut(duration: 0.25), value: selectedItem)
+                    .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
                 ImageGenerationView(viewModel: imageGenViewModel)
                     .opacity(selectedItem == .generateImage ? 1 : 0)
+                    .scaleEffect(selectedItem == .generateImage ? 1 : 0.98)
                     .allowsHitTesting(selectedItem == .generateImage)
-                    .neuAnimation(.easeInOut(duration: 0.25), value: selectedItem)
+                    .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
                 ImageInspectorView(
                     viewModel: imageInspectorViewModel,
@@ -73,25 +75,26 @@ struct ContentView: View {
                     selectedSidebarItem: $selectedItem
                 )
                 .opacity(selectedItem == .imageInspector ? 1 : 0)
+                .scaleEffect(selectedItem == .imageInspector ? 1 : 0.98)
                 .allowsHitTesting(selectedItem == .imageInspector)
-                .neuAnimation(.easeInOut(duration: 0.25), value: selectedItem)
+                .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
                 if selectedItem == .library {
                     SavedWorkflowsView(
                         viewModel: workflowViewModel,
                         selectedItem: $selectedItem
                     )
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 } else if selectedItem == .templates {
                     TemplatesLibraryView(
                         viewModel: workflowViewModel,
                         selectedItem: $selectedItem
                     )
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 } else if selectedItem == .settings {
                     SettingsView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .transition(.opacity)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
         }
@@ -100,7 +103,7 @@ struct ContentView: View {
 
     private func sidebarButton(_ title: String, icon: String, item: SidebarItem) -> some View {
         Button(action: {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(.spring(response: 0.18, dampingFraction: 0.8)) {
                 selectedItem = item
             }
         }) {
@@ -187,7 +190,7 @@ struct SavedWorkflowsView: View {
                     Button(action: { showingSaveSheet = true }) {
                         Image(systemName: "plus")
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(NeumorphicIconButtonStyle())
                     .accessibilityLabel("Save current workflow")
                     .help("Save current workflow to library")
                     .disabled(viewModel.instructions.isEmpty)
@@ -464,7 +467,7 @@ struct WorkflowDetailPanel: View {
                                 .font(.title2)
                                 .foregroundColor(workflow.isFavorite ? .yellow : .secondary)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(NeumorphicIconButtonStyle())
                         .accessibilityLabel(workflow.isFavorite ? "Remove from favorites" : "Add to favorites")
                     }
                 }

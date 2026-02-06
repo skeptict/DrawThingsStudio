@@ -17,6 +17,7 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
 
     @State private var searchText = ""
     @State private var isExpanded = false
+    @State private var isHovered = false
     @FocusState private var isSearchFocused: Bool
 
     private var filteredItems: [Item] {
@@ -42,7 +43,7 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
         VStack(alignment: .leading, spacing: 4) {
             // Header with selection button
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
                     isExpanded.toggle()
                     if isExpanded {
                         searchText = ""
@@ -63,10 +64,25 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(Color.neuSurface)
-                .cornerRadius(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isHovered ? Color.neuSurface.opacity(0.9) : Color.neuSurface)
+                        .shadow(
+                            color: isHovered ? Color.neuShadowDark.opacity(0.1) : Color.clear,
+                            radius: 2, x: 1, y: 1
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(isHovered ? Color.neuShadowDark.opacity(0.15) : Color.clear, lineWidth: 0.5)
+                )
             }
             .buttonStyle(.plain)
+            .scaleEffect(isHovered ? 1.01 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
             .accessibilityLabel("\(title): \(selectedItemLabel)")
             .accessibilityHint("Double-tap to \(isExpanded ? "close" : "open") dropdown")
 
@@ -211,7 +227,7 @@ struct LoRAConfigRow: View {
                     .foregroundColor(.secondary)
                     .font(.caption)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(NeumorphicIconButtonStyle())
             .accessibilityLabel("Remove \(lora.name)")
         }
         .padding(.horizontal, 10)
@@ -254,7 +270,7 @@ struct LoRAConfigurationView: View {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 14))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NeumorphicIconButtonStyle())
                 .disabled(availableLoRAs.isEmpty)
                 .accessibilityLabel("Add LoRA")
             }

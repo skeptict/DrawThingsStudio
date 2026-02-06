@@ -331,7 +331,7 @@ struct SettingsView: View {
                                 }
                                 Button(action: { showAPIKey.toggle() }) {
                                     Image(systemName: showAPIKey ? "eye.slash" : "eye").foregroundColor(.neuTextSecondary)
-                                }.buttonStyle(.plain)
+                                }.buttonStyle(NeumorphicIconButtonStyle())
                             }
                         }
                     }
@@ -358,7 +358,7 @@ struct SettingsView: View {
                             }
                             Button(action: { showSharedSecret.toggle() }) {
                                 Image(systemName: showSharedSecret ? "eye.slash" : "eye").foregroundColor(.neuTextSecondary)
-                            }.buttonStyle(.plain)
+                            }.buttonStyle(NeumorphicIconButtonStyle())
                         }
                     }
 

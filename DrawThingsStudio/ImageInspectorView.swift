@@ -59,7 +59,7 @@ struct ImageInspectorView: View {
                     }
                     .font(.caption)
                     .foregroundColor(.neuTextSecondary)
-                    .buttonStyle(.plain)
+                    .buttonStyle(NeumorphicPlainButtonStyle())
                     .accessibilityLabel("Clear history")
                 }
             }
@@ -97,65 +97,17 @@ struct ImageInspectorView: View {
     }
 
     private func historyRow(_ entry: InspectedImage) -> some View {
-        let isSelected = viewModel.selectedImage?.id == entry.id
-        return HStack(spacing: 10) {
-            Image(nsImage: entry.image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: 48, height: 48)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.sourceName)
-                    .font(.caption)
-                    .fontWeight(isSelected ? .semibold : .regular)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                HStack(spacing: 4) {
-                    if entry.metadata != nil {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        Text(entry.metadata!.format.rawValue)
-                            .font(.caption2)
-                            .foregroundColor(.neuTextSecondary)
-                    } else {
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 6, height: 6)
-                        Text("No metadata")
-                            .font(.caption2)
-                            .foregroundColor(.neuTextSecondary)
-                    }
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(6)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? Color.neuAccent.opacity(0.12) : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(isSelected ? Color.neuAccent.opacity(0.3) : Color.clear, lineWidth: 1)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            viewModel.selectedImage = entry
-            viewModel.errorMessage = nil
-        }
-        .contextMenu {
-            Button("Delete") {
+        HistoryRowView(
+            entry: entry,
+            isSelected: viewModel.selectedImage?.id == entry.id,
+            onSelect: {
+                viewModel.selectedImage = entry
+                viewModel.errorMessage = nil
+            },
+            onDelete: {
                 viewModel.deleteImage(entry)
             }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(entry.sourceName), \(entry.metadata != nil ? entry.metadata!.format.rawValue + " metadata" : "no metadata")")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        )
     }
 
     // MARK: - Detail Panel
@@ -516,6 +468,114 @@ struct ImageInspectorView: View {
             provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, error in
                 if let error = error { continuation.resume(throwing: error) }
                 else { continuation.resume(returning: data) }
+            }
+        }
+    }
+}
+
+// MARK: - History Row View with Hover State
+
+private struct HistoryRowView: View {
+    let entry: InspectedImage
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovered = false
+
+    private var backgroundColor: Color {
+        if isSelected {
+            return Color.neuAccent.opacity(0.12)
+        } else if isHovered {
+            return Color.neuSurface.opacity(0.6)
+        }
+        return Color.clear
+    }
+
+    private var strokeColor: Color {
+        if isSelected {
+            return Color.neuAccent.opacity(0.3)
+        } else if isHovered {
+            return Color.neuShadowDark.opacity(0.1)
+        }
+        return Color.clear
+    }
+
+    private var scaleAmount: CGFloat {
+        isHovered && !isSelected ? 1.02 : 1.0
+    }
+
+    private var accessibilityText: String {
+        let metadataDesc = entry.metadata != nil ? entry.metadata!.format.rawValue + " metadata" : "no metadata"
+        return "\(entry.sourceName), \(metadataDesc)"
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(nsImage: entry.image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 48, height: 48)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.sourceName)
+                    .font(.caption)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                metadataIndicator
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(backgroundColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(strokeColor, lineWidth: 1)
+        )
+        .scaleEffect(scaleAmount)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .onTapGesture {
+            onSelect()
+        }
+        .contextMenu {
+            Button("Delete") {
+                onDelete()
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private var metadataIndicator: some View {
+        HStack(spacing: 4) {
+            if let meta = entry.metadata {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
+                Text(meta.format.rawValue)
+                    .font(.caption2)
+                    .foregroundColor(.neuTextSecondary)
+            } else {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 6, height: 6)
+                Text("No metadata")
+                    .font(.caption2)
+                    .foregroundColor(.neuTextSecondary)
             }
         }
     }

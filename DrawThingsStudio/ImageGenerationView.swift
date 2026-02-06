@@ -71,7 +71,7 @@ struct ImageGenerationView: View {
             }
             .font(.caption)
             .foregroundColor(.neuTextSecondary)
-            .buttonStyle(.plain)
+            .buttonStyle(NeumorphicPlainButtonStyle())
             .accessibilityLabel("Refresh connection status")
         }
     }
@@ -172,9 +172,9 @@ struct ImageGenerationView: View {
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.caption)
+                            .foregroundColor(.neuTextSecondary)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.neuTextSecondary)
+                    .buttonStyle(NeumorphicIconButtonStyle())
                     .help("Refresh models from Draw Things")
                     .accessibilityLabel("Refresh models from Draw Things")
                 }
@@ -322,7 +322,7 @@ struct ImageGenerationView: View {
                     Image(systemName: "folder")
                         .foregroundColor(.neuTextSecondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NeumorphicIconButtonStyle())
                 .help("Open output folder")
                 .accessibilityLabel("Open output folder")
             }
