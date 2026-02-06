@@ -18,8 +18,8 @@ extension Color {
     static let neuShadowDark = Color(red: 0.75, green: 0.71, blue: 0.65)
     /// Light shadow/highlight color
     static let neuShadowLight = Color.white
-    /// Subtle text on beige background
-    static let neuTextSecondary = Color(red: 0.65, green: 0.60, blue: 0.54)
+    /// Subtle text on beige background (WCAG AA compliant ~5.1:1 contrast)
+    static let neuTextSecondary = Color(red: 0.40, green: 0.37, blue: 0.32)
     /// Accent for neumorphic UI
     static let neuAccent = Color(red: 0.55, green: 0.50, blue: 0.44)
 }
@@ -162,6 +162,9 @@ struct NeumorphicProgressBar: View {
             }
         }
         .frame(height: 8)
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(Int(value * 100)) percent")
     }
 }
 
@@ -235,5 +238,27 @@ struct NeuStatusBadge: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .neuInset(cornerRadius: 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
+    }
+}
+
+// MARK: - Reduced Motion Support
+
+struct NeuAnimationModifier<V: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let animation: Animation
+    let value: V
+
+    func body(content: Content) -> some View {
+        content.animation(reduceMotion ? nil : animation, value: value)
+    }
+}
+
+extension View {
+    /// Animation that respects the user's Reduce Motion accessibility setting.
+    /// Returns nil (no animation) when Reduce Motion is enabled.
+    func neuAnimation<V: Equatable>(_ animation: Animation = .easeInOut(duration: 0.25), value: V) -> some View {
+        modifier(NeuAnimationModifier(animation: animation, value: value))
     }
 }

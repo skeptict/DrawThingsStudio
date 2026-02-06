@@ -233,6 +233,7 @@ struct InstructionListView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Validate workflow")
+                .accessibilityLabel("Validate workflow")
 
                 Text("\(viewModel.instructionCount)")
                     .font(.caption)
@@ -240,6 +241,7 @@ struct InstructionListView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .neuInset(cornerRadius: 6)
+                    .accessibilityLabel("\(viewModel.instructionCount) instructions")
             }
             .padding(16)
 
@@ -278,6 +280,7 @@ struct InstructionListView: View {
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.instructions.map(\.id))
             }
 
             // Footer actions
@@ -290,6 +293,7 @@ struct InstructionListView: View {
                 }
                 .disabled(!viewModel.hasSelection)
                 .help("Delete selected instruction")
+                .accessibilityLabel("Delete selected instruction")
 
                 Button {
                     viewModel.duplicateSelectedInstruction()
@@ -299,6 +303,7 @@ struct InstructionListView: View {
                 }
                 .disabled(!viewModel.hasSelection)
                 .help("Duplicate selected instruction")
+                .accessibilityLabel("Duplicate selected instruction")
 
                 Spacer()
 
@@ -310,6 +315,7 @@ struct InstructionListView: View {
                 }
                 .disabled(!viewModel.hasSelection)
                 .help("Move up")
+                .accessibilityLabel("Move instruction up")
 
                 Button {
                     viewModel.moveSelectedDown()
@@ -319,6 +325,7 @@ struct InstructionListView: View {
                 }
                 .disabled(!viewModel.hasSelection)
                 .help("Move down")
+                .accessibilityLabel("Move instruction down")
             }
             .buttonStyle(.plain)
             .padding(12)

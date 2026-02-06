@@ -8,3 +8,5 @@ xcuserdata/
 .swiftpm/
 # Local working files for Claude Code
 misc/
+output/
+tmp/

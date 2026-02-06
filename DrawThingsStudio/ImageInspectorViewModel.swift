@@ -21,6 +21,8 @@ struct InspectedImage: Identifiable {
 @MainActor
 final class ImageInspectorViewModel: ObservableObject {
 
+    private static let maxHistoryCount = 50
+
     @Published var history: [InspectedImage] = []
     @Published var selectedImage: InspectedImage?
     @Published var errorMessage: String?
@@ -54,6 +56,7 @@ final class ImageInspectorViewModel: ObservableObject {
             inspectedAt: Date()
         )
         history.insert(entry, at: 0)
+        trimHistoryIfNeeded()
         selectedImage = entry
 
         if metadata == nil {
@@ -95,6 +98,7 @@ final class ImageInspectorViewModel: ObservableObject {
             inspectedAt: Date()
         )
         history.insert(entry, at: 0)
+        trimHistoryIfNeeded()
         selectedImage = entry
 
         if metadata == nil {
@@ -137,6 +141,12 @@ final class ImageInspectorViewModel: ObservableObject {
         errorMessage = nil
     }
 
+    private func trimHistoryIfNeeded() {
+        if history.count > Self.maxHistoryCount {
+            history = Array(history.prefix(Self.maxHistoryCount))
+        }
+    }
+
     // MARK: - Clipboard
 
     func copyPromptToClipboard() {
@@ -154,18 +164,34 @@ final class ImageInspectorViewModel: ObservableObject {
 
     func copyConfigToClipboard() {
         guard let meta = selectedImage?.metadata else { return }
-        var dict: [String: Any] = [:]
 
+        // For Draw Things format: export the full v2 config with proper key names
+        if meta.format == .drawThings, let v2 = meta.rawV2Config {
+            let exportDict = Self.buildDrawThingsExportConfig(v2: v2, topLevel: meta.rawTopLevel)
+            guard let jsonData = try? JSONSerialization.data(
+                withJSONObject: exportDict,
+                options: [.prettyPrinted, .sortedKeys]
+            ),
+            let jsonString = String(data: jsonData, encoding: .utf8) else { return }
+
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(jsonString, forType: .string)
+            return
+        }
+
+        // For non-Draw Things formats, build from extracted fields
+        var dict: [String: Any] = [:]
         if let w = meta.width { dict["width"] = w }
         if let h = meta.height { dict["height"] = h }
         if let steps = meta.steps { dict["steps"] = steps }
-        if let guidance = meta.guidanceScale { dict["guidanceScale"] = guidance }
+        if let guidance = meta.guidanceScale { dict["guidance_scale"] = guidance }
         if let seed = meta.seed { dict["seed"] = seed }
         if let sampler = meta.sampler { dict["sampler"] = sampler }
         if let model = meta.model { dict["model"] = model }
         if let strength = meta.strength { dict["strength"] = strength }
         if let shift = meta.shift { dict["shift"] = shift }
-        if let seedMode = meta.seedMode { dict["seedMode"] = seedMode }
+        if let seedMode = meta.seedMode { dict["seed_mode"] = seedMode }
         if !meta.loras.isEmpty {
             dict["loras"] = meta.loras.map { lora in
                 ["file": lora.file, "weight": lora.weight, "mode": lora.mode] as [String: Any]
@@ -173,22 +199,108 @@ final class ImageInspectorViewModel: ObservableObject {
         }
 
         guard !dict.isEmpty,
-              let jsonData = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
-              var jsonString = String(data: jsonData, encoding: .utf8) else { return }
-
-        // Format as compact-ish JSON: one key per line, no spaces after colons
-        // JSONSerialization compact output is single-line; reformat with newlines
-        jsonString = jsonString
-            .replacingOccurrences(of: "\": ", with: "\":")
-            .replacingOccurrences(of: "\" : ", with: "\":")
-            .replacingOccurrences(of: "{", with: "{\n  ")
-            .replacingOccurrences(of: ",", with: ",\n  ")
-            .replacingOccurrences(of: "}", with: "\n}")
-            .replacingOccurrences(of: "\n  \n", with: "\n")
+              let jsonData = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
+              let jsonString = String(data: jsonData, encoding: .utf8) else { return }
 
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(jsonString, forType: .string)
+    }
+
+    // MARK: - Draw Things Config Export
+
+    /// Builds a Draw Things-compatible config dictionary from v2 config data.
+    /// Transforms camelCase v2 keys to the snake_case/mixed format Draw Things expects.
+    private static func buildDrawThingsExportConfig(v2: [String: Any], topLevel: [String: Any]?) -> [String: Any] {
+        // Key mapping from v2 camelCase to Draw Things export format
+        let keyMap: [String: String] = [
+            "aestheticScore": "aesthetic_score",
+            "batchCount": "batch_count",
+            "batchSize": "batch_size",
+            // causalInference, causalInferencePad, cfgZero* stay as-is
+            "clipSkip": "clip_skip",
+            "clipWeight": "clip_weight",
+            "cropLeft": "crop_left",
+            "cropTop": "crop_top",
+            "decodingTileHeight": "decoding_tile_height",
+            "decodingTileOverlap": "decoding_tile_overlap",
+            "decodingTileWidth": "decoding_tile_width",
+            "diffusionTileHeight": "diffusion_tile_height",
+            "diffusionTileOverlap": "diffusion_tile_overlap",
+            "diffusionTileWidth": "diffusion_tile_width",
+            "guidanceEmbed": "guidance_embed",
+            "guidanceScale": "guidance_scale",
+            "guidingFrameNoise": "guiding_frame_noise",
+            "hiresFix": "hires_fix",
+            "hiresFixHeight": "hires_fix_height",
+            "hiresFixStrength": "hires_fix_strength",
+            "hiresFixWidth": "hires_fix_width",
+            "imageGuidanceScale": "image_guidance",
+            "imagePriorSteps": "image_prior_steps",
+            "maskBlur": "mask_blur",
+            "maskBlurOutset": "mask_blur_outset",
+            "motionScale": "motion_scale",
+            "negativeAestheticScore": "negative_aesthetic_score",
+            "negativeOriginalImageHeight": "negative_original_height",
+            "negativeOriginalImageWidth": "negative_original_width",
+            "negativePromptForImagePrior": "negative_prompt_for_image_prior",
+            "numFrames": "num_frames",
+            "originalImageHeight": "original_height",
+            "originalImageWidth": "original_width",
+            "preserveOriginalAfterInpaint": "preserve_original_after_inpaint",
+            "refinerStart": "refiner_start",
+            "resolutionDependentShift": "resolution_dependent_shift",
+            "seedMode": "seed_mode",
+            "separateClipL": "separate_clip_l",
+            "separateOpenClipG": "separate_open_clip_g",
+            "speedUpWithGuidanceEmbed": "speed_up_with_guidance_embed",
+            "stage2Guidance": "stage_2_guidance",
+            "stage2Shift": "stage_2_shift",
+            "stage2Steps": "stage_2_steps",
+            "startFrameGuidance": "start_frame_guidance",
+            "stochasticSamplingGamma": "stochastic_sampling_gamma",
+            "t5TextEncoder": "t5_text_encoder_decoding",
+            "targetImageHeight": "target_height",
+            "targetImageWidth": "target_width",
+            "tiledDecoding": "tiled_decoding",
+            "tiledDiffusion": "tiled_diffusion",
+            "upscalerScaleFactor": "upscaler_scale",
+            "zeroNegativePrompt": "zero_negative_prompt",
+        ]
+
+        // seedMode int to string mapping
+        let seedModeNames: [Int: String] = [
+            0: "Legacy",
+            1: "Torch CPU Compatible",
+            2: "Scale Alike",
+            3: "Nvidia GPU Compatible",
+        ]
+
+        var result: [String: Any] = [:]
+
+        for (key, value) in v2 {
+            let exportKey = keyMap[key] ?? key
+
+            // Special handling for seedMode: convert int to string
+            if key == "seedMode", let intVal = value as? Int {
+                result[exportKey] = seedModeNames[intVal] ?? "Legacy"
+            } else {
+                result[exportKey] = value
+            }
+        }
+
+        // Add duration from profile if available
+        if let profile = topLevel?["profile"] as? [String: Any],
+           let duration = profile["duration"] as? Double {
+            result["duration"] = duration
+        }
+
+        // Add mask_blur from top level if not already in v2
+        if result["mask_blur"] == nil, let maskBlur = topLevel?["mask_blur"] as? Double {
+            result["mask_blur"] = maskBlur
+        }
+
+        return result
     }
 
     func copyAllToClipboard() {

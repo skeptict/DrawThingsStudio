@@ -60,10 +60,12 @@ struct ContentView: View {
                 WorkflowBuilderView(viewModel: workflowViewModel)
                     .opacity(selectedItem == .workflow || selectedItem == nil ? 1 : 0)
                     .allowsHitTesting(selectedItem == .workflow || selectedItem == nil)
+                    .neuAnimation(.easeInOut(duration: 0.25), value: selectedItem)
 
                 ImageGenerationView(viewModel: imageGenViewModel)
                     .opacity(selectedItem == .generateImage ? 1 : 0)
                     .allowsHitTesting(selectedItem == .generateImage)
+                    .neuAnimation(.easeInOut(duration: 0.25), value: selectedItem)
 
                 ImageInspectorView(
                     viewModel: imageInspectorViewModel,
@@ -72,20 +74,24 @@ struct ContentView: View {
                 )
                 .opacity(selectedItem == .imageInspector ? 1 : 0)
                 .allowsHitTesting(selectedItem == .imageInspector)
+                .neuAnimation(.easeInOut(duration: 0.25), value: selectedItem)
 
                 if selectedItem == .library {
                     SavedWorkflowsView(
                         viewModel: workflowViewModel,
                         selectedItem: $selectedItem
                     )
+                    .transition(.opacity)
                 } else if selectedItem == .templates {
                     TemplatesLibraryView(
                         viewModel: workflowViewModel,
                         selectedItem: $selectedItem
                     )
+                    .transition(.opacity)
                 } else if selectedItem == .settings {
                     SettingsView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .transition(.opacity)
                 }
             }
         }
@@ -93,7 +99,11 @@ struct ContentView: View {
     }
 
     private func sidebarButton(_ title: String, icon: String, item: SidebarItem) -> some View {
-        Button(action: { selectedItem = item }) {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                selectedItem = item
+            }
+        }) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.body)
@@ -108,6 +118,9 @@ struct ContentView: View {
         .buttonStyle(.plain)
         .neuSidebarItem(isSelected: selectedItem == item)
         .padding(.horizontal, 8)
+        .accessibilityLabel(title)
+        .accessibilityHint("Switch to \(title)")
+        .accessibilityAddTraits(selectedItem == item ? .isSelected : [])
     }
 }
 
@@ -168,13 +181,14 @@ struct SavedWorkflowsView: View {
                             .textFieldStyle(.plain)
                     }
                     .padding(8)
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .background(Color.neuSurface)
                     .cornerRadius(6)
 
                     Button(action: { showingSaveSheet = true }) {
                         Image(systemName: "plus")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Save current workflow")
                     .help("Save current workflow to library")
                     .disabled(viewModel.instructions.isEmpty)
                 }
@@ -198,7 +212,7 @@ struct SavedWorkflowsView: View {
                             Button("Save Current Workflow") {
                                 showingSaveSheet = true
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                             .padding(.top, 8)
                         }
                     }
@@ -228,10 +242,12 @@ struct SavedWorkflowsView: View {
                             }
                         }
                     }
-                    .listStyle(.sidebar)
+                    .listStyle(.inset)
+                    .scrollContentBackground(.hidden)
                 }
             }
             .frame(minWidth: 280, idealWidth: 320)
+            .neuBackground()
 
             // Right side: Workflow details
             WorkflowDetailPanel(
@@ -407,6 +423,8 @@ struct WorkflowRowView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(workflow.name), \(workflow.instructionCount) instructions\(workflow.isFavorite ? ", favorite" : "")")
     }
 }
 
@@ -446,7 +464,8 @@ struct WorkflowDetailPanel: View {
                                 .font(.title2)
                                 .foregroundColor(workflow.isFavorite ? .yellow : .secondary)
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(workflow.isFavorite ? "Remove from favorites" : "Add to favorites")
                     }
                 }
                 .padding(24)
@@ -468,7 +487,7 @@ struct WorkflowDetailPanel: View {
                                 .font(.system(.body, design: .monospaced))
                                 .padding(12)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color(NSColor.controlBackgroundColor))
+                                .background(Color.neuBackground.opacity(0.6))
                                 .cornerRadius(8)
                         }
 
@@ -506,7 +525,7 @@ struct WorkflowDetailPanel: View {
                                     .font(.system(.caption, design: .monospaced))
                                     .padding(12)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .background(Color.neuBackground.opacity(0.6))
                                     .cornerRadius(8)
                             }
                         }
@@ -531,10 +550,11 @@ struct WorkflowDetailPanel: View {
                     Button(action: { onLoad(workflow) }) {
                         Label("Open Workflow", systemImage: "doc")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                 }
                 .padding()
             }
+            .neuBackground()
         } else {
             // Empty state
             VStack(spacing: 16) {
@@ -604,7 +624,7 @@ struct SaveWorkflowSheet: View {
                     onSave(name.isEmpty ? "Untitled Workflow" : name, description)
                     isPresented = false
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                 .keyboardShortcut(.defaultAction)
             }
         }
@@ -661,7 +681,7 @@ struct RenameWorkflowSheet: View {
                     workflow.modifiedAt = Date()
                     isPresented = false
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                 .keyboardShortcut(.defaultAction)
             }
         }
@@ -693,9 +713,10 @@ struct TemplatesLibraryView: View {
                         .foregroundColor(.secondary)
                     TextField("Search templates...", text: $searchText)
                         .textFieldStyle(.plain)
+                        .accessibilityLabel("Search templates")
                 }
                 .padding(8)
-                .background(Color(NSColor.controlBackgroundColor))
+                .background(Color.neuSurface)
                 .cornerRadius(6)
                 .padding()
 
@@ -714,6 +735,7 @@ struct TemplatesLibraryView: View {
                 }
             }
             .frame(minWidth: 300, idealWidth: 350)
+            .neuBackground()
 
             // Right side: Template details/preview
             TemplateDetailView(
@@ -724,6 +746,7 @@ struct TemplatesLibraryView: View {
                 }
             )
             .frame(minWidth: 400)
+            .neuBackground()
         }
         .navigationTitle("Templates Library")
     }
@@ -834,8 +857,11 @@ struct TemplateRowView: View {
             Spacer()
         }
         .padding(10)
-        .background(isSelected ? Color.accentColor : Color(NSColor.controlBackgroundColor))
+        .background(isSelected ? Color.neuAccent : Color.neuSurface)
         .cornerRadius(8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(template.title). \(template.description)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -928,7 +954,7 @@ struct TemplateDetailView: View {
                     Button(action: { onUseTemplate(template) }) {
                         Label("Use This Template", systemImage: "plus.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                     .controlSize(.large)
                     Spacer()
                 }

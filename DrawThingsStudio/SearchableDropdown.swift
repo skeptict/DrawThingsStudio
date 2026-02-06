@@ -67,6 +67,8 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
                 .cornerRadius(8)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(title): \(selectedItemLabel)")
+            .accessibilityHint("Double-tap to \(isExpanded ? "close" : "open") dropdown")
 
             // Dropdown panel
             if isExpanded {
@@ -79,8 +81,9 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
 
                         TextField(placeholder, text: $searchText)
                             .textFieldStyle(.plain)
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .focused($isSearchFocused)
+                            .accessibilityLabel("Search \(title)")
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
@@ -94,7 +97,7 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
                             if filteredItems.isEmpty {
                                 Text("No results")
                                     .foregroundColor(.secondary)
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 8)
                             } else {
@@ -110,7 +113,7 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
                                     } label: {
                                         HStack {
                                             Text(label)
-                                                .font(.system(size: 12))
+                                                .font(.caption)
                                                 .lineLimit(1)
                                                 .truncationMode(.middle)
 
@@ -128,6 +131,8 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
                                         .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel(label)
+                                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                                 }
                             }
                         }
@@ -180,7 +185,7 @@ struct LoRAConfigRow: View {
         HStack(spacing: 12) {
             // LoRA name
             Text(lora.name)
-                .font(.system(size: 12))
+                .font(.caption)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -189,6 +194,8 @@ struct LoRAConfigRow: View {
             HStack(spacing: 4) {
                 Slider(value: $weight, in: 0...2, step: 0.1)
                     .frame(width: 80)
+                    .accessibilityLabel("Weight for \(lora.name)")
+                    .accessibilityValue(String(format: "%.1f", weight))
 
                 Text(String(format: "%.1f", weight))
                     .font(.system(size: 11, design: .monospaced))
@@ -205,6 +212,7 @@ struct LoRAConfigRow: View {
                     .font(.caption)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(lora.name)")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -236,7 +244,7 @@ struct LoRAConfigurationView: View {
             // Header
             HStack {
                 Text("LoRAs")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
 
                 Spacer()
 
@@ -248,12 +256,13 @@ struct LoRAConfigurationView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(availableLoRAs.isEmpty)
+                .accessibilityLabel("Add LoRA")
             }
 
             // Selected LoRAs
             if selectedLoRAs.isEmpty {
                 Text("No LoRAs selected")
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(.secondary)
                     .padding(.vertical, 4)
             } else {
@@ -284,7 +293,8 @@ struct LoRAConfigurationView: View {
 
                         TextField("Search LoRAs...", text: $searchText)
                             .textFieldStyle(.plain)
-                            .font(.system(size: 12))
+                            .font(.caption)
+                            .accessibilityLabel("Search LoRAs")
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
@@ -298,7 +308,7 @@ struct LoRAConfigurationView: View {
                             if filteredLoRAs.isEmpty {
                                 Text("No LoRAs available")
                                     .foregroundColor(.secondary)
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 8)
                             } else {
@@ -314,13 +324,14 @@ struct LoRAConfigurationView: View {
                                         searchText = ""
                                     } label: {
                                         Text(lora.name)
-                                            .font(.system(size: 12))
+                                            .font(.caption)
                                             .padding(.horizontal, 10)
                                             .padding(.vertical, 6)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel("Add \(lora.name)")
                                 }
                             }
                         }

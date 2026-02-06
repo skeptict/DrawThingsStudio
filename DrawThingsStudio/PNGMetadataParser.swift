@@ -45,6 +45,11 @@ struct PNGMetadata {
     var loras: [PNGMetadataLoRA] = []
     var format: PNGMetadataFormat = .unknown
 
+    /// Raw v2 config dictionary from Draw Things JSON (camelCase keys)
+    var rawV2Config: [String: Any]?
+    /// Top-level fields from Draw Things JSON (mask_blur, profile.duration, etc.)
+    var rawTopLevel: [String: Any]?
+
     /// Raw text of the metadata chunk (for display/debugging)
     var rawText: String?
 
@@ -86,12 +91,14 @@ struct PNGMetadataParser {
             }
         }
 
-        // Write to sandbox-safe location
+        // Write to sandbox-safe location (debug builds only)
+        #if DEBUG
         if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             let dir = appSupport.appendingPathComponent("DrawThingsStudio")
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             try? debugInfo.write(to: dir.appendingPathComponent("png_debug.log"), atomically: true, encoding: .utf8)
         }
+        #endif
 
         // Try A1111 format: tEXt chunk with key "parameters"
         if let parameters = chunks["parameters"] {
@@ -364,8 +371,13 @@ struct PNGMetadataParser {
             }
         }
 
+        // Store raw top-level for config export (mask_blur, profile.duration, etc.)
+        meta.rawTopLevel = json
+
         // "v2" contains the full config with long key names — use as fallback/enrichment
         if let v2 = json["v2"] as? [String: Any] {
+            meta.rawV2Config = v2
+
             if meta.model == nil || meta.model?.isEmpty == true {
                 meta.model = v2["model"] as? String
             }

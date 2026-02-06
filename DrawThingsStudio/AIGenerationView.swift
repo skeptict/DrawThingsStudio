@@ -262,7 +262,9 @@ struct ConnectionStatusBar: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(Color.neuSurface)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("LLM connection status: \(viewModel.connectionStatus.statusText)")
     }
 
     private var statusColor: Color {
@@ -603,6 +605,8 @@ struct GenerationOptionsView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(aiViewModel.isGenerating || !canGenerate)
+            .accessibilityLabel("Generate workflow")
+            .accessibilityHint("Uses AI to generate workflow instructions based on your concept")
         }
         .padding()
     }
@@ -796,5 +800,7 @@ struct StyleButton: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(style.displayName) style")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

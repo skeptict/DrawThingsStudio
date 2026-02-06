@@ -52,10 +52,12 @@ struct WorkflowExecutionView: View {
                 HStack(spacing: 16) {
                     Label(viewModel.status.displayText, systemImage: statusIcon)
                         .foregroundColor(statusColor)
+                        .accessibilityLabel("Execution status: \(viewModel.status.displayText)")
 
                     if viewModel.status.isRunning {
                         Text("\(viewModel.currentInstructionIndex + 1) / \(viewModel.totalInstructions)")
                             .foregroundColor(.secondary)
+                            .accessibilityLabel("Progress: \(viewModel.currentInstructionIndex + 1) of \(viewModel.totalInstructions) instructions")
                     }
                 }
                 .font(.subheadline)
@@ -262,6 +264,8 @@ struct WorkflowExecutionView: View {
 
             ProgressView(value: progress.fraction)
                 .progressViewStyle(.linear)
+                .accessibilityLabel("Generation progress")
+                .accessibilityValue("\(Int(progress.fraction * 100)) percent")
         }
         .padding()
         .background(Color.neuSurface)
@@ -360,6 +364,7 @@ struct WorkflowExecutionView: View {
                     }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Execute workflow")
                 } else if viewModel.status.isRunning {
                     Button("Cancel") {
                         viewModel.cancel()

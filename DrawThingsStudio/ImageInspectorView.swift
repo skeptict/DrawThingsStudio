@@ -60,6 +60,7 @@ struct ImageInspectorView: View {
                     .font(.caption)
                     .foregroundColor(.neuTextSecondary)
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear history")
                 }
             }
             .padding(12)
@@ -79,6 +80,7 @@ struct ImageInspectorView: View {
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
+                .accessibilityLabel("Drop images here to inspect metadata. Supports PNG and JPG from Finder or Discord.")
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 8) {
@@ -151,6 +153,9 @@ struct ImageInspectorView: View {
                 viewModel.deleteImage(entry)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(entry.sourceName), \(entry.metadata != nil ? entry.metadata!.format.rawValue + " metadata" : "no metadata")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Detail Panel
@@ -365,6 +370,8 @@ struct ImageInspectorView: View {
             }
             .buttonStyle(NeumorphicButtonStyle(isProminent: true))
             .controlSize(.large)
+            .accessibilityLabel("Send to Generate Image")
+            .accessibilityHint("Uses this image's prompt and settings in Generate Image")
         }
     }
 

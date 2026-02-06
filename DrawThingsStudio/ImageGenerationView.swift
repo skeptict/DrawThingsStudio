@@ -62,6 +62,7 @@ struct ImageGenerationView: View {
     private var connectionStatusBadge: some View {
         HStack(spacing: 8) {
             NeuStatusBadge(color: connectionColor, text: viewModel.connectionStatus.displayText)
+                .accessibilityLabel("Connection status: \(viewModel.connectionStatus.displayText)")
 
             Spacer()
 
@@ -71,6 +72,7 @@ struct ImageGenerationView: View {
             .font(.caption)
             .foregroundColor(.neuTextSecondary)
             .buttonStyle(.plain)
+            .accessibilityLabel("Refresh connection status")
         }
     }
 
@@ -174,6 +176,7 @@ struct ImageGenerationView: View {
                     .buttonStyle(.plain)
                     .foregroundColor(.neuTextSecondary)
                     .help("Refresh models from Draw Things")
+                    .accessibilityLabel("Refresh models from Draw Things")
                 }
                 if assetManager.models.isEmpty {
                     TextField("e.g., z_image_turbo_1.0_q8p.ckpt", text: $viewModel.config.model)
@@ -232,6 +235,8 @@ struct ImageGenerationView: View {
                 HStack(spacing: 8) {
                     Slider(value: $viewModel.config.strength, in: 0...1, step: 0.05)
                         .tint(Color.neuAccent)
+                        .accessibilityLabel("Strength")
+                        .accessibilityValue(String(format: "%.0f percent", viewModel.config.strength * 100))
                     Text(String(format: "%.2f", viewModel.config.strength))
                         .font(.caption)
                         .foregroundColor(.neuTextSecondary)
@@ -266,6 +271,8 @@ struct ImageGenerationView: View {
             if viewModel.isGenerating {
                 VStack(spacing: 6) {
                     NeumorphicProgressBar(value: viewModel.progressFraction)
+                        .accessibilityLabel("Generation progress")
+                        .accessibilityValue("\(Int(viewModel.progressFraction * 100)) percent")
                     Text(viewModel.progress.description)
                         .font(.caption)
                         .foregroundColor(.neuTextSecondary)
@@ -275,6 +282,7 @@ struct ImageGenerationView: View {
                     viewModel.cancelGeneration()
                 }
                 .buttonStyle(NeumorphicButtonStyle())
+                .accessibilityLabel("Cancel generation")
             } else {
                 Button(action: { viewModel.generate() }) {
                     HStack {
@@ -287,6 +295,8 @@ struct ImageGenerationView: View {
                 .controlSize(.large)
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(viewModel.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("Generate image")
+                .accessibilityHint("Sends prompt to Draw Things for image generation")
             }
         }
     }
@@ -314,6 +324,7 @@ struct ImageGenerationView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Open output folder")
+                .accessibilityLabel("Open output folder")
             }
             .padding(16)
 
@@ -394,6 +405,9 @@ struct ImageGenerationView: View {
                 Divider()
                 Button("Delete", role: .destructive) { viewModel.deleteImage(generatedImage) }
             }
+            .accessibilityLabel("Generated image")
+            .accessibilityHint("Double-tap to select")
+            .accessibilityAddTraits(viewModel.selectedImage?.id == generatedImage.id ? .isSelected : [])
     }
 
     private func imageDetailView(_ generatedImage: GeneratedImage) -> some View {
