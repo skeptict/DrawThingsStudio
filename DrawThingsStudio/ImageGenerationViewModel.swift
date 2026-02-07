@@ -68,6 +68,11 @@ final class ImageGenerationViewModel: ObservableObject {
             return
         }
 
+        guard !config.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Please specify a model (enter manually or refresh from Draw Things)"
+            return
+        }
+
         guard !isGenerating else { return }
 
         errorMessage = nil

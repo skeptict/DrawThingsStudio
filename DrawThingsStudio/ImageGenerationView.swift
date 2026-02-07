@@ -272,7 +272,8 @@ struct ImageGenerationView: View {
                 .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                 .controlSize(.large)
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(viewModel.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(viewModel.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                          viewModel.config.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityIdentifier("generate_generateButton")
                 .accessibilityLabel("Generate image")
                 .accessibilityHint("Sends prompt to Draw Things for image generation")

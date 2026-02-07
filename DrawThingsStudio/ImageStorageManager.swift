@@ -33,6 +33,9 @@ final class ImageStorageManager: ObservableObject {
 
     /// Save a generated image to disk with metadata sidecar
     func saveImage(_ image: NSImage, prompt: String, negativePrompt: String, config: DrawThingsGenerationConfig, inferenceTimeMs: Int?) -> GeneratedImage? {
+        // Ensure directory exists before saving
+        ensureDirectoryExists()
+
         let timestamp = ISO8601DateFormatter().string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
             .replacingOccurrences(of: "T", with: "_")
@@ -182,12 +185,24 @@ final class ImageStorageManager: ObservableObject {
 
     private func ensureDirectoryExists() {
         let fileManager = FileManager.default
-        if !fileManager.fileExists(atPath: storageDirectory.path) {
+        var isDirectory: ObjCBool = false
+        let exists = fileManager.fileExists(atPath: storageDirectory.path, isDirectory: &isDirectory)
+
+        if !exists || !isDirectory.boolValue {
             do {
-                try fileManager.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
+                try fileManager.createDirectory(at: storageDirectory, withIntermediateDirectories: true, attributes: nil)
                 logger.info("Created storage directory at \(self.storageDirectory.path)")
             } catch {
                 logger.error("Failed to create storage directory: \(error.localizedDescription)")
+                // Try alternative location in Documents folder as fallback
+                let fallbackDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+                    .appendingPathComponent("DrawThingsStudio/GeneratedImages", isDirectory: true)
+                do {
+                    try fileManager.createDirectory(at: fallbackDir, withIntermediateDirectories: true, attributes: nil)
+                    logger.info("Created fallback storage directory at \(fallbackDir.path)")
+                } catch {
+                    logger.error("Failed to create fallback storage directory: \(error.localizedDescription)")
+                }
             }
         }
     }
