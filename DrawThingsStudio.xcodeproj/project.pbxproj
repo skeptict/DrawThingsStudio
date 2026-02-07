@@ -10,14 +10,30 @@
 		FDAE38B52F280DF30010FC04 /* DrawThingsClient in Frameworks */ = {isa = PBXBuildFile; productRef = FD31E3F02F1A0000003E0C4C /* DrawThingsClient */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		FDA09D5C2F36EABE003D7DF0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FD31E3D02F184A4C003E0C4C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FD31E3D72F184A4D003E0C4C;
+			remoteInfo = DrawThingsStudio;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		FD31E3D82F184A4D003E0C4C /* DrawThingsStudio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DrawThingsStudio.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FDA09D562F36EABE003D7DF0 /* DrawThingsStudioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DrawThingsStudioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		FD31E3DA2F184A4D003E0C4C /* DrawThingsStudio */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DrawThingsStudio;
+			sourceTree = "<group>";
+		};
+		FDA09D572F36EABE003D7DF0 /* DrawThingsStudioUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DrawThingsStudioUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +47,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FDA09D532F36EABE003D7DF0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				FD31E3DA2F184A4D003E0C4C /* DrawThingsStudio */,
+				FDA09D572F36EABE003D7DF0 /* DrawThingsStudioUITests */,
 				FD31E3D92F184A4D003E0C4C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				FD31E3D82F184A4D003E0C4C /* DrawThingsStudio.app */,
+				FDA09D562F36EABE003D7DF0 /* DrawThingsStudioUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,6 +101,29 @@
 			productReference = FD31E3D82F184A4D003E0C4C /* DrawThingsStudio.app */;
 			productType = "com.apple.product-type.application";
 		};
+		FDA09D552F36EABE003D7DF0 /* DrawThingsStudioUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FDA09D602F36EABE003D7DF0 /* Build configuration list for PBXNativeTarget "DrawThingsStudioUITests" */;
+			buildPhases = (
+				FDA09D522F36EABE003D7DF0 /* Sources */,
+				FDA09D532F36EABE003D7DF0 /* Frameworks */,
+				FDA09D542F36EABE003D7DF0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FDA09D5D2F36EABE003D7DF0 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				FDA09D572F36EABE003D7DF0 /* DrawThingsStudioUITests */,
+			);
+			name = DrawThingsStudioUITests;
+			packageProductDependencies = (
+			);
+			productName = DrawThingsStudioUITests;
+			productReference = FDA09D562F36EABE003D7DF0 /* DrawThingsStudioUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -88,6 +136,10 @@
 				TargetAttributes = {
 					FD31E3D72F184A4D003E0C4C = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					FDA09D552F36EABE003D7DF0 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = FD31E3D72F184A4D003E0C4C;
 					};
 				};
 			};
@@ -109,12 +161,20 @@
 			projectRoot = "";
 			targets = (
 				FD31E3D72F184A4D003E0C4C /* DrawThingsStudio */,
+				FDA09D552F36EABE003D7DF0 /* DrawThingsStudioUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		FD31E3D62F184A4D003E0C4C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FDA09D542F36EABE003D7DF0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -131,7 +191,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FDA09D522F36EABE003D7DF0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FDA09D5D2F36EABE003D7DF0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FD31E3D72F184A4D003E0C4C /* DrawThingsStudio */;
+			targetProxy = FDA09D5C2F36EABE003D7DF0 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		FD31E3E12F184A4E003E0C4C /* Debug */ = {
@@ -314,6 +389,42 @@
 			};
 			name = Release;
 		};
+		FDA09D5E2F36EABE003D7DF0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tanque.org.DrawThingsStudioUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = DrawThingsStudio;
+			};
+			name = Debug;
+		};
+		FDA09D5F2F36EABE003D7DF0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = tanque.org.DrawThingsStudioUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = DrawThingsStudio;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -331,6 +442,15 @@
 			buildConfigurations = (
 				FD31E3E42F184A4E003E0C4C /* Debug */,
 				FD31E3E52F184A4E003E0C4C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FDA09D602F36EABE003D7DF0 /* Build configuration list for PBXNativeTarget "DrawThingsStudioUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FDA09D5E2F36EABE003D7DF0 /* Debug */,
+				FDA09D5F2F36EABE003D7DF0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

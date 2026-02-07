@@ -75,6 +75,7 @@ struct ImageInspectorView: View {
                     Text("Drop images here")
                         .font(.callout)
                         .foregroundColor(.neuTextSecondary)
+                        .accessibilityIdentifier("inspector_dropZoneText")
                     Text("PNG, JPG from Finder or Discord")
                         .font(.caption2)
                         .foregroundColor(.neuTextSecondary.opacity(0.6))
