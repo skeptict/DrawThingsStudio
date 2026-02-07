@@ -121,6 +121,7 @@ struct ContentView: View {
         .buttonStyle(.plain)
         .neuSidebarItem(isSelected: selectedItem == item)
         .padding(.horizontal, 8)
+        .accessibilityIdentifier("sidebar_\(item.rawValue)")
         .accessibilityLabel(title)
         .accessibilityHint("Switch to \(title)")
         .accessibilityAddTraits(selectedItem == item ? .isSelected : [])
@@ -182,6 +183,7 @@ struct SavedWorkflowsView: View {
                             .foregroundColor(.secondary)
                         TextField("Search workflows...", text: $searchText)
                             .textFieldStyle(.plain)
+                            .accessibilityIdentifier("savedWorkflows_searchField")
                     }
                     .padding(8)
                     .background(Color.neuSurface)
@@ -191,6 +193,7 @@ struct SavedWorkflowsView: View {
                         Image(systemName: "plus")
                     }
                     .buttonStyle(NeumorphicIconButtonStyle())
+                    .accessibilityIdentifier("savedWorkflows_saveButton")
                     .accessibilityLabel("Save current workflow")
                     .help("Save current workflow to library")
                     .disabled(viewModel.instructions.isEmpty)
@@ -716,6 +719,7 @@ struct TemplatesLibraryView: View {
                         .foregroundColor(.secondary)
                     TextField("Search templates...", text: $searchText)
                         .textFieldStyle(.plain)
+                        .accessibilityIdentifier("templates_searchField")
                         .accessibilityLabel("Search templates")
                 }
                 .padding(8)
@@ -959,6 +963,7 @@ struct TemplateDetailView: View {
                     }
                     .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                     .controlSize(.large)
+                    .accessibilityIdentifier("templates_useButton")
                     Spacer()
                 }
                 .padding()

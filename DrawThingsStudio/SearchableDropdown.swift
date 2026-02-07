@@ -284,6 +284,7 @@ struct LoRAConfigurationView: View {
                         .font(.system(size: 14))
                 }
                 .buttonStyle(NeumorphicIconButtonStyle())
+                .accessibilityIdentifier("lora_addButton")
                 .accessibilityLabel("Add LoRA")
             }
 
@@ -323,6 +324,7 @@ struct LoRAConfigurationView: View {
                             .onSubmit {
                                 addManualLoRA()
                             }
+                            .accessibilityIdentifier("lora_manualEntryField")
                             .accessibilityLabel("Enter LoRA filename manually")
 
                         if !manualLoRAName.isEmpty {
@@ -534,6 +536,7 @@ struct ModelSelectorView: View {
                         .foregroundColor(.neuTextSecondary)
                 }
                 .buttonStyle(NeumorphicIconButtonStyle())
+                .accessibilityIdentifier("model_toggleManualEntry")
                 .help(isManualEntry ? "Switch to dropdown" : "Enter model name manually")
                 .accessibilityLabel(isManualEntry ? "Switch to dropdown selection" : "Switch to manual entry")
 
@@ -547,6 +550,7 @@ struct ModelSelectorView: View {
                             .foregroundColor(.neuTextSecondary)
                     }
                     .buttonStyle(NeumorphicIconButtonStyle())
+                    .accessibilityIdentifier("model_refreshButton")
                     .help("Refresh models from Draw Things")
                     .accessibilityLabel("Refresh models from Draw Things")
                 }
@@ -557,6 +561,7 @@ struct ModelSelectorView: View {
                 // Manual entry text field
                 TextField("e.g., z_image_turbo_1.0_q8p.ckpt", text: $selection)
                     .textFieldStyle(NeumorphicTextFieldStyle())
+                    .accessibilityIdentifier("model_manualEntryField")
                     .accessibilityLabel("Model filename")
             } else {
                 // Dropdown selector

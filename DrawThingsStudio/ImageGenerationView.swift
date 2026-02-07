@@ -72,6 +72,7 @@ struct ImageGenerationView: View {
             .font(.caption)
             .foregroundColor(.neuTextSecondary)
             .buttonStyle(NeumorphicPlainButtonStyle())
+            .accessibilityIdentifier("generate_refreshConnectionButton")
             .accessibilityLabel("Refresh connection status")
         }
     }
@@ -138,11 +139,13 @@ struct ImageGenerationView: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(Color.neuShadowDark.opacity(0.1), lineWidth: 0.5)
                 )
+                .accessibilityIdentifier("generate_promptField")
 
             NeuSectionHeader("Negative Prompt")
 
             TextField("Things to avoid...", text: $viewModel.negativePrompt)
                 .textFieldStyle(NeumorphicTextFieldStyle())
+                .accessibilityIdentifier("generate_negativePromptField")
         }
     }
 
@@ -256,6 +259,7 @@ struct ImageGenerationView: View {
                     viewModel.cancelGeneration()
                 }
                 .buttonStyle(NeumorphicButtonStyle())
+                .accessibilityIdentifier("generate_cancelButton")
                 .accessibilityLabel("Cancel generation")
             } else {
                 Button(action: { viewModel.generate() }) {
@@ -269,6 +273,7 @@ struct ImageGenerationView: View {
                 .controlSize(.large)
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(viewModel.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("generate_generateButton")
                 .accessibilityLabel("Generate image")
                 .accessibilityHint("Sends prompt to Draw Things for image generation")
             }
@@ -297,6 +302,7 @@ struct ImageGenerationView: View {
                         .foregroundColor(.neuTextSecondary)
                 }
                 .buttonStyle(NeumorphicIconButtonStyle())
+                .accessibilityIdentifier("generate_openFolderButton")
                 .help("Open output folder")
                 .accessibilityLabel("Open output folder")
             }

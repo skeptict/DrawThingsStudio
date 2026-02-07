@@ -339,15 +339,16 @@ struct SettingsView: View {
 
                 // Draw Things Connection
                 neuSettingsSection("Draw Things Connection", icon: "paintbrush.pointed") {
-                    neuSettingsRow("Host") { TextField("", text: $settings.drawThingsHost).textFieldStyle(NeumorphicTextFieldStyle()) }
-                    neuSettingsRow("HTTP Port") { TextField("", value: $settings.drawThingsHTTPPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
-                    neuSettingsRow("gRPC Port") { TextField("", value: $settings.drawThingsGRPCPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
+                    neuSettingsRow("Host") { TextField("", text: $settings.drawThingsHost).textFieldStyle(NeumorphicTextFieldStyle()).accessibilityIdentifier("settings_drawThingsHost") }
+                    neuSettingsRow("HTTP Port") { TextField("", value: $settings.drawThingsHTTPPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100).accessibilityIdentifier("settings_drawThingsHTTPPort") }
+                    neuSettingsRow("gRPC Port") { TextField("", value: $settings.drawThingsGRPCPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100).accessibilityIdentifier("settings_drawThingsGRPCPort") }
 
                     Picker("Transport", selection: $settings.drawThingsTransport) {
                         ForEach(DrawThingsTransport.allCases) { transport in
                             Text(transport.displayName).tag(transport.rawValue)
                         }
                     }
+                    .accessibilityIdentifier("settings_transportPicker")
 
                     neuSettingsRow("Secret") {
                         HStack {
@@ -368,6 +369,7 @@ struct SettingsView: View {
                     HStack {
                         Button("Test Connection") { testDTConnection() }
                             .buttonStyle(NeumorphicButtonStyle())
+                            .accessibilityIdentifier("settings_testConnectionButton")
                             .disabled(testingDTConnection)
 
                         if testingDTConnection {

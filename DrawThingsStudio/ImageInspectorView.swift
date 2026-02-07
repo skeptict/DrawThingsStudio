@@ -60,6 +60,7 @@ struct ImageInspectorView: View {
                     .font(.caption)
                     .foregroundColor(.neuTextSecondary)
                     .buttonStyle(NeumorphicPlainButtonStyle())
+                    .accessibilityIdentifier("inspector_clearHistoryButton")
                     .accessibilityLabel("Clear history")
                 }
             }
@@ -303,14 +304,17 @@ struct ImageInspectorView: View {
             HStack(spacing: 10) {
                 Button("Copy Prompt") { viewModel.copyPromptToClipboard() }
                     .buttonStyle(NeumorphicButtonStyle())
+                    .accessibilityIdentifier("inspector_copyPromptButton")
                     .disabled(viewModel.selectedImage?.metadata?.hasPrompt != true)
 
                 Button("Copy Config") { viewModel.copyConfigToClipboard() }
                     .buttonStyle(NeumorphicButtonStyle())
+                    .accessibilityIdentifier("inspector_copyConfigButton")
                     .disabled(viewModel.selectedImage?.metadata?.hasConfig != true)
 
                 Button("Copy All") { viewModel.copyAllToClipboard() }
                     .buttonStyle(NeumorphicButtonStyle())
+                    .accessibilityIdentifier("inspector_copyAllButton")
             }
 
             Button(action: sendToGenerate) {
@@ -322,6 +326,7 @@ struct ImageInspectorView: View {
             }
             .buttonStyle(NeumorphicButtonStyle(isProminent: true))
             .controlSize(.large)
+            .accessibilityIdentifier("inspector_sendToGenerateButton")
             .accessibilityLabel("Send to Generate Image")
             .accessibilityHint("Uses this image's prompt and settings in Generate Image")
         }
