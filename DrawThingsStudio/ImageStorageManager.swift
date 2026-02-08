@@ -194,15 +194,6 @@ final class ImageStorageManager: ObservableObject {
                 logger.info("Created storage directory at \(self.storageDirectory.path)")
             } catch {
                 logger.error("Failed to create storage directory: \(error.localizedDescription)")
-                // Try alternative location in Documents folder as fallback
-                let fallbackDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-                    .appendingPathComponent("DrawThingsStudio/GeneratedImages", isDirectory: true)
-                do {
-                    try fileManager.createDirectory(at: fallbackDir, withIntermediateDirectories: true, attributes: nil)
-                    logger.info("Created fallback storage directory at \(fallbackDir.path)")
-                } catch {
-                    logger.error("Failed to create fallback storage directory: \(error.localizedDescription)")
-                }
             }
         }
     }
