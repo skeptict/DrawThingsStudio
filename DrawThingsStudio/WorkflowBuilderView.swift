@@ -231,7 +231,7 @@ struct InstructionListView: View {
                     Image(systemName: validationStatusIcon)
                         .foregroundColor(validationStatusColor)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(NeumorphicIconButtonStyle())
                 .help("Validate workflow")
                 .accessibilityLabel("Validate workflow")
 
@@ -291,6 +291,7 @@ struct InstructionListView: View {
                     Image(systemName: "trash")
                         .foregroundColor(.neuTextSecondary)
                 }
+                .buttonStyle(NeumorphicIconButtonStyle())
                 .disabled(!viewModel.hasSelection)
                 .help("Delete selected instruction")
                 .accessibilityLabel("Delete selected instruction")
@@ -301,6 +302,7 @@ struct InstructionListView: View {
                     Image(systemName: "doc.on.doc")
                         .foregroundColor(.neuTextSecondary)
                 }
+                .buttonStyle(NeumorphicIconButtonStyle())
                 .disabled(!viewModel.hasSelection)
                 .help("Duplicate selected instruction")
                 .accessibilityLabel("Duplicate selected instruction")
@@ -313,6 +315,7 @@ struct InstructionListView: View {
                     Image(systemName: "arrow.up")
                         .foregroundColor(.neuTextSecondary)
                 }
+                .buttonStyle(NeumorphicIconButtonStyle())
                 .disabled(!viewModel.hasSelection)
                 .help("Move up")
                 .accessibilityLabel("Move instruction up")
@@ -323,11 +326,11 @@ struct InstructionListView: View {
                     Image(systemName: "arrow.down")
                         .foregroundColor(.neuTextSecondary)
                 }
+                .buttonStyle(NeumorphicIconButtonStyle())
                 .disabled(!viewModel.hasSelection)
                 .help("Move down")
                 .accessibilityLabel("Move instruction down")
             }
-            .buttonStyle(.plain)
             .padding(12)
         }
         .neuCard(cornerRadius: 24)
@@ -395,7 +398,7 @@ struct ValidationPanel: View {
                     Image(systemName: "xmark")
                         .font(.caption)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(NeumorphicIconButtonStyle())
             }
 
             if !result.errors.isEmpty {
@@ -1141,7 +1144,7 @@ struct ConfigEditor: View {
                         Image(systemName: "arrow.clockwise")
                             .font(.caption2)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(NeumorphicIconButtonStyle())
                     .help("Refresh models from Draw Things")
                 }
                 if assetManager.models.isEmpty {
@@ -1587,7 +1590,7 @@ struct ManageConfigPresetsSheet: View {
                     Button(action: { importMessage = nil }) {
                         Image(systemName: "xmark")
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(NeumorphicIconButtonStyle())
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
@@ -1937,7 +1940,7 @@ struct MoodboardWeightsEditor: View {
                     } label: {
                         Image(systemName: "minus.circle")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(NeumorphicIconButtonStyle())
                 }
                 .onChange(of: editWeights[i].weight) { _, _ in updateWeights() }
             }
