@@ -18,13 +18,35 @@ final class DrawThingsAssetManager: ObservableObject {
 
     private let logger = Logger(subsystem: "com.drawthingsstudio", category: "asset-manager")
 
+    // MARK: - Cloud Catalog
+
+    private let cloudCatalog = CloudModelCatalog.shared
+
     // MARK: - Published State
 
+    /// Models detected from local Draw Things instance
     @Published private(set) var models: [DrawThingsModel] = []
     @Published private(set) var loras: [DrawThingsLoRA] = []
     @Published private(set) var isLoading = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastFetchDate: Date?
+
+    /// Combined model list: local models first, then unique cloud models
+    var allModels: [DrawThingsModel] {
+        let localFilenames = Set(models.map { $0.filename })
+        let uniqueCloud = cloudCatalog.models.filter { !localFilenames.contains($0.filename) }
+        return models + uniqueCloud
+    }
+
+    /// Cloud models only (for displaying separately if needed)
+    var cloudModels: [DrawThingsModel] {
+        cloudCatalog.models
+    }
+
+    /// Whether cloud catalog is currently loading
+    var isCloudLoading: Bool {
+        cloudCatalog.isLoading
+    }
 
     // MARK: - Initialization
 
@@ -87,9 +109,20 @@ final class DrawThingsAssetManager: ObservableObject {
         await fetchAssets()
     }
 
-    /// Force refresh assets
+    /// Force refresh assets (local and cloud)
     func forceRefresh() async {
         await fetchAssets()
+        await cloudCatalog.forceRefresh()
+    }
+
+    /// Fetch cloud catalog if needed (called on view load)
+    func fetchCloudCatalogIfNeeded() async {
+        await cloudCatalog.fetchIfNeeded()
+    }
+
+    /// Force refresh cloud catalog only
+    func refreshCloudCatalog() async {
+        await cloudCatalog.forceRefresh()
     }
 
     // MARK: - Helpers

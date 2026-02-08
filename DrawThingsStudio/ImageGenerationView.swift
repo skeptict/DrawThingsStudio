@@ -29,6 +29,7 @@ struct ImageGenerationView: View {
         .task {
             await viewModel.checkConnection()
             await assetManager.fetchAssets()
+            await assetManager.fetchCloudCatalogIfNeeded()
         }
     }
 
@@ -162,10 +163,11 @@ struct ImageGenerationView: View {
             }
 
             // Model selector with manual entry option
+            // Uses combined local + cloud models
             ModelSelectorView(
-                availableModels: assetManager.models,
+                availableModels: assetManager.allModels,
                 selection: $viewModel.config.model,
-                isLoading: assetManager.isLoading,
+                isLoading: assetManager.isLoading || assetManager.isCloudLoading,
                 onRefresh: { Task { await assetManager.forceRefresh() } }
             )
 
