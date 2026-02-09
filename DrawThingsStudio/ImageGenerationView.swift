@@ -89,20 +89,184 @@ struct ImageGenerationView: View {
 
     // MARK: - Preset Section
 
+    @State private var isPresetExpanded = false
+    @State private var presetSearchText = ""
+    @State private var isPresetHovered = false
+    @FocusState private var isPresetSearchFocused: Bool
+
+    private var filteredPresets: [ModelConfig] {
+        if presetSearchText.isEmpty {
+            return modelConfigs
+        }
+        return modelConfigs.filter { $0.name.localizedCaseInsensitiveContains(presetSearchText) }
+    }
+
+    private var presetDisplayText: String {
+        if selectedPresetID.isEmpty {
+            return "Custom"
+        }
+        if let config = modelConfigs.first(where: { $0.id.uuidString == selectedPresetID }) {
+            return config.name
+        }
+        return "Custom"
+    }
+
     private var presetSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             NeuSectionHeader("Config Preset", icon: "slider.horizontal.3")
 
-            Picker("Preset", selection: $selectedPresetID) {
-                Text("Custom").tag("")
-                ForEach(modelConfigs) { config in
-                    Text(config.name).tag(config.id.uuidString)
+            VStack(spacing: 0) {
+                // Selection button
+                Button {
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
+                        isPresetExpanded.toggle()
+                        if isPresetExpanded {
+                            presetSearchText = ""
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text(presetDisplayText)
+                            .foregroundColor(selectedPresetID.isEmpty ? .secondary : .primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        Spacer()
+
+                        Image(systemName: isPresetExpanded ? "chevron.up" : "chevron.down")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(isPresetHovered ? Color.neuSurface.opacity(0.9) : Color.neuSurface)
+                            .shadow(
+                                color: isPresetHovered ? Color.neuShadowDark.opacity(0.1) : Color.clear,
+                                radius: 2, x: 1, y: 1
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(isPresetHovered ? Color.neuShadowDark.opacity(0.15) : Color.clear, lineWidth: 0.5)
+                    )
                 }
-            }
-            .labelsHidden()
-            .onChange(of: selectedPresetID) { _, newValue in
-                if let config = modelConfigs.first(where: { $0.id.uuidString == newValue }) {
-                    viewModel.loadPreset(config)
+                .buttonStyle(.plain)
+                .scaleEffect(isPresetHovered ? 1.01 : 1.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPresetHovered)
+                .onHover { hovering in
+                    isPresetHovered = hovering
+                }
+                .accessibilityLabel("Config Preset: \(presetDisplayText)")
+                .accessibilityHint("Double-tap to \(isPresetExpanded ? "close" : "open") dropdown")
+
+                // Dropdown panel
+                if isPresetExpanded {
+                    VStack(spacing: 0) {
+                        // Search field
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+
+                            TextField("Search presets...", text: $presetSearchText)
+                                .textFieldStyle(.plain)
+                                .font(.caption)
+                                .focused($isPresetSearchFocused)
+                                .accessibilityLabel("Search config presets")
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.neuBackground)
+
+                        Divider()
+
+                        // Results list
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                // "Custom" option (always visible, not filtered)
+                                if presetSearchText.isEmpty {
+                                    Button {
+                                        selectedPresetID = ""
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            isPresetExpanded = false
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Text("Custom")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+
+                                            Spacer()
+
+                                            if selectedPresetID.isEmpty {
+                                                Image(systemName: "checkmark")
+                                                    .font(.caption)
+                                                    .foregroundColor(.accentColor)
+                                            }
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(selectedPresetID.isEmpty ? Color.accentColor.opacity(0.1) : Color.clear)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Custom preset")
+                                    .accessibilityAddTraits(selectedPresetID.isEmpty ? .isSelected : [])
+                                }
+
+                                if filteredPresets.isEmpty && !presetSearchText.isEmpty {
+                                    Text("No presets found")
+                                        .foregroundColor(.secondary)
+                                        .font(.caption)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 8)
+                                } else {
+                                    ForEach(filteredPresets) { config in
+                                        let isSelected = selectedPresetID == config.id.uuidString
+
+                                        Button {
+                                            selectedPresetID = config.id.uuidString
+                                            viewModel.loadPreset(config)
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                isPresetExpanded = false
+                                            }
+                                        } label: {
+                                            HStack {
+                                                Text(config.name)
+                                                    .font(.caption)
+                                                    .lineLimit(1)
+                                                    .truncationMode(.middle)
+
+                                                Spacer()
+
+                                                if isSelected {
+                                                    Image(systemName: "checkmark")
+                                                        .font(.caption)
+                                                        .foregroundColor(.accentColor)
+                                                }
+                                            }
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+                                            .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel(config.name)
+                                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                                    }
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 200)
+                    }
+                    .background(Color.neuSurface)
+                    .cornerRadius(8)
+                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    .onAppear {
+                        isPresetSearchFocused = true
+                    }
                 }
             }
 
