@@ -8,7 +8,7 @@ DrawThingsStudio is a macOS native application (Swift/SwiftUI) that serves as a 
 
 **Platform:** macOS 14.0+
 **Architecture:** SwiftUI + SwiftData + MVVM
-**Current State:** Fully functional with HTTP and gRPC connectivity to Draw Things, workflow creation, and LLM-assisted prompt enhancement
+**Current State:** Fully functional with HTTP and gRPC connectivity to Draw Things, workflow creation, LLM-assisted prompt enhancement, cloud model catalog, image metadata inspector, and direct workflow execution
 
 ## Build Commands
 
@@ -50,19 +50,41 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 - **Editable Styles:** Styles loaded from `~/Library/Application Support/DrawThingsStudio/enhance_styles.json`
 - **Provider Selection:** Settings → LLM Provider (persisted in UserDefaults)
 
-### Key Files Modified in Recent Sessions
-| File | Changes |
+### Cloud Model Catalog
+- Fetches official model list from [drawthingsai/community-models](https://github.com/drawthingsai/community-models) GitHub repo
+- **Sources:** `models.txt` (curated) + `builtin.txt` (built-in) = ~400 models
+- Auto-fetch on launch if cache is older than 24 hours; manual refresh available
+- Cached in UserDefaults for offline use
+- Combined with local Draw Things models (local shown first, no duplicates)
+
+### Image Inspector
+- Drag-and-drop PNG/JPG metadata reader
+- Supports Draw Things, A1111/Forge, and ComfyUI metadata formats
+- History timeline with hover states
+- "Send to Generate" transfers metadata to Image Generation view
+- Discord image URL support (downloads and inspects)
+
+### UI Testing
+- 64 XCUITest cases covering all views
+- Settings reset in teardown to prevent test pollution
+- Accessibility identifiers on all interactive elements
+
+### Key Files
+| File | Purpose |
 |------|---------|
-| `DrawThingsGRPCClient.swift` | **NEW** - gRPC client implementing DrawThingsProvider |
+| `CloudModelCatalog.swift` | Fetches/caches cloud model catalog from GitHub |
+| `DrawThingsAssetManager.swift` | Local + cloud model management, LoRA fetching |
+| `DrawThingsGRPCClient.swift` | gRPC client implementing DrawThingsProvider |
 | `DrawThingsHTTPClient.swift` | HTTP client for Draw Things API |
 | `DrawThingsProvider.swift` | Protocol + shared types for Draw Things connectivity |
 | `ImageGenerationView.swift` | Neumorphic UI for image generation |
-| `ImageGenerationViewModel.swift` | State management for generation |
-| `ImageStorageManager.swift` | Auto-save generated images with metadata |
+| `ImageGenerationViewModel.swift` | State management for generation, model validation |
+| `ImageInspectorView.swift` | PNG metadata inspector with drag-and-drop |
+| `ImageStorageManager.swift` | Auto-save generated images to sandboxed container |
 | `AppSettings.swift` | Draw Things settings, createDrawThingsClient() factory |
-| `NeumorphicStyle.swift` | **NEW** - Design system (colors, modifiers, components) |
-| `ContentView.swift` | Neumorphic sidebar styling |
-| `WorkflowBuilderView.swift` | Neumorphic styling, searchable preset picker |
+| `NeumorphicStyle.swift` | Design system (colors, modifiers, hover states, components) |
+| `ContentView.swift` | NavigationSplitView with neumorphic sidebar |
+| `WorkflowBuilderView.swift` | Instruction list, inline editors, preset picker |
 
 ## Architecture
 
@@ -126,20 +148,37 @@ User copies to Draw Things' StoryflowPipeline.js
 ## File Organization
 
 ```
-DrawThingsStudio/           # Main app target
-├── *App.swift              # Entry point
-├── ContentView.swift       # Navigation
-├── WorkflowBuilder*.swift  # Core builder (View + ViewModel)
-├── AIGeneration*.swift     # LLM integration
-├── Storyflow*.swift        # JSON export pipeline
-├── *Client.swift           # HTTP clients (Ollama, OpenAI-compatible)
-├── ConfigPresetsManager    # Model config management
-├── DataModels.swift        # SwiftData models
-├── AppSettings.swift       # Preferences + SettingsView
-└── LLMProvider.swift       # Protocol + PromptStyleManager
+DrawThingsStudio/               # Main app target
+├── *App.swift                  # Entry point
+├── ContentView.swift           # NavigationSplitView (sidebar + detail views)
+├── WorkflowBuilder*.swift      # Core builder (View + ViewModel)
+├── ImageGeneration*.swift      # Image generation (View + ViewModel)
+├── ImageInspector*.swift       # PNG metadata inspector (View + ViewModel)
+├── AIGeneration*.swift         # LLM integration
+├── Storyflow*.swift            # JSON export + execution pipeline
+├── DrawThingsProvider.swift    # Protocol for Draw Things connectivity
+├── DrawThingsHTTPClient.swift  # HTTP transport
+├── DrawThingsGRPCClient.swift  # gRPC transport
+├── DrawThingsAssetManager.swift # Model/LoRA fetching + cloud integration
+├── CloudModelCatalog.swift     # Cloud model catalog from GitHub
+├── *Client.swift               # LLM HTTP clients (Ollama, OpenAI-compatible)
+├── NeumorphicStyle.swift       # Design system (colors, modifiers, hover states)
+├── SearchableDropdown.swift    # Reusable dropdown components
+├── ConfigPresetsManager.swift  # Model config management
+├── DataModels.swift            # SwiftData models
+├── AppSettings.swift           # Preferences + SettingsView
+└── LLMProvider.swift           # Protocol + PromptStyleManager
 
-Sources/StoryFlow/          # Modular library (SPM) - currently unused
-Protos/                     # gRPC proto files (not yet integrated)
+DrawThingsStudioUITests/        # UI test suite (64 tests)
+├── NavigationTests.swift
+├── SettingsTests.swift
+├── WorkflowBuilderTests.swift
+├── GenerateImageTests.swift
+├── ImageInspectorTests.swift
+├── SavedWorkflowsTests.swift
+├── TemplatesTests.swift
+├── ConfigPresetsTests.swift
+└── AIGenerationTests.swift
 ```
 
 ## Adding New Instructions
@@ -179,7 +218,8 @@ Uses [DT-gRPC-Swift-Client](https://github.com/euphoriacyberware-ai/DT-gRPC-Swif
 | `DrawThingsProvider.swift` | Protocol + shared types (DrawThingsGenerationConfig, GenerationProgress) |
 | `DrawThingsHTTPClient.swift` | HTTP implementation using URLSession |
 | `DrawThingsGRPCClient.swift` | gRPC wrapper around DrawThingsClient |
-| `ImageStorageManager.swift` | Saves images to ~/Library/Application Support/DrawThingsStudio/GeneratedImages/ |
+| `ImageStorageManager.swift` | Saves images to sandboxed container (see note below) |
+| `CloudModelCatalog.swift` | Fetches/caches cloud model catalog from GitHub |
 
 ### Configuration Mapping
 ```swift
@@ -194,6 +234,16 @@ DrawThingsGenerationConfig → DrawThingsConfiguration (gRPC)
 
 ## Known Issues & Notes
 
+### Sandboxed Storage Location
+The app is sandboxed. Generated images are stored at:
+```
+~/Library/Containers/tanque.org.DrawThingsStudio/Data/Library/Application Support/DrawThingsStudio/GeneratedImages/
+```
+NOT at `~/Library/Application Support/DrawThingsStudio/`. This is expected macOS sandbox behavior.
+
+### gRPC Model Browsing
+When gRPC returns 0 models, the user needs to enable "Enable Model Browsing" in Draw Things settings. The app now shows this hint in the error message.
+
 ### Vision Models Return Empty
 If using a vision-language model (e.g., `qwen3-vl`) for text-only prompt enhancement, it returns empty. The app now shows: "Model returned empty response. If using a vision model (VL), try a text-only model instead."
 
@@ -207,14 +257,18 @@ Fixed: Selecting a preset now populates the Model field via `editModel = preset.
 
 ## Next Steps (Roadmap)
 
+### Completed
+- ~~Image Metadata Reading~~ - Image Inspector reads Draw Things, A1111, ComfyUI metadata
+- ~~Cloud Model Catalog~~ - Models fetched from Draw Things GitHub repo
+- ~~Direct StoryFlow Execution~~ - Run workflows directly via Draw Things API
+
 ### Phase 2: Intelligent Image Analysis
 1. **Image Evaluation via LLM** - Connect vision-capable LLMs (LLaVA, Qwen-VL) via Ollama for quality assessment
-2. **Image Metadata Reading** - Extract generation metadata from images (Draw Things, A1111, ComfyUI formats)
 
 ### Phase 3+
-3. **Conditional Logic** - If/else branching based on image analysis
-4. **Batch Processing** - Queue multiple workflows, parameter sweeps
-5. **Shortcuts Integration** - Expose workflows to macOS Shortcuts
+2. **Conditional Logic** - If/else branching based on image analysis
+3. **Batch Processing** - Queue multiple workflows, parameter sweeps
+4. **Shortcuts Integration** - Expose workflows to macOS Shortcuts
 
 ---
 
@@ -305,7 +359,7 @@ Instructions → StoryflowExecutor
 - Both HTTP and gRPC transports now working
 - Updated README.md with comprehensive features and roadmap
 
-### Session 6 (Jan 27, 2026) - Current
+### Session 6 (Jan 27, 2026)
 - **Implemented Direct StoryFlow Execution**
 - Created `StoryflowExecutor.swift` - Core execution engine with state management
 - Created `WorkflowExecutionViewModel.swift` - ViewModel for execution tracking
@@ -313,3 +367,12 @@ Instructions → StoryflowExecutor
 - Added "Execute" button to WorkflowBuilderView toolbar
 - Analyzed Draw Things API capabilities (HTTP and gRPC)
 - Documented supported/unsupported instructions for direct execution
+
+### Session 7 (Feb 7-8, 2026)
+- **QA & Testing:** Created 64 XCUITest cases covering all views
+- **Bug Fixes:** Model validation, settings reset in test teardown
+- **Image Persistence:** Verified working in sandboxed container path
+- **UX Polish:** Applied NeumorphicIconButtonStyle to all toolbar icon buttons
+- **Cloud Model Catalog:** Fetches ~400 models from Draw Things GitHub repo
+- **App Icon:** Added puppy-with-palette icon at all macOS sizes
+- **UI Improvements:** Save Canvas path clarity, gRPC "Enable Model Browsing" hint
