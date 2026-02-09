@@ -75,7 +75,11 @@ final class DrawThingsAssetManager: ObservableObject {
             if !fetchedModels.isEmpty {
                 models = fetchedModels
             }
-            lastError = "Connected via \(client.transport.displayName) - \(fetchedModels.count) models found"
+            if fetchedModels.isEmpty && client.transport == .grpc {
+                lastError = "Connected via gRPC - 0 models found. Make sure \"Enable Model Browsing\" is turned on in Draw Things settings."
+            } else {
+                lastError = "Connected via \(client.transport.displayName) - \(fetchedModels.count) models found"
+            }
         } catch {
             lastError = "Model fetch failed: \(error.localizedDescription)"
         }

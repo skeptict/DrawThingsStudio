@@ -552,7 +552,7 @@ struct InstructionEditorContent: View {
                 }
 
             case .canvasSave(let path):
-                FilePathEditor(label: "Output File", path: path, placeholder: "output.png", mustBePNG: true) { newPath in
+                FilePathEditor(label: "Save Canvas To", path: path, placeholder: "output.png", mustBePNG: true, helpText: "You can include a subdirectory path (e.g. \"my_project/output.png\")") { newPath in
                     viewModel.updateSelectedInstruction(type: .canvasSave(newPath))
                 }
 
@@ -836,6 +836,7 @@ struct FilePathEditor: View {
     var placeholder: String = "filename.png"
     var mustBePNG: Bool = false
     var isFolder: Bool = false
+    var helpText: String? = nil
     let onChange: (String) -> Void
 
     @State private var editPath: String = ""
@@ -851,7 +852,7 @@ struct FilePathEditor: View {
                 }
 
             if mustBePNG {
-                Text("Must end with .png")
+                Text("Relative to Pictures folder. Must end with .png")
                     .font(.caption)
                     .foregroundColor(.neuTextSecondary)
             } else if isFolder {
@@ -862,6 +863,12 @@ struct FilePathEditor: View {
                 Text("Relative to Pictures folder (.png, .jpg, .webp)")
                     .font(.caption)
                     .foregroundColor(.neuTextSecondary)
+            }
+
+            if let helpText = helpText {
+                Text(helpText)
+                    .font(.caption)
+                    .foregroundColor(.neuTextSecondary.opacity(0.8))
             }
         }
         .onAppear { editPath = path }
