@@ -28,7 +28,15 @@ struct DrawThingsStudioApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             SavedWorkflow.self,
-            ModelConfig.self
+            ModelConfig.self,
+            StoryProject.self,
+            StoryCharacter.self,
+            CharacterAppearance.self,
+            StorySetting.self,
+            StoryChapter.self,
+            StoryScene.self,
+            SceneCharacterPresence.self,
+            SceneVariant.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

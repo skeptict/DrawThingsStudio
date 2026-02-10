@@ -13,6 +13,7 @@ struct ContentView: View {
     @StateObject private var workflowViewModel = WorkflowBuilderViewModel()
     @StateObject private var imageGenViewModel = ImageGenerationViewModel()
     @StateObject private var imageInspectorViewModel = ImageInspectorViewModel()
+    @StateObject private var storyStudioViewModel = StoryStudioViewModel()
 
     var body: some View {
         NavigationSplitView {
@@ -32,6 +33,7 @@ struct ContentView: View {
                 sidebarButton("Workflow Builder", icon: "hammer", item: .workflow)
                 sidebarButton("Generate Image", icon: "photo.badge.plus", item: .generateImage)
                 sidebarButton("Image Inspector", icon: "doc.text.magnifyingglass", item: .imageInspector)
+                sidebarButton("Story Studio", icon: "book.pages", item: .storyStudio)
 
                 NeuSectionHeader("Library", icon: "books.vertical")
                     .padding(.horizontal, 16)
@@ -39,6 +41,7 @@ struct ContentView: View {
 
                 sidebarButton("Saved Workflows", icon: "folder", item: .library)
                 sidebarButton("Templates", icon: "doc.on.doc", item: .templates)
+                sidebarButton("Story Projects", icon: "book.closed", item: .storyProjects)
 
                 NeuSectionHeader("Settings", icon: "gearshape")
                     .padding(.horizontal, 16)
@@ -79,6 +82,12 @@ struct ContentView: View {
                 .allowsHitTesting(selectedItem == .imageInspector)
                 .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
+                StoryStudioView(viewModel: storyStudioViewModel)
+                    .opacity(selectedItem == .storyStudio ? 1 : 0)
+                    .scaleEffect(selectedItem == .storyStudio ? 1 : 0.98)
+                    .allowsHitTesting(selectedItem == .storyStudio)
+                    .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
+
                 if selectedItem == .library {
                     SavedWorkflowsView(
                         viewModel: workflowViewModel,
@@ -88,6 +97,12 @@ struct ContentView: View {
                 } else if selectedItem == .templates {
                     TemplatesLibraryView(
                         viewModel: workflowViewModel,
+                        selectedItem: $selectedItem
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                } else if selectedItem == .storyProjects {
+                    StoryProjectLibraryView(
+                        storyViewModel: storyStudioViewModel,
                         selectedItem: $selectedItem
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -132,8 +147,10 @@ enum SidebarItem: String, Identifiable {
     case workflow
     case generateImage
     case imageInspector
+    case storyStudio
     case library
     case templates
+    case storyProjects
     case settings
 
     var id: String { rawValue }

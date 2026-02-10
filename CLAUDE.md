@@ -8,7 +8,7 @@ DrawThingsStudio is a macOS native application (Swift/SwiftUI) that serves as a 
 
 **Platform:** macOS 14.0+
 **Architecture:** SwiftUI + SwiftData + MVVM
-**Current State:** Fully functional with HTTP and gRPC connectivity to Draw Things, workflow creation, LLM-assisted prompt enhancement, cloud model catalog, image metadata inspector, and direct workflow execution
+**Current State:** Fully functional with HTTP and gRPC connectivity to Draw Things, workflow creation, LLM-assisted prompt enhancement, cloud model catalog, image metadata inspector, direct workflow execution, and Story Studio for visual narrative creation
 
 ## Build Commands
 
@@ -71,6 +71,17 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 - Settings reset in teardown to prevent test pollution
 - Accessibility identifiers on all interactive elements
 
+### Story Studio (Phase 1)
+- **Visual Narrative System:** Create stories with consistent characters across scenes
+- **Data Model:** StoryProject → StoryChapter → StoryScene, with StoryCharacter and StorySetting
+- **Character Consistency:** Moodboard references, LoRA associations, prompt fragments, appearance variants
+- **PromptAssembler:** Auto-composes prompts from art style + setting + characters + action + camera/mood
+- **3-Column Layout:** Navigator (project tree) | Scene Editor | Preview & Generation
+- **Character Editor:** Full identity, reference images, LoRA, moodboard weights, appearance variants
+- **Scene Editor:** Setting picker, character presence with expression/pose/position, camera angle, mood, prompt overrides
+- **Variant System:** Multiple generation attempts per scene, select best, approve scenes
+- **Project Library:** Browse/manage story projects with detail panel
+
 ### Key Files
 | File | Purpose |
 |------|---------|
@@ -88,6 +99,13 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 | `NeumorphicStyle.swift` | Design system (colors, modifiers, hover states, components) |
 | `ContentView.swift` | NavigationSplitView with neumorphic sidebar |
 | `WorkflowBuilderView.swift` | Instruction list, inline editors, preset picker |
+| `StoryDataModels.swift` | SwiftData models for Story Studio (Project, Character, Scene, etc.) |
+| `PromptAssembler.swift` | Assembles prompts from characters + scenes + settings |
+| `StoryStudioView.swift` | 3-column Story Studio main view |
+| `StoryStudioViewModel.swift` | Story Studio state management |
+| `CharacterEditorView.swift` | Character creation/editing with appearances |
+| `SceneEditorView.swift` | Scene composition with characters, settings, camera |
+| `StoryProjectLibraryView.swift` | Project browser for Library section |
 
 ## Architecture
 
@@ -126,7 +144,8 @@ User copies to Draw Things' StoryflowPipeline.js
 
 ### Persistence
 
-- **SwiftData Models:** `SavedWorkflow`, `ModelConfig` (in `DataModels.swift`)
+- **SwiftData Models:** `SavedWorkflow`, `ModelConfig` (in `DataModels.swift`); Story Studio models in `StoryDataModels.swift`
+- **Story Models:** `StoryProject`, `StoryCharacter`, `CharacterAppearance`, `StorySetting`, `StoryChapter`, `StoryScene`, `SceneCharacterPresence`, `SceneVariant`
 - **User Settings:** `AppSettings.swift` (UserDefaults-backed)
 - **Config Presets:** `ConfigPresetsManager.swift` (JSON file import/export)
 - **Enhancement Styles:** `~/Library/Application Support/DrawThingsStudio/enhance_styles.json`
@@ -172,7 +191,13 @@ DrawThingsStudio/               # Main app target
 ├── ConfigPresetsManager.swift  # Model config management
 ├── DataModels.swift            # SwiftData models
 ├── AppSettings.swift           # Preferences + SettingsView
-└── LLMProvider.swift           # Protocol + PromptStyleManager
+├── LLMProvider.swift           # Protocol + PromptStyleManager
+├── StoryDataModels.swift       # Story Studio SwiftData models
+├── PromptAssembler.swift       # Prompt assembly engine
+├── StoryStudio*.swift          # Story Studio (View + ViewModel)
+├── CharacterEditorView.swift   # Character creation/editing sheet
+├── SceneEditorView.swift       # Scene composition editor
+└── StoryProjectLibraryView.swift # Story project browser
 
 DrawThingsStudioUITests/        # UI test suite (64 tests)
 ├── NavigationTests.swift
@@ -269,11 +294,22 @@ Fixed: Selecting a preset now populates the Model field via `editModel = preset.
 - ~~Image Metadata Reading~~ - Image Inspector reads Draw Things, A1111, ComfyUI metadata
 - ~~Cloud Model Catalog~~ - Models fetched from Draw Things GitHub repo
 - ~~Direct StoryFlow Execution~~ - Run workflows directly via Draw Things API
+- ~~Story Studio Phase 1~~ - Projects, characters, settings, scenes, prompt assembly, generation, variants
 
-### Phase 2: Intelligent Image Analysis
+### Story Studio Phase 2: Narrative Structure + Batch Generation
+- Chapters with reordering, generate entire chapters with one click, progress tracking
+
+### Story Studio Phase 3: Character Appearances + Development
+- Multiple appearances per character timeline, appearance-specific reference generation
+
+### Story Studio Phase 4: LLM-Assisted Story Development
+- Story outline generation, character sheet generation, dialogue writing, prompt optimization
+
+### Story Studio Phase 5: Export Formats
+- Comic page renderer, storyboard renderer, PDF export, image sequence export
+
+### Other Phases
 1. **Image Evaluation via LLM** - Connect vision-capable LLMs (LLaVA, Qwen-VL) via Ollama for quality assessment
-
-### Phase 3+
 2. **Conditional Logic** - If/else branching based on image analysis
 3. **Batch Processing** - Queue multiple workflows, parameter sweeps
 4. **Shortcuts Integration** - Expose workflows to macOS Shortcuts
@@ -389,3 +425,14 @@ Instructions → StoryflowExecutor
 - **Searchable Config Preset Dropdown:** Replaced standard Picker in Generate Image with searchable neumorphic dropdown matching model/sampler style
 - **Persistent Inspector History:** Inspector history now survives app restarts via PNG + JSON sidecar files in `InspectorHistory/` directory
 - **Persistence Toggle:** Added "Persist Inspector history" toggle in Settings > Interface (enabled by default)
+
+### Session 9 (Feb 10, 2026)
+- **Story Studio Phase 1:** Complete visual narrative system
+- Created `StoryDataModels.swift` — 8 SwiftData models: StoryProject, StoryCharacter, CharacterAppearance, StorySetting, StoryChapter, StoryScene, SceneCharacterPresence, SceneVariant
+- Created `PromptAssembler.swift` — Assembles prompts from art style + setting + characters + action + camera/mood; collects moodboard refs and LoRAs
+- Created `StoryStudioView.swift` — 3-column layout (Navigator | Scene Editor | Preview & Generation) with project picker
+- Created `StoryStudioViewModel.swift` — Full state management: project/chapter/scene CRUD, character/setting management, prompt assembly, generation, variant management
+- Created `CharacterEditorView.swift` — Character identity, reference images, LoRA/moodboard consistency tools, appearance variants
+- Created `SceneEditorView.swift` — Setting picker, character presence with expression/pose/position, camera angles, mood, prompt overrides, config overrides
+- Created `StoryProjectLibraryView.swift` — Project browser with detail panel showing stats, chapters, generation defaults
+- Integrated into `ContentView.swift` (new sidebar items: Story Studio, Story Projects) and `DrawThingsStudioApp.swift` (registered 8 new SwiftData models)
