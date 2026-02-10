@@ -41,7 +41,7 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 
 ### Config Presets
 - Import model configs from Draw Things JSON exports
-- Searchable preset picker with type-to-filter
+- Searchable preset picker with type-to-filter (both Workflow Builder and Generate Image)
 - Presets stored in SwiftData
 
 ### LLM Integration
@@ -60,7 +60,9 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 ### Image Inspector
 - Drag-and-drop PNG/JPG metadata reader
 - Supports Draw Things, A1111/Forge, and ComfyUI metadata formats
-- History timeline with hover states
+- **Persistent history:** Saved to disk as PNG + JSON sidecars, restored on launch
+- History persistence toggle in Settings > Interface (enabled by default)
+- History timeline with hover states (max 50 entries)
 - "Send to Generate" transfers metadata to Image Generation view
 - Discord image URL support (downloads and inspects)
 
@@ -80,6 +82,7 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 | `ImageGenerationView.swift` | Neumorphic UI for image generation |
 | `ImageGenerationViewModel.swift` | State management for generation, model validation |
 | `ImageInspectorView.swift` | PNG metadata inspector with drag-and-drop |
+| `ImageInspectorViewModel.swift` | Inspector state, persistent history, clipboard operations |
 | `ImageStorageManager.swift` | Auto-save generated images to sandboxed container |
 | `AppSettings.swift` | Draw Things settings, createDrawThingsClient() factory |
 | `NeumorphicStyle.swift` | Design system (colors, modifiers, hover states, components) |
@@ -127,6 +130,8 @@ User copies to Draw Things' StoryflowPipeline.js
 - **User Settings:** `AppSettings.swift` (UserDefaults-backed)
 - **Config Presets:** `ConfigPresetsManager.swift` (JSON file import/export)
 - **Enhancement Styles:** `~/Library/Application Support/DrawThingsStudio/enhance_styles.json`
+- **Generated Images:** PNG + JSON sidecars in `GeneratedImages/` (via `ImageStorageManager`)
+- **Inspector History:** PNG + JSON sidecars in `InspectorHistory/` (via `ImageInspectorViewModel`, toggle in Settings)
 
 ### Instruction System
 
@@ -235,9 +240,12 @@ DrawThingsGenerationConfig → DrawThingsConfiguration (gRPC)
 ## Known Issues & Notes
 
 ### Sandboxed Storage Location
-The app is sandboxed. Generated images are stored at:
+The app is sandboxed. All file-based storage is under the container:
 ```
-~/Library/Containers/tanque.org.DrawThingsStudio/Data/Library/Application Support/DrawThingsStudio/GeneratedImages/
+~/Library/Containers/tanque.org.DrawThingsStudio/Data/Library/Application Support/DrawThingsStudio/
+├── GeneratedImages/    # Generated image PNGs + JSON metadata sidecars
+├── InspectorHistory/   # Persisted inspector history PNGs + JSON sidecars
+└── enhance_styles.json # Custom prompt enhancement styles
 ```
 NOT at `~/Library/Application Support/DrawThingsStudio/`. This is expected macOS sandbox behavior.
 
@@ -376,3 +384,8 @@ Instructions → StoryflowExecutor
 - **Cloud Model Catalog:** Fetches ~400 models from Draw Things GitHub repo
 - **App Icon:** Added puppy-with-palette icon at all macOS sizes
 - **UI Improvements:** Save Canvas path clarity, gRPC "Enable Model Browsing" hint
+
+### Session 8 (Feb 8, 2026)
+- **Searchable Config Preset Dropdown:** Replaced standard Picker in Generate Image with searchable neumorphic dropdown matching model/sampler style
+- **Persistent Inspector History:** Inspector history now survives app restarts via PNG + JSON sidecar files in `InspectorHistory/` directory
+- **Persistence Toggle:** Added "Persist Inspector history" toggle in Settings > Interface (enabled by default)
