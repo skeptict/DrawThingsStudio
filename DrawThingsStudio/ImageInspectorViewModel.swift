@@ -2,31 +2,161 @@
 //  ImageInspectorViewModel.swift
 //  DrawThingsStudio
 //
-//  ViewModel for PNG metadata inspection with history
+//  ViewModel for PNG metadata inspection with history and optional persistence
 //
 
 import Foundation
 import AppKit
 import Combine
+import OSLog
 
 /// A single inspected image with its metadata
 struct InspectedImage: Identifiable {
-    let id = UUID()
+    let id: UUID
     let image: NSImage
     let metadata: PNGMetadata?
     let sourceName: String
     let inspectedAt: Date
+
+    init(id: UUID = UUID(), image: NSImage, metadata: PNGMetadata?, sourceName: String, inspectedAt: Date) {
+        self.id = id
+        self.image = image
+        self.metadata = metadata
+        self.sourceName = sourceName
+        self.inspectedAt = inspectedAt
+    }
+}
+
+/// Codable sidecar for persisting inspected image metadata to disk
+private struct PersistedInspectorEntry: Codable {
+    let id: String
+    let sourceName: String
+    let inspectedAt: Date
+
+    // PNGMetadata fields
+    let prompt: String?
+    let negativePrompt: String?
+    let width: Int?
+    let height: Int?
+    let steps: Int?
+    let guidanceScale: Double?
+    let seed: Int?
+    let sampler: String?
+    let model: String?
+    let strength: Double?
+    let shift: Double?
+    let seedMode: String?
+    let loras: [PersistedLoRA]
+    let format: String
+    let rawText: String?
+
+    // Raw configs stored as JSON data
+    let rawV2ConfigJSON: Data?
+    let rawTopLevelJSON: Data?
+
+    struct PersistedLoRA: Codable {
+        let file: String
+        let weight: Double
+        let mode: String
+    }
+
+    init(from entry: InspectedImage) {
+        self.id = entry.id.uuidString
+        self.sourceName = entry.sourceName
+        self.inspectedAt = entry.inspectedAt
+
+        let meta = entry.metadata
+        self.prompt = meta?.prompt
+        self.negativePrompt = meta?.negativePrompt
+        self.width = meta?.width
+        self.height = meta?.height
+        self.steps = meta?.steps
+        self.guidanceScale = meta?.guidanceScale
+        self.seed = meta?.seed
+        self.sampler = meta?.sampler
+        self.model = meta?.model
+        self.strength = meta?.strength
+        self.shift = meta?.shift
+        self.seedMode = meta?.seedMode
+        self.loras = meta?.loras.map { PersistedLoRA(file: $0.file, weight: $0.weight, mode: $0.mode) } ?? []
+        self.format = meta?.format.rawValue ?? PNGMetadataFormat.unknown.rawValue
+        self.rawText = meta?.rawText
+
+        // Serialize raw configs
+        if let v2 = meta?.rawV2Config {
+            self.rawV2ConfigJSON = try? JSONSerialization.data(withJSONObject: v2, options: [])
+        } else {
+            self.rawV2ConfigJSON = nil
+        }
+        if let topLevel = meta?.rawTopLevel {
+            self.rawTopLevelJSON = try? JSONSerialization.data(withJSONObject: topLevel, options: [])
+        } else {
+            self.rawTopLevelJSON = nil
+        }
+    }
+
+    func toMetadata() -> PNGMetadata? {
+        // Return nil if there's no meaningful metadata
+        let hasAny = prompt != nil || negativePrompt != nil || width != nil || height != nil ||
+                     steps != nil || guidanceScale != nil || seed != nil || sampler != nil ||
+                     model != nil || !loras.isEmpty
+        guard hasAny else { return nil }
+
+        var meta = PNGMetadata()
+        meta.prompt = prompt
+        meta.negativePrompt = negativePrompt
+        meta.width = width
+        meta.height = height
+        meta.steps = steps
+        meta.guidanceScale = guidanceScale
+        meta.seed = seed
+        meta.sampler = sampler
+        meta.model = model
+        meta.strength = strength
+        meta.shift = shift
+        meta.seedMode = seedMode
+        meta.loras = loras.map { PNGMetadataLoRA(file: $0.file, weight: $0.weight, mode: $0.mode) }
+        meta.format = PNGMetadataFormat(rawValue: format) ?? .unknown
+        meta.rawText = rawText
+
+        if let v2Data = rawV2ConfigJSON,
+           let v2 = try? JSONSerialization.jsonObject(with: v2Data) as? [String: Any] {
+            meta.rawV2Config = v2
+        }
+        if let topData = rawTopLevelJSON,
+           let topLevel = try? JSONSerialization.jsonObject(with: topData) as? [String: Any] {
+            meta.rawTopLevel = topLevel
+        }
+
+        return meta
+    }
 }
 
 @MainActor
 final class ImageInspectorViewModel: ObservableObject {
 
     private static let maxHistoryCount = 50
+    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "inspector")
 
     @Published var history: [InspectedImage] = []
     @Published var selectedImage: InspectedImage?
     @Published var errorMessage: String?
     @Published var isProcessing = false
+
+    // MARK: - Persistence
+
+    private var storageDirectory: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("DrawThingsStudio/InspectorHistory", isDirectory: true)
+    }
+
+    private var isPersistenceEnabled: Bool {
+        AppSettings.shared.persistInspectorHistory
+    }
+
+    init() {
+        loadHistoryFromDisk()
+    }
 
     // MARK: - Load Image from URL
 
@@ -58,6 +188,7 @@ final class ImageInspectorViewModel: ObservableObject {
         history.insert(entry, at: 0)
         trimHistoryIfNeeded()
         selectedImage = entry
+        saveEntryToDisk(entry)
 
         if metadata == nil {
             errorMessage = "No generation metadata found in this image."
@@ -100,6 +231,7 @@ final class ImageInspectorViewModel: ObservableObject {
         history.insert(entry, at: 0)
         trimHistoryIfNeeded()
         selectedImage = entry
+        saveEntryToDisk(entry)
 
         if metadata == nil {
             errorMessage = "No metadata found. Images from Discord or browsers often have metadata stripped. Try saving the image first, then dragging the file."
@@ -130,6 +262,7 @@ final class ImageInspectorViewModel: ObservableObject {
 
     func deleteImage(_ image: InspectedImage) {
         history.removeAll { $0.id == image.id }
+        deleteEntryFromDisk(image.id)
         if selectedImage?.id == image.id {
             selectedImage = history.first
         }
@@ -139,11 +272,114 @@ final class ImageInspectorViewModel: ObservableObject {
         history.removeAll()
         selectedImage = nil
         errorMessage = nil
+        clearPersistedHistory()
     }
 
     private func trimHistoryIfNeeded() {
         if history.count > Self.maxHistoryCount {
+            let trimmed = Array(history.suffix(from: Self.maxHistoryCount))
+            for entry in trimmed {
+                deleteEntryFromDisk(entry.id)
+            }
             history = Array(history.prefix(Self.maxHistoryCount))
+        }
+    }
+
+    // MARK: - Disk Persistence
+
+    private func ensureDirectoryExists() {
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: storageDirectory.path) {
+            try? fm.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
+        }
+    }
+
+    private func saveEntryToDisk(_ entry: InspectedImage) {
+        guard isPersistenceEnabled else { return }
+        ensureDirectoryExists()
+
+        let idString = entry.id.uuidString
+
+        // Save image as PNG
+        let imageURL = storageDirectory.appendingPathComponent("\(idString).png")
+        if let tiffData = entry.image.tiffRepresentation,
+           let bitmapRep = NSBitmapImageRep(data: tiffData),
+           let pngData = bitmapRep.representation(using: .png, properties: [:]) {
+            try? pngData.write(to: imageURL)
+        }
+
+        // Save metadata sidecar
+        let metaURL = storageDirectory.appendingPathComponent("\(idString).json")
+        let persisted = PersistedInspectorEntry(from: entry)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let jsonData = try? encoder.encode(persisted) {
+            try? jsonData.write(to: metaURL)
+        }
+    }
+
+    private func deleteEntryFromDisk(_ id: UUID) {
+        let idString = id.uuidString
+        let imageURL = storageDirectory.appendingPathComponent("\(idString).png")
+        let metaURL = storageDirectory.appendingPathComponent("\(idString).json")
+        try? FileManager.default.removeItem(at: imageURL)
+        try? FileManager.default.removeItem(at: metaURL)
+    }
+
+    private func clearPersistedHistory() {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: storageDirectory.path) else { return }
+        if let files = try? fm.contentsOfDirectory(at: storageDirectory, includingPropertiesForKeys: nil) {
+            for file in files {
+                try? fm.removeItem(at: file)
+            }
+        }
+    }
+
+    private func loadHistoryFromDisk() {
+        guard isPersistenceEnabled else { return }
+
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: storageDirectory.path) else { return }
+
+        guard let files = try? fm.contentsOfDirectory(at: storageDirectory, includingPropertiesForKeys: nil) else { return }
+
+        let jsonFiles = files.filter { $0.pathExtension == "json" }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        var loaded: [InspectedImage] = []
+
+        for jsonURL in jsonFiles {
+            guard let jsonData = try? Data(contentsOf: jsonURL),
+                  let persisted = try? decoder.decode(PersistedInspectorEntry.self, from: jsonData),
+                  let uuid = UUID(uuidString: persisted.id) else {
+                continue
+            }
+
+            let imageURL = storageDirectory.appendingPathComponent("\(persisted.id).png")
+            guard let image = NSImage(contentsOf: imageURL) else {
+                continue
+            }
+
+            let metadata = persisted.toMetadata()
+            let entry = InspectedImage(
+                id: uuid,
+                image: image,
+                metadata: metadata,
+                sourceName: persisted.sourceName,
+                inspectedAt: persisted.inspectedAt
+            )
+            loaded.append(entry)
+        }
+
+        // Sort newest first
+        loaded.sort { $0.inspectedAt > $1.inspectedAt }
+        history = Array(loaded.prefix(Self.maxHistoryCount))
+        selectedImage = history.first
+
+        if !history.isEmpty {
+            logger.info("Loaded \(self.history.count) entries from inspector history")
         }
     }
 

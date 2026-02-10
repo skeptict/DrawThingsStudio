@@ -107,6 +107,9 @@ final class AppSettings: ObservableObject {
     @Published var compactJSON: Bool {
         didSet { defaults.set(compactJSON, forKey: "ui.compactJSON") }
     }
+    @Published var persistInspectorHistory: Bool {
+        didSet { defaults.set(persistInspectorHistory, forKey: "ui.persistInspectorHistory") }
+    }
 
     // MARK: - Init
 
@@ -149,6 +152,7 @@ final class AppSettings: ObservableObject {
         self.showValidationWarnings = defaults.object(forKey: "ui.showValidationWarnings") as? Bool ?? true
         self.autoPreviewJSON = defaults.bool(forKey: "ui.autoPreviewJSON")
         self.compactJSON = defaults.bool(forKey: "ui.compactJSON")
+        self.persistInspectorHistory = defaults.object(forKey: "ui.persistInspectorHistory") as? Bool ?? true
     }
 
     // MARK: - Computed Properties
@@ -252,6 +256,7 @@ final class AppSettings: ObservableObject {
         showValidationWarnings = true
         autoPreviewJSON = false
         compactJSON = false
+        persistInspectorHistory = true
     }
 }
 
@@ -409,6 +414,11 @@ struct SettingsView: View {
                         .tint(Color.neuAccent)
                     Toggle("Compact JSON format", isOn: $settings.compactJSON)
                         .tint(Color.neuAccent)
+                    Toggle("Persist Inspector history", isOn: $settings.persistInspectorHistory)
+                        .tint(Color.neuAccent)
+                    Text("When enabled, Image Inspector history is saved to disk and restored on launch.")
+                        .font(.caption)
+                        .foregroundColor(.neuTextSecondary)
                 }
 
                 // Reset
