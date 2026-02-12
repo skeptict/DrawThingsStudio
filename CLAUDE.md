@@ -156,10 +156,12 @@ User copies to Draw Things' StoryflowPipeline.js
 
 `WorkflowInstruction` wraps `InstructionType` enum with 50+ cases covering:
 - Flow control: `note`, `loop`, `loopEnd`, `end`
-- Prompts: `prompt`, `negativePrompt`, `config`
+- Prompts: `prompt`, `negativePrompt`, `config`, `generate`
 - Canvas: `canvasClear`, `canvasLoad`, `canvasSave`, `moveScale`, `crop`
 - Moodboard: `moodboardClear`, `moodboardAdd`, `moodboardWeights`
 - Advanced: `depthExtract`, `faceZoom`, `removeBackground`, `inpaintTools`
+
+**Generation triggers:** Only `canvasSave`, `loopSave`, and `generate` actually call Draw Things to produce images. The executor warns and disables the Execute button if a workflow has no generation trigger.
 
 ## Key Patterns
 
@@ -270,6 +272,7 @@ The app is sandboxed. All file-based storage is under the container:
 ~/Library/Containers/tanque.org.DrawThingsStudio/Data/Library/Application Support/DrawThingsStudio/
 ├── GeneratedImages/    # Generated image PNGs + JSON metadata sidecars
 ├── InspectorHistory/   # Persisted inspector history PNGs + JSON sidecars
+├── WorkflowOutput/     # Workflow execution output (canvasSave destination)
 └── enhance_styles.json # Custom prompt enhancement styles
 ```
 NOT at `~/Library/Application Support/DrawThingsStudio/`. This is expected macOS sandbox behavior.
@@ -332,8 +335,9 @@ Direct execution allows running StoryFlow workflows without exporting to Draw Th
 | `prompt`, `negativePrompt` | Sets generation parameters |
 | `config` | Merges with current config |
 | `frames` | Sets frame count |
-| `canvasLoad` | Loads image from Pictures folder |
+| `canvasLoad` | Loads image from working directory |
 | `canvasSave` | Triggers generation and saves result |
+| `generate` | Triggers generation without saving to disk |
 | `loopLoad`, `loopSave` | Iterates over folder files |
 
 **Partially Supported:**
@@ -363,11 +367,11 @@ Instructions → StoryflowExecutor
                     ↓
               ExecutionState (canvas, mask, config, prompt)
                     ↓
-              canvasSave triggers generation
+              canvasSave/generate triggers generation
                     ↓
               DrawThingsProvider (HTTP/gRPC)
                     ↓
-              Generated images saved to working directory
+              Generated images saved to WorkflowOutput/ (canvasSave) or displayed (generate)
 ```
 
 ---
@@ -436,3 +440,8 @@ Instructions → StoryflowExecutor
 - Created `SceneEditorView.swift` — Setting picker, character presence with expression/pose/position, camera angles, mood, prompt overrides, config overrides
 - Created `StoryProjectLibraryView.swift` — Project browser with detail panel showing stats, chapters, generation defaults
 - Integrated into `ContentView.swift` (new sidebar items: Story Studio, Story Projects) and `DrawThingsStudioApp.swift` (registered 8 new SwiftData models)
+
+### Session 10 (Feb 11, 2026)
+- **Generate Image instruction:** New `generate` instruction type triggers Draw Things generation without saving to disk (result stored on canvas and shown in image panel)
+- **Missing trigger warning:** Execution preview shows orange warning banner when workflow has no generation trigger (`canvasSave`, `loopSave`, or `generate`); Execute button disabled with tooltip
+- **Workflow output path fix:** Default working directory changed from `~/Pictures` (not writable in sandbox) to `Application Support/DrawThingsStudio/WorkflowOutput/`
