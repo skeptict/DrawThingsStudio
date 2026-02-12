@@ -95,7 +95,10 @@ class WorkflowExecutionViewModel: ObservableObject {
     // MARK: - Initialization
 
     init() {
-        self.workingDirectory = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = appSupport.appendingPathComponent("DrawThingsStudio/WorkflowOutput", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        self.workingDirectory = dir
     }
 
     // MARK: - Public Methods
