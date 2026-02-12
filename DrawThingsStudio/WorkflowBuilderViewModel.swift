@@ -288,6 +288,8 @@ class WorkflowBuilderViewModel: ObservableObject {
                 )
                 return .config(config)
             }
+        case "generate":
+            return .generate
         case "canvasSave":
             if let value = dict[key] as? String { return .canvasSave(value) }
         case "canvasLoad":

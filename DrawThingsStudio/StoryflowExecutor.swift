@@ -182,6 +182,8 @@ class StoryflowExecutor {
             return .full
         case .loopLoad, .loopSave:
             return .full
+        case .generate:
+            return .full
 
         // Partially supported
         case .maskLoad:
@@ -355,6 +357,9 @@ class StoryflowExecutor {
         case .canvasSave(let path):
             return await saveCanvas(instruction: instruction, path: path)
 
+        case .generate:
+            return await generateImage(instruction: instruction)
+
         case .moveScale, .adaptSize, .crop:
             return (.skipped(instruction, reason: "Canvas manipulation requires Draw Things internal state"), [])
 
@@ -506,6 +511,45 @@ class StoryflowExecutor {
             return .success(instruction, message: "Saved: \(path)", imageCount: imageCount)
         } catch {
             return .failed(instruction, error: "Failed to save: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Generate (no file save)
+
+    private func generateImage(instruction: WorkflowInstruction) async -> (StoryflowInstructionResult, [NSImage]) {
+        guard !state.prompt.isEmpty else {
+            return (.failed(instruction, error: "No prompt set for generation"), [])
+        }
+
+        let isImg2Img = state.canvas != nil
+        let hasMask = state.mask != nil
+        let modeDescription = hasMask ? "inpainting" : (isImg2Img ? "img2img" : "txt2img")
+
+        logger.info("Generating via \(modeDescription) (no file save)")
+
+        do {
+            onProgress?(.starting)
+
+            let images = try await provider.generateImage(
+                prompt: state.prompt,
+                sourceImage: state.canvas,
+                mask: state.mask,
+                config: state.config,
+                onProgress: { [weak self] progress in
+                    self?.onProgress?(progress)
+                }
+            )
+
+            guard let firstImage = images.first else {
+                return (.failed(instruction, error: "No image generated"), [])
+            }
+
+            state.canvas = firstImage
+
+            return (.success(instruction, message: "Generated \(images.count) image(s) via \(modeDescription)", imageCount: images.count), images)
+
+        } catch {
+            return (.failed(instruction, error: "Generation failed (\(modeDescription)): \(error.localizedDescription)"), [])
         }
     }
 

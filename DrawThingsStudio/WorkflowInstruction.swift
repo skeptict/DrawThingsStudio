@@ -79,6 +79,9 @@ enum InstructionType {
     // Loop-specific
     case loopLoad(String)
     case loopSave(String)
+
+    // Generation trigger (without file save)
+    case generate
 }
 
 // MARK: - Display Properties
@@ -133,6 +136,8 @@ extension WorkflowInstruction {
 
         case .loopLoad: return "folder"
         case .loopSave: return "folder.badge.plus"
+
+        case .generate: return "sparkles"
         }
     }
 
@@ -156,6 +161,8 @@ extension WorkflowInstruction {
         case .removeBackground, .faceZoom, .askZoom, .inpaintTools, .xlMagic: return .red
 
         case .loopLoad, .loopSave: return .indigo
+
+        case .generate: return .blue
         }
     }
 
@@ -207,6 +214,8 @@ extension WorkflowInstruction {
 
         case .loopLoad: return "Loop Load"
         case .loopSave: return "Loop Save"
+
+        case .generate: return "Generate Image"
         }
     }
 
@@ -312,6 +321,9 @@ extension WorkflowInstruction {
             return folder.isEmpty ? "(no folder)" : folder
         case .loopSave(let prefix):
             return prefix.isEmpty ? "(no prefix)" : "\(prefix)0.png, \(prefix)1.png, ..."
+
+        case .generate:
+            return "Trigger generation (no file save)"
         }
     }
 
@@ -320,7 +332,7 @@ extension WorkflowInstruction {
         switch type {
         case .note, .loop, .loopEnd, .end:
             return .flowControl
-        case .prompt, .negativePrompt, .config, .frames:
+        case .prompt, .negativePrompt, .config, .frames, .generate:
             return .promptConfig
         case .canvasClear, .canvasLoad, .canvasSave, .moveScale, .adaptSize, .crop:
             return .canvas
@@ -454,6 +466,9 @@ extension WorkflowInstruction {
             return LoopLoadInstruction(folderName: folder).instructionDict
         case .loopSave(let prefix):
             return LoopSaveInstruction(prefix: prefix).instructionDict
+
+        case .generate:
+            return GenerateInstruction().instructionDict
         }
     }
 }
@@ -505,5 +520,9 @@ extension WorkflowInstruction {
 
     static func makeMoodboardCanvas() -> WorkflowInstruction {
         WorkflowInstruction(type: .moodboardCanvas)
+    }
+
+    static func makeGenerate() -> WorkflowInstruction {
+        WorkflowInstruction(type: .generate)
     }
 }

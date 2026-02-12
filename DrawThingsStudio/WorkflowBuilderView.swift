@@ -167,6 +167,7 @@ struct WorkflowBuilderView: View {
             Button("Prompt") { viewModel.addInstruction(.prompt("")) }
             Button("Negative Prompt") { viewModel.addInstruction(.negativePrompt("")) }
             Button("Config") { viewModel.addInstruction(.config(DrawThingsConfig())) }
+            Button("Generate Image") { viewModel.addInstruction(.generate) }
             Button("Frames") { viewModel.addInstruction(.frames(24)) }
         }
 

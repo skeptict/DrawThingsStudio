@@ -101,10 +101,11 @@ class WorkflowExecutionViewModel: ObservableObject {
     // MARK: - Public Methods
 
     /// Check support levels for all instructions in a workflow
-    func analyzeWorkflow(_ instructions: [WorkflowInstruction]) -> (full: Int, partial: Int, unsupported: Int) {
+    func analyzeWorkflow(_ instructions: [WorkflowInstruction]) -> (full: Int, partial: Int, unsupported: Int, hasGenerationTrigger: Bool) {
         var full = 0
         var partial = 0
         var unsupported = 0
+        var hasGenerationTrigger = false
 
         for instruction in instructions {
             switch StoryflowExecutor.supportLevel(for: instruction) {
@@ -115,9 +116,16 @@ class WorkflowExecutionViewModel: ObservableObject {
             case .notSupported:
                 unsupported += 1
             }
+
+            switch instruction.type {
+            case .canvasSave, .loopSave, .generate:
+                hasGenerationTrigger = true
+            default:
+                break
+            }
         }
 
-        return (full, partial, unsupported)
+        return (full, partial, unsupported, hasGenerationTrigger)
     }
 
     /// Start executing a workflow

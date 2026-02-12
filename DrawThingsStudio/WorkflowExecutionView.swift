@@ -162,6 +162,19 @@ struct WorkflowExecutionView: View {
                 StatBadge(value: analysis.unsupported, label: "Skipped", color: .red)
             }
 
+            if !analysis.hasGenerationTrigger {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("This workflow has no generation trigger. Add a \"Save Canvas\", \"Loop Save\", or \"Generate Image\" instruction to generate images via Draw Things.")
+                        .font(.callout)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.12))
+                .cornerRadius(8)
+            }
+
             Divider()
 
             ScrollView {
@@ -357,6 +370,7 @@ struct WorkflowExecutionView: View {
                 .keyboardShortcut(.cancelAction)
 
                 if viewModel.status == .idle {
+                    let analysis = viewModel.analyzeWorkflow(instructions)
                     Button("Execute") {
                         Task {
                             await viewModel.execute(instructions: instructions)
@@ -364,6 +378,8 @@ struct WorkflowExecutionView: View {
                     }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
+                    .disabled(!analysis.hasGenerationTrigger)
+                    .help(analysis.hasGenerationTrigger ? "Execute workflow" : "Add a Save Canvas, Loop Save, or Generate Image instruction first")
                     .accessibilityLabel("Execute workflow")
                 } else if viewModel.status.isRunning {
                     Button("Cancel") {

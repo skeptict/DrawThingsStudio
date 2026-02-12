@@ -282,6 +282,13 @@ struct ConfigInstruction: StoryflowInstruction {
     }
 }
 
+/// Generate instruction - triggers image generation without saving to file
+struct GenerateInstruction: StoryflowInstruction {
+    var instructionDict: [String: Any] {
+        ["generate": true]
+    }
+}
+
 /// Frames instruction for video generation
 struct FramesInstruction: StoryflowInstruction {
     let frames: Int
