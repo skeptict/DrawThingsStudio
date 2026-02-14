@@ -853,7 +853,7 @@ struct FilePathEditor: View {
                 }
 
             if mustBePNG {
-                Text("Relative to Pictures folder. Must end with .png")
+                Text("Relative to working directory. Must end with .png")
                     .font(.caption)
                     .foregroundColor(.neuTextSecondary)
             } else if isFolder {
@@ -861,7 +861,7 @@ struct FilePathEditor: View {
                     .font(.caption)
                     .foregroundColor(.neuTextSecondary)
             } else {
-                Text("Relative to Pictures folder (.png, .jpg, .webp)")
+                Text("Relative to working directory (.png, .jpg, .webp)")
                     .font(.caption)
                     .foregroundColor(.neuTextSecondary)
             }
