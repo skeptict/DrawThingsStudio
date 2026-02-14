@@ -35,7 +35,7 @@ struct DTProjectBrowserView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("View your Draw Things generation history, thumbnails, and metadata.\nGrant access to the Draw Things Documents folder to get started.")
+            Text("View your Draw Things generation history, thumbnails, and metadata.\nSelect any folder containing .sqlite3 project files — local or on an external drive.")
                 .font(.body)
                 .foregroundColor(.neuTextSecondary)
                 .multilineTextAlignment(.center)
@@ -53,8 +53,8 @@ struct DTProjectBrowserView: View {
             .padding(12)
             .neuInset(cornerRadius: 8)
 
-            Button(action: { viewModel.requestFolderAccess() }) {
-                Label("Open Folder...", systemImage: "folder.badge.plus")
+            Button(action: { viewModel.addFolder() }) {
+                Label("Add Folder...", systemImage: "folder.badge.plus")
             }
             .buttonStyle(NeumorphicButtonStyle(isProminent: true))
             .controlSize(.large)
@@ -88,19 +88,19 @@ struct DTProjectBrowserView: View {
                     .font(.headline)
                     .foregroundColor(.neuAccent)
                 Spacer()
-                Button(action: { viewModel.requestFolderAccess() }) {
+                Button(action: { viewModel.addFolder() }) {
                     Image(systemName: "folder.badge.plus")
                 }
                 .buttonStyle(NeumorphicIconButtonStyle())
-                .help("Select a different folder")
-                .accessibilityIdentifier("dtProjects_changeFolder")
+                .help("Add another folder")
+                .accessibilityIdentifier("dtProjects_addFolder")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
             Divider()
 
-            if viewModel.projects.isEmpty {
+            if viewModel.projects.isEmpty && viewModel.folders.allSatisfy({ $0.isAvailable }) {
                 Spacer()
                 VStack(spacing: 8) {
                     Image(systemName: "questionmark.folder")
@@ -114,13 +114,24 @@ struct DTProjectBrowserView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 2) {
-                        ForEach(viewModel.projects) { project in
-                            DTProjectRow(
-                                project: project,
-                                isSelected: viewModel.selectedProject == project
-                            )
-                            .onTapGesture {
-                                viewModel.selectProject(project)
+                        // Show folder sections when multiple folders exist
+                        if viewModel.folders.count > 1 {
+                            ForEach(viewModel.folders) { folder in
+                                folderSection(folder)
+                            }
+                        } else {
+                            // Single folder — just list projects directly
+                            if let folder = viewModel.folders.first, !folder.isAvailable {
+                                unavailableFolderBanner(folder)
+                            }
+                            ForEach(viewModel.projects) { project in
+                                DTProjectRow(
+                                    project: project,
+                                    isSelected: viewModel.selectedProject == project
+                                )
+                                .onTapGesture {
+                                    viewModel.selectProject(project)
+                                }
                             }
                         }
                     }
@@ -129,6 +140,68 @@ struct DTProjectBrowserView: View {
             }
         }
         .neuBackground()
+    }
+
+    private func folderSection(_ folder: BookmarkedFolder) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: folder.isAvailable ? "folder.fill" : "externaldrive.badge.xmark")
+                    .font(.caption)
+                    .foregroundColor(folder.isAvailable ? .neuAccent : .orange)
+                Text(folder.label)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(folder.isAvailable ? .neuAccent : .orange)
+                    .lineLimit(1)
+                Spacer()
+                Button(action: { viewModel.removeFolder(folder) }) {
+                    Image(systemName: "xmark.circle")
+                        .font(.caption)
+                        .foregroundColor(.neuTextSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Remove this folder")
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+
+            if !folder.isAvailable {
+                unavailableFolderBanner(folder)
+            }
+
+            let folderProjects = viewModel.projects.filter { $0.folderName == folder.label }
+            if folderProjects.isEmpty && folder.isAvailable {
+                Text("No databases in this folder")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 4)
+            } else {
+                ForEach(folderProjects) { project in
+                    DTProjectRow(
+                        project: project,
+                        isSelected: viewModel.selectedProject == project
+                    )
+                    .onTapGesture {
+                        viewModel.selectProject(project)
+                    }
+                }
+            }
+        }
+    }
+
+    private func unavailableFolderBanner(_ folder: BookmarkedFolder) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text("Volume not available")
+                .font(.caption2)
+                .foregroundColor(.orange)
+        }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Center: Thumbnail Grid
@@ -160,7 +233,20 @@ struct DTProjectBrowserView: View {
 
             Divider()
 
-            if viewModel.selectedProject == nil {
+            if let error = viewModel.errorMessage {
+                Spacer()
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.title2)
+                        .foregroundColor(.orange)
+                    Text(error)
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                Spacer()
+            } else if viewModel.selectedProject == nil {
                 Spacer()
                 VStack(spacing: 8) {
                     Image(systemName: "arrow.left")

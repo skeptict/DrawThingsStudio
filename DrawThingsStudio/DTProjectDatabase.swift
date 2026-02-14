@@ -217,7 +217,21 @@ final class DTProjectDatabase: @unchecked Sendable {
     init?(fileURL: URL) {
         self.fileURL = fileURL
         var dbPtr: OpaquePointer?
-        guard sqlite3_open_v2(fileURL.path, &dbPtr, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else {
+        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX
+
+        // Try normal read-only open first
+        if sqlite3_open_v2(fileURL.path, &dbPtr, flags, nil) == SQLITE_OK {
+            self.db = dbPtr
+            return
+        }
+
+        // Fallback: use immutable=1 URI for read-only/external/non-APFS media
+        // This skips WAL sidecar creation and file locking, which fail on
+        // exFAT, FAT32, NTFS, and read-only volumes.
+        let escaped = fileURL.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? fileURL.path
+        let uri = "file://\(escaped)?immutable=1"
+        let uriFlags = flags | SQLITE_OPEN_URI
+        guard sqlite3_open_v2(uri, &dbPtr, uriFlags, nil) == SQLITE_OK else {
             return nil
         }
         self.db = dbPtr

@@ -18,12 +18,14 @@ Drag-and-drop image metadata reader (default view):
 
 Browse Draw Things project databases directly from the app:
 
-- **Database Browsing**: Open `.sqlite3` project files from the Draw Things Documents folder
+- **Database Browsing**: Open `.sqlite3` project files from the Draw Things Documents folder or any location
+- **External Drive Support**: Browse projects on USB drives, SD cards, and network volumes (exFAT, FAT32, NTFS supported)
+- **Multiple Folders**: Bookmark multiple folders simultaneously — local and external drives aggregated in one view
 - **Thumbnail Grid**: View generation thumbnails with prompt preview, date, and dimensions
 - **Metadata Extraction**: Prompt, negative prompt, model, dimensions, steps, guidance, seed, sampler, LoRAs, shift, seed mode
 - **FlatBuffer Parsing**: Reads TensorHistoryNode blobs without external libraries
 - **Actions**: Copy Prompt, Copy Config, Copy All, Send to Generate Image
-- **Sandbox Access**: Security-scoped bookmarks for persistent folder access
+- **Sandbox Access**: Security-scoped bookmarks for persistent folder access across launches
 - **Pagination**: Loads 200 entries at a time with search filtering
 
 ### Image Generation
@@ -117,9 +119,11 @@ Connect to local LLM providers for intelligent assistance:
 ### For DT Project Browsing
 
 1. Navigate to **DT Projects** in the Library sidebar section
-2. Click **Open Folder** and grant access to your Draw Things Documents folder
-   (typically `~/Library/Containers/com.liuliu.draw-things/Data/Documents/`)
-3. Select a project database to browse generations with thumbnails and metadata
+2. Click **Add Folder** and select a folder containing `.sqlite3` project files
+   - Default location: `~/Library/Containers/com.liuliu.draw-things/Data/Documents/`
+   - External drives: navigate to any mounted volume under `/Volumes/`
+3. Add multiple folders to aggregate projects from different locations
+4. Select a project database to browse generations with thumbnails and metadata
 
 ## Architecture
 
