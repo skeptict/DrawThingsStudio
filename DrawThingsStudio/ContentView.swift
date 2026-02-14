@@ -9,11 +9,12 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @State private var selectedItem: SidebarItem? = .workflow
+    @State private var selectedItem: SidebarItem? = .imageInspector
     @StateObject private var workflowViewModel = WorkflowBuilderViewModel()
     @StateObject private var imageGenViewModel = ImageGenerationViewModel()
     @StateObject private var imageInspectorViewModel = ImageInspectorViewModel()
     @StateObject private var storyStudioViewModel = StoryStudioViewModel()
+    @StateObject private var projectBrowserViewModel = DTProjectBrowserViewModel()
 
     var body: some View {
         NavigationSplitView {
@@ -30,15 +31,16 @@ struct ContentView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
 
+                sidebarButton("Image Inspector", icon: "doc.text.magnifyingglass", item: .imageInspector)
                 sidebarButton("Workflow Builder", icon: "hammer", item: .workflow)
                 sidebarButton("Generate Image", icon: "photo.badge.plus", item: .generateImage)
-                sidebarButton("Image Inspector", icon: "doc.text.magnifyingglass", item: .imageInspector)
                 sidebarButton("Story Studio", icon: "book.pages", item: .storyStudio)
 
                 NeuSectionHeader("Library", icon: "books.vertical")
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
 
+                sidebarButton("DT Projects", icon: "cylinder.split.1x2", item: .projectBrowser)
                 sidebarButton("Saved Workflows", icon: "folder", item: .library)
                 sidebarButton("Templates", icon: "doc.on.doc", item: .templates)
                 sidebarButton("Story Projects", icon: "book.closed", item: .storyProjects)
@@ -61,9 +63,9 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                 WorkflowBuilderView(viewModel: workflowViewModel)
-                    .opacity(selectedItem == .workflow || selectedItem == nil ? 1 : 0)
-                    .scaleEffect(selectedItem == .workflow || selectedItem == nil ? 1 : 0.98)
-                    .allowsHitTesting(selectedItem == .workflow || selectedItem == nil)
+                    .opacity(selectedItem == .workflow ? 1 : 0)
+                    .scaleEffect(selectedItem == .workflow ? 1 : 0.98)
+                    .allowsHitTesting(selectedItem == .workflow)
                     .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
                 ImageGenerationView(viewModel: imageGenViewModel)
@@ -77,9 +79,9 @@ struct ContentView: View {
                     imageGenViewModel: imageGenViewModel,
                     selectedSidebarItem: $selectedItem
                 )
-                .opacity(selectedItem == .imageInspector ? 1 : 0)
-                .scaleEffect(selectedItem == .imageInspector ? 1 : 0.98)
-                .allowsHitTesting(selectedItem == .imageInspector)
+                .opacity(selectedItem == .imageInspector || selectedItem == nil ? 1 : 0)
+                .scaleEffect(selectedItem == .imageInspector || selectedItem == nil ? 1 : 0.98)
+                .allowsHitTesting(selectedItem == .imageInspector || selectedItem == nil)
                 .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
                 StoryStudioView(viewModel: storyStudioViewModel)
@@ -88,7 +90,14 @@ struct ContentView: View {
                     .allowsHitTesting(selectedItem == .storyStudio)
                     .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
-                if selectedItem == .library {
+                if selectedItem == .projectBrowser {
+                    DTProjectBrowserView(
+                        viewModel: projectBrowserViewModel,
+                        imageGenViewModel: imageGenViewModel,
+                        selectedSidebarItem: $selectedItem
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                } else if selectedItem == .library {
                     SavedWorkflowsView(
                         viewModel: workflowViewModel,
                         selectedItem: $selectedItem
@@ -148,6 +157,7 @@ enum SidebarItem: String, Identifiable {
     case generateImage
     case imageInspector
     case storyStudio
+    case projectBrowser
     case library
     case templates
     case storyProjects

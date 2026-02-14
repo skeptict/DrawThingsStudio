@@ -71,6 +71,16 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 - Settings reset in teardown to prevent test pollution
 - Accessibility identifiers on all interactive elements
 
+### DT Project Database Browser
+- **Browse Draw Things project databases** (`.sqlite3` files) directly
+- **FlatBuffer parsing:** Reads TensorHistoryNode blobs without external libraries
+- **Thumbnail extraction:** Scans FlatBuffer blobs for JPEG SOI/EOI markers
+- **Metadata extraction:** Prompt, negative prompt, model, dimensions, steps, guidance, seed, sampler, LoRAs, shift, seed mode, wall clock
+- **3-column UI:** Project list | Thumbnail grid | Detail panel
+- **Sandbox access:** NSOpenPanel + security-scoped bookmarks for folder access persistence
+- **Pagination:** Loads 200 entries at a time with "Load More"
+- **Search:** Filter by prompt, negative prompt, or model name
+
 ### Story Studio (Phase 1)
 - **Visual Narrative System:** Create stories with consistent characters across scenes
 - **Data Model:** StoryProject → StoryChapter → StoryScene, with StoryCharacter and StorySetting
@@ -85,6 +95,9 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 ### Key Files
 | File | Purpose |
 |------|---------|
+| `DTProjectDatabase.swift` | SQLite + FlatBuffer reader for Draw Things project databases |
+| `DTProjectBrowserView.swift` | 3-column DT project browser UI |
+| `DTProjectBrowserViewModel.swift` | DT project browser state management |
 | `CloudModelCatalog.swift` | Fetches/caches cloud model catalog from GitHub |
 | `DrawThingsAssetManager.swift` | Local + cloud model management, LoRA fetching |
 | `DrawThingsGRPCClient.swift` | gRPC client implementing DrawThingsProvider |
@@ -194,6 +207,8 @@ DrawThingsStudio/               # Main app target
 ├── DataModels.swift            # SwiftData models
 ├── AppSettings.swift           # Preferences + SettingsView
 ├── LLMProvider.swift           # Protocol + PromptStyleManager
+├── DTProjectDatabase.swift     # SQLite + FlatBuffer reader for DT project databases
+├── DTProjectBrowser*.swift     # DT project browser (View + ViewModel)
 ├── StoryDataModels.swift       # Story Studio SwiftData models
 ├── PromptAssembler.swift       # Prompt assembly engine
 ├── StoryStudio*.swift          # Story Studio (View + ViewModel)
@@ -445,3 +460,14 @@ Instructions → StoryflowExecutor
 - **Generate Image instruction:** New `generate` instruction type triggers Draw Things generation without saving to disk (result stored on canvas and shown in image panel)
 - **Missing trigger warning:** Execution preview shows orange warning banner when workflow has no generation trigger (`canvasSave`, `loopSave`, or `generate`); Execute button disabled with tooltip
 - **Workflow output path fix:** Default working directory changed from `~/Pictures` (not writable in sandbox) to `Application Support/DrawThingsStudio/WorkflowOutput/`
+
+### Session 11 (Feb 13, 2026)
+- **Image Inspector as default:** Image Inspector is now the default sidebar item (was Workflow Builder); reordered sidebar buttons accordingly
+- **DT Project Database Browser:** New 3-column browser for Draw Things `.sqlite3` project databases
+  - Created `DTProjectDatabase.swift` — SQLite3 C API reader with manual FlatBuffer parsing (no external FlatBuffer library)
+  - Created `DTProjectBrowserViewModel.swift` — State management with security-scoped bookmark persistence, pagination, search
+  - Created `DTProjectBrowserView.swift` — Neumorphic 3-column layout: project list, thumbnail grid, detail panel
+  - Parses `tensorhistorynode` FlatBuffer blobs for prompts, model, dimensions, steps, guidance, seed, sampler, LoRAs, shift, wall_clock
+  - Extracts JPEG thumbnails from `thumbnailhistoryhalfnode` blobs via SOI/EOI marker scanning
+  - Sandbox folder access via NSOpenPanel with security-scoped bookmarks stored in UserDefaults
+  - Added `SidebarItem.projectBrowser` in Library section
