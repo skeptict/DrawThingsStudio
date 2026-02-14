@@ -227,3 +227,4 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 
 - [Draw Things](https://drawthings.ai) by Liu Liu for the excellent image generation app
 - [StoryFlow Editor](https://cutsceneartist.com/DrawThings/StoryflowEditor_online.html) — the original web-based StoryFlow workflow editor that inspired this project
+- [dtm](https://github.com/kcjerrell/dtm) by KC Jerrell — Rust/Tauri Draw Things database reader whose FlatBuffer schemas and database parsing approach informed our DT Project Browser implementation
