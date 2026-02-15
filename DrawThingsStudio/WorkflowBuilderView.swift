@@ -740,6 +740,8 @@ struct PromptEditor: View {
         }
     }
 
+    @State private var showStyleEditor: Bool = false
+
     private var stylePickerPopover: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Enhance Style")
@@ -754,16 +756,23 @@ struct PromptEditor: View {
                             showStylePicker = false
                             enhancePrompt(style: style)
                         } label: {
-                            HStack {
-                                Image(systemName: style.icon)
-                                    .frame(width: 24)
-                                Text(style.name)
-                                Spacer()
-                                if style.isBuiltIn {
-                                    Text("built-in")
-                                        .font(.caption2)
-                                        .foregroundColor(.neuTextSecondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Image(systemName: style.icon)
+                                        .frame(width: 24)
+                                    Text(style.name)
+                                    Spacer()
+                                    if style.isBuiltIn {
+                                        Text("built-in")
+                                            .font(.caption2)
+                                            .foregroundColor(.neuTextSecondary)
+                                    }
                                 }
+                                Text(style.systemPrompt.prefix(80) + (style.systemPrompt.count > 80 ? "..." : ""))
+                                    .font(.caption2)
+                                    .foregroundColor(.neuTextSecondary)
+                                    .lineLimit(2)
+                                    .padding(.leading, 28)
                             }
                             .contentShape(Rectangle())
                         }
@@ -772,13 +781,13 @@ struct PromptEditor: View {
                     }
                 }
             }
-            .frame(maxHeight: 200)
+            .frame(maxHeight: 300)
 
             Divider()
 
             Button {
                 showStylePicker = false
-                styleManager.openStylesFile()
+                showStyleEditor = true
             } label: {
                 HStack {
                     Image(systemName: "pencil")
@@ -789,22 +798,12 @@ struct PromptEditor: View {
             }
             .buttonStyle(.plain)
             .padding(.vertical, 4)
-
-            Button {
-                styleManager.loadStyles()
-            } label: {
-                HStack {
-                    Image(systemName: "arrow.clockwise")
-                        .frame(width: 24)
-                    Text("Reload Styles")
-                    Spacer()
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, 4)
         }
         .padding()
-        .frame(width: 220)
+        .frame(width: 300)
+        .sheet(isPresented: $showStyleEditor) {
+            PromptStyleEditorView()
+        }
     }
 
     private func enhancePrompt(style: CustomPromptStyle) {

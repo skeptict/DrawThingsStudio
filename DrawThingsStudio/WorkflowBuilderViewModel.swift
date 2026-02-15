@@ -598,12 +598,7 @@ class WorkflowBuilderViewModel: ObservableObject {
     /// Whether prompt enhancement is in progress
     @Published var isEnhancing: Bool = false
 
-    /// Enhance a prompt using AI with the selected LLM provider
-    func enhancePrompt(_ prompt: String, style: PromptStyle = .creative) async throws -> String {
-        try await enhancePrompt(prompt, systemPrompt: style.systemPrompt)
-    }
-
-    /// Enhance a prompt using AI with a custom system prompt
+    /// Enhance a prompt using AI with a custom style
     func enhancePrompt(_ prompt: String, customStyle: CustomPromptStyle) async throws -> String {
         try await enhancePrompt(prompt, systemPrompt: customStyle.systemPrompt)
     }

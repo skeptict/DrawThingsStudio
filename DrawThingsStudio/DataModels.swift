@@ -27,6 +27,8 @@ class ModelConfig {
     var shift: Float?
     var clipSkip: Int?
     var strength: Float?
+    var stochasticSamplingGamma: Float?
+    var isFavorite: Bool = false
 
     // Metadata
     var isBuiltIn: Bool
@@ -45,6 +47,8 @@ class ModelConfig {
         shift: Float? = nil,
         clipSkip: Int? = nil,
         strength: Float? = nil,
+        stochasticSamplingGamma: Float? = nil,
+        isFavorite: Bool = false,
         isBuiltIn: Bool = false
     ) {
         self.id = UUID()
@@ -59,6 +63,8 @@ class ModelConfig {
         self.shift = shift
         self.clipSkip = clipSkip
         self.strength = strength
+        self.stochasticSamplingGamma = stochasticSamplingGamma
+        self.isFavorite = isFavorite
         self.isBuiltIn = isBuiltIn
         self.createdAt = Date()
         self.modifiedAt = Date()
@@ -76,6 +82,7 @@ class ModelConfig {
         if let shift = shift { config["shift"] = shift }
         if let clipSkip = clipSkip { config["clipSkip"] = clipSkip }
         if let strength = strength { config["strength"] = strength }
+        if let ssg = stochasticSamplingGamma { config["stochasticSamplingGamma"] = ssg }
         return config
     }
 }

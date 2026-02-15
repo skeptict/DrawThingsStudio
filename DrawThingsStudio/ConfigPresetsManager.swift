@@ -28,6 +28,7 @@ struct DrawThingsConfigData: Codable {
     var sampler: Int?
     var shift: Double?
     var strength: Double?
+    var stochasticSamplingGamma: Double?
     var clipSkip: Int?
     var seed: Int?
     var model: String?
@@ -39,7 +40,7 @@ struct DrawThingsConfigData: Codable {
 
     enum CodingKeys: String, CodingKey {
         case targetImageWidth, targetImageHeight, steps, guidanceScale
-        case sampler, shift, strength, clipSkip, seed, model
+        case sampler, shift, strength, stochasticSamplingGamma, clipSkip, seed, model
         case batchCount, batchSize
     }
 
@@ -51,6 +52,7 @@ struct DrawThingsConfigData: Codable {
         sampler: Int? = nil,
         shift: Double? = nil,
         strength: Double? = nil,
+        stochasticSamplingGamma: Double? = nil,
         clipSkip: Int? = nil,
         seed: Int? = nil,
         model: String? = nil,
@@ -64,6 +66,7 @@ struct DrawThingsConfigData: Codable {
         self.sampler = sampler
         self.shift = shift
         self.strength = strength
+        self.stochasticSamplingGamma = stochasticSamplingGamma
         self.clipSkip = clipSkip
         self.seed = seed
         self.model = model
@@ -80,6 +83,7 @@ struct DrawThingsConfigData: Codable {
         sampler = try container.decodeIfPresent(Int.self, forKey: .sampler)
         shift = try container.decodeIfPresent(Double.self, forKey: .shift)
         strength = try container.decodeIfPresent(Double.self, forKey: .strength)
+        stochasticSamplingGamma = try container.decodeIfPresent(Double.self, forKey: .stochasticSamplingGamma)
         clipSkip = try container.decodeIfPresent(Int.self, forKey: .clipSkip)
         seed = try container.decodeIfPresent(Int.self, forKey: .seed)
         model = try container.decodeIfPresent(String.self, forKey: .model)
@@ -96,6 +100,7 @@ struct DrawThingsConfigData: Codable {
         try container.encodeIfPresent(sampler, forKey: .sampler)
         try container.encodeIfPresent(shift, forKey: .shift)
         try container.encodeIfPresent(strength, forKey: .strength)
+        try container.encodeIfPresent(stochasticSamplingGamma, forKey: .stochasticSamplingGamma)
         try container.encodeIfPresent(clipSkip, forKey: .clipSkip)
         try container.encodeIfPresent(seed, forKey: .seed)
         try container.encodeIfPresent(model, forKey: .model)
@@ -120,6 +125,7 @@ struct StudioConfigPreset: Codable, Identifiable {
     var shift: Float?
     var clipSkip: Int?
     var strength: Float?
+    var stochasticSamplingGamma: Float?
     var isBuiltIn: Bool
     var createdAt: Date
     var modifiedAt: Date
@@ -137,6 +143,7 @@ struct StudioConfigPreset: Codable, Identifiable {
         shift: Float? = nil,
         clipSkip: Int? = nil,
         strength: Float? = nil,
+        stochasticSamplingGamma: Float? = nil,
         isBuiltIn: Bool,
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
@@ -153,6 +160,7 @@ struct StudioConfigPreset: Codable, Identifiable {
         self.shift = shift
         self.clipSkip = clipSkip
         self.strength = strength
+        self.stochasticSamplingGamma = stochasticSamplingGamma
         self.isBuiltIn = isBuiltIn
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
@@ -171,6 +179,7 @@ struct StudioConfigPreset: Codable, Identifiable {
         self.shift = modelConfig.shift
         self.clipSkip = modelConfig.clipSkip
         self.strength = modelConfig.strength
+        self.stochasticSamplingGamma = modelConfig.stochasticSamplingGamma
         self.isBuiltIn = modelConfig.isBuiltIn
         self.createdAt = modelConfig.createdAt
         self.modifiedAt = modelConfig.modifiedAt
@@ -189,6 +198,7 @@ struct StudioConfigPreset: Codable, Identifiable {
             shift: shift,
             clipSkip: clipSkip,
             strength: strength,
+            stochasticSamplingGamma: stochasticSamplingGamma,
             isBuiltIn: isBuiltIn
         )
         return config
@@ -323,6 +333,7 @@ class ConfigPresetsManager {
                 shift: dt.configuration.shift.map { Float($0) },
                 clipSkip: dt.configuration.clipSkip,
                 strength: dt.configuration.strength.map { Float($0) },
+                stochasticSamplingGamma: dt.configuration.stochasticSamplingGamma.map { Float($0) },
                 isBuiltIn: false,
                 createdAt: Date(),
                 modifiedAt: Date()
@@ -382,6 +393,7 @@ class ConfigPresetsManager {
                     shift: dt.configuration.shift.map { Float($0) },
                     clipSkip: dt.configuration.clipSkip,
                     strength: dt.configuration.strength.map { Float($0) },
+                    stochasticSamplingGamma: dt.configuration.stochasticSamplingGamma.map { Float($0) },
                     isBuiltIn: false,
                     createdAt: Date(),
                     modifiedAt: Date()

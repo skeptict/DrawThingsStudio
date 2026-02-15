@@ -150,7 +150,7 @@ class AIGenerationViewModel: ObservableObject {
     func generateStoryWorkflow(
         concept: String,
         sceneCount: Int,
-        style: PromptStyle,
+        systemPrompt: String,
         config: DrawThingsConfig
     ) async throws -> [[String: Any]] {
         guard let generator = promptGenerator else {
@@ -166,7 +166,7 @@ class AIGenerationViewModel: ObservableObject {
         return try await generator.generateStoryWorkflow(
             concept: concept,
             sceneCount: sceneCount,
-            style: style,
+            systemPrompt: systemPrompt,
             config: config
         )
     }
@@ -174,7 +174,7 @@ class AIGenerationViewModel: ObservableObject {
     func generateVariationWorkflow(
         concept: String,
         variationCount: Int,
-        style: PromptStyle,
+        systemPrompt: String,
         config: DrawThingsConfig
     ) async throws -> [[String: Any]] {
         guard let generator = promptGenerator else {
@@ -190,7 +190,7 @@ class AIGenerationViewModel: ObservableObject {
         return try await generator.generateVariationWorkflow(
             concept: concept,
             variationCount: variationCount,
-            style: style,
+            systemPrompt: systemPrompt,
             config: config
         )
     }
@@ -198,7 +198,7 @@ class AIGenerationViewModel: ObservableObject {
     func generateCharacterWorkflow(
         characterConcept: String,
         sceneDescriptions: [String],
-        style: PromptStyle,
+        systemPrompt: String,
         config: DrawThingsConfig
     ) async throws -> [[String: Any]] {
         guard let generator = promptGenerator else {
@@ -214,12 +214,12 @@ class AIGenerationViewModel: ObservableObject {
         return try await generator.generateCharacterWorkflow(
             characterConcept: characterConcept,
             sceneDescriptions: sceneDescriptions,
-            style: style,
+            systemPrompt: systemPrompt,
             config: config
         )
     }
 
-    func enhancePrompt(concept: String, style: PromptStyle) async throws -> String {
+    func enhancePrompt(concept: String, systemPrompt: String) async throws -> String {
         guard let generator = promptGenerator else {
             throw LLMError.connectionFailed("Not connected to LLM provider")
         }
@@ -230,7 +230,7 @@ class AIGenerationViewModel: ObservableObject {
 
         defer { isGenerating = false }
 
-        return try await generator.enhancePrompt(concept: concept, style: style)
+        return try await generator.enhancePrompt(concept: concept, systemPrompt: systemPrompt)
     }
 }
 
@@ -358,13 +358,16 @@ struct GenerationOptionsView: View {
     @ObservedObject var workflowViewModel: WorkflowBuilderViewModel
     @Binding var isPresented: Bool
 
+    @ObservedObject private var styleManager = PromptStyleManager.shared
+
     @State private var selectedTab: GenerationType = .story
     @State private var concept: String = ""
     @State private var sceneCount: Int = 3
     @State private var variationCount: Int = 5
-    @State private var selectedStyle: PromptStyle = AppSettings.shared.defaultPromptStyle
+    @State private var selectedStyleID: String = AppSettings.shared.defaultStyle
     @State private var characterConcept: String = ""
     @State private var sceneDescriptions: String = ""
+    @State private var showStyleEditor: Bool = false
 
     // Config - use defaults from settings
     @State private var width: Int = AppSettings.shared.defaultWidth
@@ -566,47 +569,104 @@ struct GenerationOptionsView: View {
 
     // MARK: - Style Section
 
+    private var selectedStyle: CustomPromptStyle? {
+        styleManager.style(for: selectedStyleID)
+    }
+
     private var styleSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Prompt Style")
-                .font(.headline)
+            HStack {
+                Text("Prompt Style")
+                    .font(.headline)
+                Spacer()
+                Button("Edit Styles...") {
+                    showStyleEditor = true
+                }
+                .font(.caption)
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
+            }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 8) {
-                ForEach(PromptStyle.allCases) { style in
+                ForEach(styleManager.styles) { style in
                     StyleButton(
                         style: style,
-                        isSelected: selectedStyle == style
+                        isSelected: selectedStyleID == style.id
                     ) {
-                        selectedStyle = style
+                        selectedStyleID = style.id
                     }
                 }
             }
+
+            if let style = selectedStyle {
+                DisclosureGroup("System Prompt") {
+                    Text(style.systemPrompt)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(6)
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+        }
+        .sheet(isPresented: $showStyleEditor) {
+            PromptStyleEditorView()
         }
     }
 
     // MARK: - Generate Button
 
     private var generateButton: some View {
-        HStack {
-            if aiViewModel.isGenerating {
-                ProgressView()
-                    .scaleEffect(0.8)
-                Text(aiViewModel.generationProgress)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-
-            Button("Generate Workflow") {
-                Task {
-                    await generate()
+        VStack(spacing: 8) {
+            if let error = aiViewModel.errorMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .lineLimit(3)
+                    Spacer()
+                    Button {
+                        aiViewModel.errorMessage = nil
+                    } label: {
+                        Image(systemName: "xmark.circle")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
+                .padding(8)
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(6)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(aiViewModel.isGenerating || !canGenerate)
-            .accessibilityLabel("Generate workflow")
-            .accessibilityHint("Uses AI to generate workflow instructions based on your concept")
+
+            HStack {
+                if aiViewModel.isGenerating {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text(aiViewModel.generationProgress)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button("Generate Workflow") {
+                    aiViewModel.errorMessage = nil
+                    Task {
+                        await generate()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(aiViewModel.isGenerating || !canGenerate)
+                .accessibilityLabel("Generate workflow")
+                .accessibilityHint("Uses AI to generate workflow instructions based on your concept")
+            }
         }
         .padding()
     }
@@ -634,6 +694,8 @@ struct GenerationOptionsView: View {
             shift: settings.defaultShift > 0 ? Float(settings.defaultShift) : nil
         )
 
+        let systemPrompt = selectedStyle?.systemPrompt ?? PromptStyle.creative.systemPrompt
+
         do {
             let instructions: [[String: Any]]
 
@@ -642,7 +704,7 @@ struct GenerationOptionsView: View {
                 instructions = try await aiViewModel.generateStoryWorkflow(
                     concept: concept,
                     sceneCount: sceneCount,
-                    style: selectedStyle,
+                    systemPrompt: systemPrompt,
                     config: config
                 )
 
@@ -650,7 +712,7 @@ struct GenerationOptionsView: View {
                 instructions = try await aiViewModel.generateVariationWorkflow(
                     concept: concept,
                     variationCount: variationCount,
-                    style: selectedStyle,
+                    systemPrompt: systemPrompt,
                     config: config
                 )
 
@@ -663,7 +725,7 @@ struct GenerationOptionsView: View {
                 instructions = try await aiViewModel.generateCharacterWorkflow(
                     characterConcept: characterConcept,
                     sceneDescriptions: scenes,
-                    style: selectedStyle,
+                    systemPrompt: systemPrompt,
                     config: config
                 )
             }
@@ -778,7 +840,7 @@ enum GenerationType: String, CaseIterable, Identifiable {
 // MARK: - Style Button
 
 struct StyleButton: View {
-    let style: PromptStyle
+    let style: CustomPromptStyle
     let isSelected: Bool
     let action: () -> Void
 
@@ -787,7 +849,7 @@ struct StyleButton: View {
             VStack(spacing: 4) {
                 Image(systemName: style.icon)
                     .font(.title3)
-                Text(style.displayName)
+                Text(style.name)
                     .font(.caption)
             }
             .frame(maxWidth: .infinity)
@@ -798,9 +860,10 @@ struct StyleButton: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.3))
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(style.displayName) style")
+        .accessibilityLabel("\(style.name) style")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

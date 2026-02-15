@@ -77,6 +77,7 @@ struct DrawThingsGenerationConfig: Codable {
     var model: String
     var shift: Double
     var strength: Double
+    var stochasticSamplingGamma: Double
     var batchSize: Int
     var batchCount: Int
     var negativePrompt: String
@@ -105,6 +106,7 @@ struct DrawThingsGenerationConfig: Codable {
         model: String = "",
         shift: Double = 3.0,
         strength: Double = 1.0,
+        stochasticSamplingGamma: Double = 0.3,
         batchSize: Int = 1,
         batchCount: Int = 1,
         negativePrompt: String = "",
@@ -120,6 +122,7 @@ struct DrawThingsGenerationConfig: Codable {
         self.model = model
         self.shift = shift
         self.strength = strength
+        self.stochasticSamplingGamma = stochasticSamplingGamma
         self.batchSize = batchSize
         self.batchCount = batchCount
         self.negativePrompt = negativePrompt
@@ -140,6 +143,7 @@ struct DrawThingsGenerationConfig: Codable {
             "sampler": sampler,
             "shift": shift,
             "strength": strength,
+            "stochastic_sampling_gamma": stochasticSamplingGamma,
             "batch_size": batchSize,
             "batch_count": batchCount
         ]

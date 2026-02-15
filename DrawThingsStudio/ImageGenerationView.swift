@@ -7,12 +7,16 @@
 
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct ImageGenerationView: View {
     @ObservedObject var viewModel: ImageGenerationViewModel
     @StateObject private var assetManager = DrawThingsAssetManager.shared
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \ModelConfig.name) private var modelConfigs: [ModelConfig]
     @State private var selectedPresetID: String = ""
+    @State private var showingConfigImport = false
+    @State private var importMessage: String?
 
     var body: some View {
         HStack(spacing: 20) {
@@ -26,6 +30,13 @@ struct ImageGenerationView: View {
         }
         .padding(20)
         .neuBackground()
+        .fileImporter(
+            isPresented: $showingConfigImport,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            handleConfigImport(result)
+        }
         .task {
             await viewModel.checkConnection()
             await assetManager.fetchAssets()
@@ -113,7 +124,16 @@ struct ImageGenerationView: View {
 
     private var presetSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            NeuSectionHeader("Config Preset", icon: "slider.horizontal.3")
+            HStack {
+                NeuSectionHeader("Config Preset", icon: "slider.horizontal.3")
+                Spacer()
+                Button(action: { showingConfigImport = true }) {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .buttonStyle(NeumorphicIconButtonStyle())
+                .help("Import config presets from JSON")
+                .accessibilityIdentifier("generate_importPresetsButton")
+            }
 
             VStack(spacing: 0) {
                 // Selection button
@@ -226,33 +246,47 @@ struct ImageGenerationView: View {
                                     ForEach(filteredPresets) { config in
                                         let isSelected = selectedPresetID == config.id.uuidString
 
-                                        Button {
-                                            selectedPresetID = config.id.uuidString
-                                            viewModel.loadPreset(config)
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                isPresetExpanded = false
-                                            }
-                                        } label: {
-                                            HStack {
-                                                Text(config.name)
-                                                    .font(.caption)
-                                                    .lineLimit(1)
-                                                    .truncationMode(.middle)
-
-                                                Spacer()
-
-                                                if isSelected {
-                                                    Image(systemName: "checkmark")
-                                                        .font(.caption)
-                                                        .foregroundColor(.accentColor)
+                                        HStack(spacing: 0) {
+                                            Button {
+                                                selectedPresetID = config.id.uuidString
+                                                viewModel.loadPreset(config)
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    isPresetExpanded = false
                                                 }
+                                            } label: {
+                                                HStack {
+                                                    Text(config.name)
+                                                        .font(.caption)
+                                                        .lineLimit(1)
+                                                        .truncationMode(.middle)
+
+                                                    Spacer()
+
+                                                    if isSelected {
+                                                        Image(systemName: "checkmark")
+                                                            .font(.caption)
+                                                            .foregroundColor(.accentColor)
+                                                    }
+                                                }
+                                                .padding(.leading, 10)
+                                                .padding(.vertical, 6)
+                                                .contentShape(Rectangle())
                                             }
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 6)
-                                            .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
-                                            .contentShape(Rectangle())
+                                            .buttonStyle(.plain)
+
+                                            Button {
+                                                config.isFavorite.toggle()
+                                                try? modelContext.save()
+                                            } label: {
+                                                Image(systemName: config.isFavorite ? "star.fill" : "star")
+                                                    .font(.caption2)
+                                                    .foregroundColor(config.isFavorite ? .orange : .neuTextSecondary)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .padding(.horizontal, 8)
+                                            .accessibilityLabel(config.isFavorite ? "Remove from favorites" : "Add to favorites")
                                         }
-                                        .buttonStyle(.plain)
+                                        .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
                                         .accessibilityLabel(config.name)
                                         .accessibilityAddTraits(isSelected ? .isSelected : [])
                                     }
@@ -271,8 +305,12 @@ struct ImageGenerationView: View {
             }
 
             if !modelConfigs.isEmpty {
+                let quickPresets: [ModelConfig] = {
+                    let favorites = modelConfigs.filter { $0.isFavorite }
+                    return Array(favorites.isEmpty ? modelConfigs.prefix(3) : favorites.prefix(3))
+                }()
                 HStack(spacing: 8) {
-                    ForEach(Array(modelConfigs.prefix(3))) { config in
+                    ForEach(quickPresets) { config in
                         Button(config.name) {
                             viewModel.loadPreset(config)
                             selectedPresetID = config.id.uuidString
@@ -281,6 +319,17 @@ struct ImageGenerationView: View {
                         .buttonStyle(NeumorphicButtonStyle())
                     }
                 }
+            }
+
+            if let message = importMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(message.contains("failed") ? .red : .green)
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            importMessage = nil
+                        }
+                    }
             }
         }
     }
@@ -384,6 +433,23 @@ struct ImageGenerationView: View {
                         .font(.caption)
                         .foregroundColor(.neuTextSecondary)
                         .frame(width: 35)
+                }
+            }
+
+            // SSS (Strategic Stochastic Sampling) — only for TCD sampler
+            if viewModel.config.sampler == "TCD" {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Stochastic Sampling (SSS)").font(.caption).foregroundColor(.neuTextSecondary)
+                    HStack(spacing: 8) {
+                        Slider(value: $viewModel.config.stochasticSamplingGamma, in: 0...1, step: 0.01)
+                            .tint(Color.neuAccent)
+                            .accessibilityLabel("Stochastic Sampling Gamma")
+                            .accessibilityValue(String(format: "%.0f percent", viewModel.config.stochasticSamplingGamma * 100))
+                        Text(String(format: "%.0f%%", viewModel.config.stochasticSamplingGamma * 100))
+                            .font(.caption)
+                            .foregroundColor(.neuTextSecondary)
+                            .frame(width: 35)
+                    }
                 }
             }
 
@@ -624,6 +690,32 @@ struct ImageGenerationView: View {
             TextField("", value: value, format: .number.precision(.fractionLength(1)))
                 .textFieldStyle(NeumorphicTextFieldStyle())
                 .frame(width: 70)
+        }
+    }
+
+    // MARK: - Config Import
+
+    private func handleConfigImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let hasAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if hasAccess { url.stopAccessingSecurityScopedResource() }
+            }
+            do {
+                let data = try Data(contentsOf: url)
+                let presets = try ConfigPresetsManager.shared.importPresetsFromData(data)
+                for preset in presets {
+                    let config = preset.toModelConfig()
+                    modelContext.insert(config)
+                }
+                importMessage = "Imported \(presets.count) preset(s)"
+            } catch {
+                importMessage = "Import failed: \(error.localizedDescription)"
+            }
+        case .failure(let error):
+            importMessage = "Import failed: \(error.localizedDescription)"
         }
     }
 

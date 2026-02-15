@@ -168,8 +168,8 @@ final class AppSettings: ObservableObject {
         )
     }
 
-    var defaultPromptStyle: PromptStyle {
-        PromptStyle(rawValue: defaultStyle) ?? .creative
+    var defaultPromptStyle: CustomPromptStyle {
+        PromptStyleManager.shared.style(for: defaultStyle) ?? PromptStyle.creative.asCustomStyle
     }
 
     var providerType: LLMProviderType {
@@ -264,12 +264,14 @@ final class AppSettings: ObservableObject {
 
 struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
+    @ObservedObject var styleManager = PromptStyleManager.shared
     @State private var testingConnection = false
     @State private var connectionResult: String?
     @State private var showAPIKey = false
     @State private var testingDTConnection = false
     @State private var dtConnectionResult: String?
     @State private var showSharedSecret = false
+    @State private var showStyleEditor = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -402,9 +404,17 @@ struct SettingsView: View {
                     neuSettingsRow("Sampler") { TextField("e.g., DPM++ 2M Karras", text: $settings.defaultSampler).textFieldStyle(NeumorphicTextFieldStyle()) }
 
                     Picker("Style", selection: $settings.defaultStyle) {
-                        ForEach(PromptStyle.allCases) { style in
-                            Text(style.displayName).tag(style.rawValue)
+                        ForEach(styleManager.styles) { style in
+                            Text(style.name).tag(style.id)
                         }
+                    }
+
+                    Button("Manage Styles...") {
+                        showStyleEditor = true
+                    }
+                    .buttonStyle(NeumorphicButtonStyle())
+                    .sheet(isPresented: $showStyleEditor) {
+                        PromptStyleEditorView()
                     }
                 }
 

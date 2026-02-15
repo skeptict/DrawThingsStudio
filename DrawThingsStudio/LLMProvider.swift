@@ -254,14 +254,22 @@ class PromptStyleManager: ObservableObject {
         loadStylesSync()
     }
 
-    /// Save current styles to JSON file (only custom ones)
+    /// Save current styles to JSON file (custom styles + modified built-ins)
     func saveStyles() {
-        let customStyles = styles.filter { !$0.isBuiltIn }
+        let builtInDefaults = Dictionary(uniqueKeysWithValues: PromptStyle.allCases.map { ($0.rawValue, $0.asCustomStyle) })
+        let stylesToSave = styles.filter { style in
+            if style.isBuiltIn { return false }
+            // Save if it's custom or if it's a modified built-in
+            if let builtIn = builtInDefaults[style.id] {
+                return style.systemPrompt != builtIn.systemPrompt || style.name != builtIn.name || style.icon != builtIn.icon
+            }
+            return true
+        }
 
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(customStyles)
+            let data = try encoder.encode(stylesToSave)
             try data.write(to: stylesFilePath)
         } catch {
             print("Failed to save styles: \(error)")
@@ -321,10 +329,42 @@ class PromptStyleManager: ObservableObject {
         saveStyles()
     }
 
-    /// Remove a custom style (built-in styles cannot be removed)
+    /// Update an existing style (finds by ID and replaces)
+    func updateStyle(_ style: CustomPromptStyle) {
+        if let index = styles.firstIndex(where: { $0.id == style.id }) {
+            styles[index] = style
+            saveStyles()
+        }
+    }
+
+    /// Remove a custom style (built-in styles cannot be removed, but modified built-ins revert to default)
     func removeStyle(id: String) {
-        styles.removeAll { $0.id == id && !$0.isBuiltIn }
+        let builtInIDs = Set(PromptStyle.allCases.map { $0.rawValue })
+        if builtInIDs.contains(id) {
+            // It's a built-in — restore the default
+            resetBuiltInStyle(id: id)
+        } else {
+            styles.removeAll { $0.id == id }
+            saveStyles()
+        }
+    }
+
+    /// Reset a modified built-in style back to its default
+    func resetBuiltInStyle(id: String) {
+        guard let builtInEnum = PromptStyle(rawValue: id) else { return }
+        let defaultStyle = builtInEnum.asCustomStyle
+        if let index = styles.firstIndex(where: { $0.id == id }) {
+            styles[index] = defaultStyle
+        }
         saveStyles()
+    }
+
+    /// Check if a built-in style has been modified from its default
+    func isBuiltInModified(id: String) -> Bool {
+        guard let builtInEnum = PromptStyle(rawValue: id) else { return false }
+        let defaultStyle = builtInEnum.asCustomStyle
+        guard let current = styles.first(where: { $0.id == id }) else { return false }
+        return current.systemPrompt != defaultStyle.systemPrompt || current.name != defaultStyle.name || current.icon != defaultStyle.icon
     }
 
     /// Get a style by ID

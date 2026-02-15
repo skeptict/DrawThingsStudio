@@ -420,6 +420,7 @@ class StoryflowExecutor {
         if let batch = config.batchCount { state.config.batchCount = batch }
         if let size = config.batchSize { state.config.batchSize = size }
         if let shift = config.shift { state.config.shift = Double(shift) }
+        if let ssg = config.stochasticSamplingGamma { state.config.stochasticSamplingGamma = Double(ssg) }
 
         if let loras = config.loras {
             state.config.loras = loras.compactMap { loraDict in

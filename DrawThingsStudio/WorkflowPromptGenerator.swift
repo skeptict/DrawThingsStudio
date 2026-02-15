@@ -39,14 +39,14 @@ class WorkflowPromptGenerator: ObservableObject {
     func generateStoryScenes(
         concept: String,
         sceneCount: Int,
-        style: PromptStyle = .creative
+        systemPrompt: String
     ) async throws -> [String] {
         await setGenerating(true, progress: "Generating \(sceneCount) scenes...")
 
         defer { Task { await setGenerating(false) } }
 
         let prompt = """
-        \(style.systemPrompt)
+        \(systemPrompt)
 
         Generate exactly \(sceneCount) detailed image generation prompts for a story about: \(concept)
 
@@ -78,14 +78,14 @@ class WorkflowPromptGenerator: ObservableObject {
     func generateVariations(
         basePrompt: String,
         variationCount: Int,
-        style: PromptStyle = .creative
+        systemPrompt: String
     ) async throws -> [String] {
         await setGenerating(true, progress: "Generating \(variationCount) variations...")
 
         defer { Task { await setGenerating(false) } }
 
         let prompt = """
-        \(style.systemPrompt)
+        \(systemPrompt)
 
         Create exactly \(variationCount) different variations of this image prompt:
         "\(basePrompt)"
@@ -139,14 +139,14 @@ class WorkflowPromptGenerator: ObservableObject {
     /// Generate a detailed character description for consistency
     func generateCharacterDescription(
         characterConcept: String,
-        style: PromptStyle = .creative
+        systemPrompt: String
     ) async throws -> String {
         await setGenerating(true, progress: "Creating character description...")
 
         defer { Task { await setGenerating(false) } }
 
         let prompt = """
-        \(style.systemPrompt)
+        \(systemPrompt)
 
         Create a detailed, consistent character description for AI image generation based on: "\(characterConcept)"
 
@@ -175,15 +175,7 @@ class WorkflowPromptGenerator: ObservableObject {
 
     // MARK: - Single Prompt Enhancement
 
-    /// Enhance a simple concept into a detailed prompt
-    func enhancePrompt(
-        concept: String,
-        style: PromptStyle = .creative
-    ) async throws -> String {
-        try await enhancePrompt(concept: concept, systemPrompt: style.systemPrompt)
-    }
-
-    /// Enhance a simple concept into a detailed prompt using a custom system prompt
+    /// Enhance a simple concept into a detailed prompt using a system prompt
     func enhancePrompt(
         concept: String,
         systemPrompt: String
@@ -273,14 +265,14 @@ class WorkflowPromptGenerator: ObservableObject {
     func refinePrompt(
         originalPrompt: String,
         feedback: String,
-        style: PromptStyle = .creative
+        systemPrompt: String
     ) async throws -> String {
         await setGenerating(true, progress: "Refining prompt...")
 
         defer { Task { await setGenerating(false) } }
 
         let prompt = """
-        \(style.systemPrompt)
+        \(systemPrompt)
 
         Improve this AI image generation prompt based on the feedback:
 
@@ -310,31 +302,20 @@ class WorkflowPromptGenerator: ObservableObject {
     /// Generate a negative prompt based on the positive prompt
     func generateNegativePrompt(
         forPrompt positivePrompt: String,
-        style: PromptStyle = .creative
+        systemPrompt: String
     ) async throws -> String {
         await setGenerating(true, progress: "Generating negative prompt...")
 
         defer { Task { await setGenerating(false) } }
-
-        let styleSpecificNegatives: String
-        switch style {
-        case .photorealistic:
-            styleSpecificNegatives = "cartoon, anime, illustration, painting, drawing, cgi, 3d render"
-        case .anime:
-            styleSpecificNegatives = "photorealistic, photograph, 3d render, western art style"
-        case .artistic:
-            styleSpecificNegatives = "photorealistic, photograph, digital art, 3d render"
-        default:
-            styleSpecificNegatives = ""
-        }
 
         let prompt = """
         Based on this image generation prompt, create a concise negative prompt to avoid unwanted elements:
 
         Positive prompt: "\(positivePrompt)"
 
+        \(systemPrompt)
+
         Include common quality issues to avoid and anything that would detract from the desired result.
-        \(styleSpecificNegatives.isEmpty ? "" : "Also include: \(styleSpecificNegatives)")
 
         Output ONLY the negative prompt as a comma-separated list, nothing else.
         """
@@ -354,7 +335,7 @@ class WorkflowPromptGenerator: ObservableObject {
     func generateStoryWorkflow(
         concept: String,
         sceneCount: Int,
-        style: PromptStyle = .creative,
+        systemPrompt: String,
         config: DrawThingsConfig
     ) async throws -> [[String: Any]] {
         await setGenerating(true, progress: "Generating story workflow...")
@@ -363,11 +344,11 @@ class WorkflowPromptGenerator: ObservableObject {
 
         // Generate scene prompts
         await updateProgress("Generating scene prompts...")
-        let scenes = try await generateStoryScenes(concept: concept, sceneCount: sceneCount, style: style)
+        let scenes = try await generateStoryScenes(concept: concept, sceneCount: sceneCount, systemPrompt: systemPrompt)
 
         // Generate negative prompt
         await updateProgress("Generating negative prompt...")
-        let negativePrompt = try await generateNegativePrompt(forPrompt: scenes.first ?? concept, style: style)
+        let negativePrompt = try await generateNegativePrompt(forPrompt: scenes.first ?? concept, systemPrompt: systemPrompt)
 
         // Build workflow instructions
         let generator = StoryflowInstructionGenerator()
@@ -391,7 +372,7 @@ class WorkflowPromptGenerator: ObservableObject {
     func generateCharacterWorkflow(
         characterConcept: String,
         sceneDescriptions: [String],
-        style: PromptStyle = .creative,
+        systemPrompt: String,
         config: DrawThingsConfig
     ) async throws -> [[String: Any]] {
         await setGenerating(true, progress: "Generating character workflow...")
@@ -400,11 +381,11 @@ class WorkflowPromptGenerator: ObservableObject {
 
         // Generate character reference prompt
         await updateProgress("Creating character reference...")
-        let characterPrompt = try await generateCharacterDescription(characterConcept: characterConcept, style: style)
+        let characterPrompt = try await generateCharacterDescription(characterConcept: characterConcept, systemPrompt: systemPrompt)
 
         // Generate negative prompt
         await updateProgress("Generating negative prompt...")
-        let negativePrompt = try await generateNegativePrompt(forPrompt: characterPrompt, style: style)
+        let negativePrompt = try await generateNegativePrompt(forPrompt: characterPrompt, systemPrompt: systemPrompt)
 
         // Build workflow with moodboard
         let generator = StoryflowInstructionGenerator()
@@ -438,7 +419,7 @@ class WorkflowPromptGenerator: ObservableObject {
     func generateVariationWorkflow(
         concept: String,
         variationCount: Int,
-        style: PromptStyle = .creative,
+        systemPrompt: String,
         config: DrawThingsConfig
     ) async throws -> [[String: Any]] {
         await setGenerating(true, progress: "Generating variation workflow...")
@@ -447,15 +428,15 @@ class WorkflowPromptGenerator: ObservableObject {
 
         // Enhance the base concept
         await updateProgress("Enhancing base prompt...")
-        let basePrompt = try await enhancePrompt(concept: concept, style: style)
+        let basePrompt = try await enhancePrompt(concept: concept, systemPrompt: systemPrompt)
 
         // Generate variations
         await updateProgress("Generating variations...")
-        let variations = try await generateVariations(basePrompt: basePrompt, variationCount: variationCount, style: style)
+        let variations = try await generateVariations(basePrompt: basePrompt, variationCount: variationCount, systemPrompt: systemPrompt)
 
         // Generate negative prompt
         await updateProgress("Generating negative prompt...")
-        let negativePrompt = try await generateNegativePrompt(forPrompt: basePrompt, style: style)
+        let negativePrompt = try await generateNegativePrompt(forPrompt: basePrompt, systemPrompt: systemPrompt)
 
         // Build workflow
         var instructions: [[String: Any]] = []

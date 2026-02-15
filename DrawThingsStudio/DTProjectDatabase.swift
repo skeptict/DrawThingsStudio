@@ -34,6 +34,7 @@ struct DTGenerationEntry: Identifiable, Hashable {
     let sampler: String
     let seedMode: String
     let shift: Float
+    let stochasticSamplingGamma: Float
     let wallClock: Date
     let loras: [DTLoRAEntry]
     var thumbnail: NSImage?
@@ -343,6 +344,7 @@ final class DTProjectDatabase: @unchecked Sendable {
             sampler: Self.samplerName(samplerByte),
             seedMode: Self.seedModeName(seedModeByte),
             shift: shift,
+            stochasticSamplingGamma: 0.3,
             wallClock: wallClock,
             loras: loras,
             thumbnail: nil

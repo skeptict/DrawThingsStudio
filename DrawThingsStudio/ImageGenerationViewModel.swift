@@ -188,6 +188,7 @@ final class ImageGenerationViewModel: ObservableObject {
         if let strength = modelConfig.strength {
             config.strength = Double(strength)
         }
+        config.stochasticSamplingGamma = Double(modelConfig.stochasticSamplingGamma ?? 0.3)
         config.model = modelConfig.modelName
     }
 

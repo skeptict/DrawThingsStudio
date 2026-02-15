@@ -120,48 +120,17 @@ class OllamaClient: LLMProvider, ObservableObject {
         model: String,
         options: LLMGenerationOptions = .default
     ) async throws -> String {
-        let url = baseURL.appendingPathComponent("api/generate")
+        let result = try await chat(
+            messages: [.user(prompt)],
+            model: model,
+            options: options
+        )
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        let body: [String: Any] = [
-            "model": model,
-            "prompt": prompt,
-            "stream": false,
-            "options": [
-                "temperature": options.temperature,
-                "top_p": options.topP,
-                "num_predict": options.maxTokens
-            ]
-        ]
-
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        logger.debug("Generating text with model: \(model)")
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw LLMError.invalidResponse
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw LLMError.requestFailed("Status \(httpResponse.statusCode): \(errorMessage)")
-        }
-
-        let result = try JSONDecoder().decode(OllamaGenerateResponse.self, from: data)
-
-        logger.debug("Generated \(result.response.count) characters")
-
-        if result.response.isEmpty {
-            logger.warning("Model '\(model)' returned empty response. Vision models (VL) require image input.")
+        if result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw LLMError.requestFailed("Model returned empty response. If using a vision model (VL), try a text-only model instead.")
         }
 
-        return result.response
+        return result
     }
 
     // MARK: - Generate Text Streaming
@@ -311,27 +280,6 @@ private struct OllamaModel: Codable {
     enum CodingKeys: String, CodingKey {
         case name, size, digest
         case modifiedAt = "modified_at"
-    }
-}
-
-private struct OllamaGenerateResponse: Codable {
-    let model: String
-    let response: String
-    let done: Bool
-    let context: [Int]?
-    let totalDuration: Int64?
-    let loadDuration: Int64?
-    let promptEvalCount: Int?
-    let evalCount: Int?
-    let evalDuration: Int64?
-
-    enum CodingKeys: String, CodingKey {
-        case model, response, done, context
-        case totalDuration = "total_duration"
-        case loadDuration = "load_duration"
-        case promptEvalCount = "prompt_eval_count"
-        case evalCount = "eval_count"
-        case evalDuration = "eval_duration"
     }
 }
 

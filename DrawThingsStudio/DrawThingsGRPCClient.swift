@@ -332,6 +332,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             batchCount: Int32(config.batchCount),
             batchSize: Int32(config.batchSize),
             strength: Float(config.strength),
+            stochasticSamplingGamma: Float(config.stochasticSamplingGamma),
             seedMode: mapSeedMode(config.seedMode)
         )
     }
