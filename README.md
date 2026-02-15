@@ -226,5 +226,6 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 ## Acknowledgments
 
 - [Draw Things](https://drawthings.ai) by Liu Liu for the excellent image generation app
+- [DT-gRPC-Swift-Client](https://github.com/euphoriacyberware-ai/DT-gRPC-Swift-Client) — Swift gRPC client library for Draw Things image generation
 - [StoryFlow Editor](https://cutsceneartist.com/DrawThings/StoryflowEditor_online.html) — the original web-based StoryFlow workflow editor that inspired this project
 - [dtm](https://github.com/kcjerrell/dtm) by KC Jerrell — Rust/Tauri Draw Things database reader whose FlatBuffer schemas and database parsing approach informed our DT Project Browser implementation
