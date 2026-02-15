@@ -471,3 +471,17 @@ Instructions → StoryflowExecutor
   - Extracts JPEG thumbnails from `thumbnailhistoryhalfnode` blobs via SOI/EOI marker scanning
   - Sandbox folder access via NSOpenPanel with security-scoped bookmarks stored in UserDefaults
   - Added `SidebarItem.projectBrowser` in Library section
+
+### Session 12 (Feb 14, 2026)
+- **External drive support for DT Project Browser:**
+  - Added `com.apple.security.files.bookmarks.app-scope` entitlement for persistent bookmark access
+  - Multiple folder bookmarks — browse projects from local and external drives simultaneously
+  - SQLite `immutable=1` URI fallback for exFAT/FAT32/NTFS/read-only volumes (WAL mode workaround)
+  - Automatic migration from legacy single-bookmark to array-based storage
+  - Folder sections with remove buttons, unavailable volume warnings
+  - Proper `startAccessingSecurityScopedResource()` / `stopAccessingSecurityScopedResource()` lifecycle
+  - Error messages for ejected drives and database open failures
+- **DT Project Browser action buttons:** Copy Config, Copy All, Send to Generate Image (matching Image Inspector)
+- **DT-gRPC-Swift-Client remote dependency:** Switched from local SPM path to remote GitHub dependency; forked to `skeptict/DT-gRPC-Swift-Client` v1.2.3 with model family fix
+- **Workflow Builder tooltips:** Added `.help()` descriptive tooltips to all toolbar icon buttons (Open, AI Generate, Add, Templates, Save to Library, Preview, Execute, Copy, Save, Export)
+- **README updates:** Comprehensive refresh with all features, external drive support, DT-gRPC-Swift-Client and dtm acknowledgments
