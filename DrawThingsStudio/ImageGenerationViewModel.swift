@@ -190,6 +190,9 @@ final class ImageGenerationViewModel: ObservableObject {
         }
         config.stochasticSamplingGamma = Double(modelConfig.stochasticSamplingGamma ?? 0.3)
         config.model = modelConfig.modelName
+        if let seedMode = modelConfig.seedMode {
+            config.seedMode = SeedModeMapping.name(for: seedMode)
+        }
     }
 
     // MARK: - Private

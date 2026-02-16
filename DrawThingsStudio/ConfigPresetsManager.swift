@@ -20,9 +20,9 @@ struct DrawThingsConfigFile: Codable {
 
 /// The configuration data inside a Draw Things config
 struct DrawThingsConfigData: Codable {
-    // Core settings we care about
-    var targetImageWidth: Int?
-    var targetImageHeight: Int?
+    // Core settings — width/height are the actual canvas dimensions
+    var width: Int?
+    var height: Int?
     var steps: Int?
     var guidanceScale: Double?
     var sampler: Int?
@@ -31,6 +31,7 @@ struct DrawThingsConfigData: Codable {
     var stochasticSamplingGamma: Double?
     var clipSkip: Int?
     var seed: Int?
+    var seedMode: Int?
     var model: String?
     var batchCount: Int?
     var batchSize: Int?
@@ -39,14 +40,14 @@ struct DrawThingsConfigData: Codable {
     var additionalFields: [String: AnyCodable]?
 
     enum CodingKeys: String, CodingKey {
-        case targetImageWidth, targetImageHeight, steps, guidanceScale
-        case sampler, shift, strength, stochasticSamplingGamma, clipSkip, seed, model
+        case width, height, steps, guidanceScale
+        case sampler, shift, strength, stochasticSamplingGamma, clipSkip, seed, seedMode, model
         case batchCount, batchSize
     }
 
     init(
-        targetImageWidth: Int? = nil,
-        targetImageHeight: Int? = nil,
+        width: Int? = nil,
+        height: Int? = nil,
         steps: Int? = nil,
         guidanceScale: Double? = nil,
         sampler: Int? = nil,
@@ -55,12 +56,13 @@ struct DrawThingsConfigData: Codable {
         stochasticSamplingGamma: Double? = nil,
         clipSkip: Int? = nil,
         seed: Int? = nil,
+        seedMode: Int? = nil,
         model: String? = nil,
         batchCount: Int? = nil,
         batchSize: Int? = nil
     ) {
-        self.targetImageWidth = targetImageWidth
-        self.targetImageHeight = targetImageHeight
+        self.width = width
+        self.height = height
         self.steps = steps
         self.guidanceScale = guidanceScale
         self.sampler = sampler
@@ -69,6 +71,7 @@ struct DrawThingsConfigData: Codable {
         self.stochasticSamplingGamma = stochasticSamplingGamma
         self.clipSkip = clipSkip
         self.seed = seed
+        self.seedMode = seedMode
         self.model = model
         self.batchCount = batchCount
         self.batchSize = batchSize
@@ -76,8 +79,8 @@ struct DrawThingsConfigData: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        targetImageWidth = try container.decodeIfPresent(Int.self, forKey: .targetImageWidth)
-        targetImageHeight = try container.decodeIfPresent(Int.self, forKey: .targetImageHeight)
+        width = try container.decodeIfPresent(Int.self, forKey: .width)
+        height = try container.decodeIfPresent(Int.self, forKey: .height)
         steps = try container.decodeIfPresent(Int.self, forKey: .steps)
         guidanceScale = try container.decodeIfPresent(Double.self, forKey: .guidanceScale)
         sampler = try container.decodeIfPresent(Int.self, forKey: .sampler)
@@ -86,6 +89,7 @@ struct DrawThingsConfigData: Codable {
         stochasticSamplingGamma = try container.decodeIfPresent(Double.self, forKey: .stochasticSamplingGamma)
         clipSkip = try container.decodeIfPresent(Int.self, forKey: .clipSkip)
         seed = try container.decodeIfPresent(Int.self, forKey: .seed)
+        seedMode = try container.decodeIfPresent(Int.self, forKey: .seedMode)
         model = try container.decodeIfPresent(String.self, forKey: .model)
         batchCount = try container.decodeIfPresent(Int.self, forKey: .batchCount)
         batchSize = try container.decodeIfPresent(Int.self, forKey: .batchSize)
@@ -93,8 +97,8 @@ struct DrawThingsConfigData: Codable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(targetImageWidth, forKey: .targetImageWidth)
-        try container.encodeIfPresent(targetImageHeight, forKey: .targetImageHeight)
+        try container.encodeIfPresent(width, forKey: .width)
+        try container.encodeIfPresent(height, forKey: .height)
         try container.encodeIfPresent(steps, forKey: .steps)
         try container.encodeIfPresent(guidanceScale, forKey: .guidanceScale)
         try container.encodeIfPresent(sampler, forKey: .sampler)
@@ -103,6 +107,7 @@ struct DrawThingsConfigData: Codable {
         try container.encodeIfPresent(stochasticSamplingGamma, forKey: .stochasticSamplingGamma)
         try container.encodeIfPresent(clipSkip, forKey: .clipSkip)
         try container.encodeIfPresent(seed, forKey: .seed)
+        try container.encodeIfPresent(seedMode, forKey: .seedMode)
         try container.encodeIfPresent(model, forKey: .model)
         try container.encodeIfPresent(batchCount, forKey: .batchCount)
         try container.encodeIfPresent(batchSize, forKey: .batchSize)
@@ -126,6 +131,7 @@ struct StudioConfigPreset: Codable, Identifiable {
     var clipSkip: Int?
     var strength: Float?
     var stochasticSamplingGamma: Float?
+    var seedMode: Int?
     var isBuiltIn: Bool
     var createdAt: Date
     var modifiedAt: Date
@@ -144,6 +150,7 @@ struct StudioConfigPreset: Codable, Identifiable {
         clipSkip: Int? = nil,
         strength: Float? = nil,
         stochasticSamplingGamma: Float? = nil,
+        seedMode: Int? = nil,
         isBuiltIn: Bool,
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
@@ -161,6 +168,7 @@ struct StudioConfigPreset: Codable, Identifiable {
         self.clipSkip = clipSkip
         self.strength = strength
         self.stochasticSamplingGamma = stochasticSamplingGamma
+        self.seedMode = seedMode
         self.isBuiltIn = isBuiltIn
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
@@ -180,6 +188,7 @@ struct StudioConfigPreset: Codable, Identifiable {
         self.clipSkip = modelConfig.clipSkip
         self.strength = modelConfig.strength
         self.stochasticSamplingGamma = modelConfig.stochasticSamplingGamma
+        self.seedMode = modelConfig.seedMode
         self.isBuiltIn = modelConfig.isBuiltIn
         self.createdAt = modelConfig.createdAt
         self.modifiedAt = modelConfig.modifiedAt
@@ -199,6 +208,7 @@ struct StudioConfigPreset: Codable, Identifiable {
             clipSkip: clipSkip,
             strength: strength,
             stochasticSamplingGamma: stochasticSamplingGamma,
+            seedMode: seedMode,
             isBuiltIn: isBuiltIn
         )
         return config
@@ -209,11 +219,12 @@ struct StudioConfigPreset: Codable, Identifiable {
 
 /// Map Draw Things sampler integers to names
 enum SamplerMapping {
+    /// Maps Draw Things sampler integer (matching FlatBuffer SamplerType enum) to display name
     static let samplerNames: [Int: String] = [
-        0: "PLMS",
-        1: "DDIM",
-        2: "DPM++ 2M Karras",
-        3: "Euler A",
+        0: "DPM++ 2M Karras",
+        1: "Euler A",
+        2: "DDIM",
+        3: "PLMS",
         4: "DPM++ SDE Karras",
         5: "UniPC",
         6: "LCM",
@@ -222,11 +233,13 @@ enum SamplerMapping {
         9: "TCD",
         10: "Euler A Trailing",
         11: "DPM++ SDE Trailing",
-        12: "DDIM Trailing",
-        13: "DPM++ 2M AYS",
-        14: "Euler A AYS",
+        12: "DPM++ 2M AYS",
+        13: "Euler A AYS",
+        14: "DPM++ SDE AYS",
         15: "DPM++ 2M Trailing",
-        16: "DPM++ 2M",
+        16: "DDIM Trailing",
+        17: "UniPC Trailing",
+        18: "UniPC AYS",
     ]
 
     static func name(for index: Int) -> String {
@@ -235,6 +248,26 @@ enum SamplerMapping {
 
     static func index(for name: String) -> Int {
         samplerNames.first { $0.value == name }?.key ?? 2
+    }
+}
+
+// MARK: - Seed Mode Mapping
+
+/// Map Draw Things seed mode integers to names
+enum SeedModeMapping {
+    static let seedModeNames: [Int: String] = [
+        0: "Legacy",
+        1: "Torch CPU Compatible",
+        2: "Scale Alike",
+        3: "Nvidia GPU Compatible",
+    ]
+
+    static func name(for index: Int) -> String {
+        seedModeNames[index] ?? "Legacy"
+    }
+
+    static func index(for name: String) -> Int {
+        seedModeNames.first { $0.value == name }?.key ?? 0
     }
 }
 
@@ -278,8 +311,8 @@ class ConfigPresetsManager {
     func exportAsDrawThingsFormat(_ configs: [ModelConfig], to url: URL) throws {
         let dtConfigs = configs.map { config -> DrawThingsConfigFile in
             let configData = DrawThingsConfigData(
-                targetImageWidth: config.width,
-                targetImageHeight: config.height,
+                width: config.width,
+                height: config.height,
                 steps: config.steps,
                 guidanceScale: Double(config.guidanceScale),
                 sampler: SamplerMapping.index(for: config.samplerName),
@@ -287,6 +320,7 @@ class ConfigPresetsManager {
                 strength: config.strength.map { Double($0) },
                 clipSkip: config.clipSkip,
                 seed: nil,
+                seedMode: config.seedMode,
                 model: nil,
                 batchCount: nil,
                 batchSize: nil
@@ -323,10 +357,10 @@ class ConfigPresetsManager {
             StudioConfigPreset(
                 id: UUID(),
                 name: dt.name,
-                modelName: "Imported",
+                modelName: dt.configuration.model ?? "Unknown",
                 description: "Imported from Draw Things",
-                width: dt.configuration.targetImageWidth ?? 1024,
-                height: dt.configuration.targetImageHeight ?? 1024,
+                width: dt.configuration.width ?? 1024,
+                height: dt.configuration.height ?? 1024,
                 steps: dt.configuration.steps ?? 30,
                 guidanceScale: Float(dt.configuration.guidanceScale ?? 7.5),
                 samplerName: SamplerMapping.name(for: dt.configuration.sampler ?? 2),
@@ -334,6 +368,7 @@ class ConfigPresetsManager {
                 clipSkip: dt.configuration.clipSkip,
                 strength: dt.configuration.strength.map { Float($0) },
                 stochasticSamplingGamma: dt.configuration.stochasticSamplingGamma.map { Float($0) },
+                seedMode: dt.configuration.seedMode,
                 isBuiltIn: false,
                 createdAt: Date(),
                 modifiedAt: Date()
@@ -364,29 +399,22 @@ class ConfigPresetsManager {
             logger.debug("Not native format: \(error.localizedDescription)")
         }
 
-        // Try Draw Things format
+        // Try Draw Things array format: [{"name":"...", "configuration":{...}}]
         do {
             let decoder = JSONDecoder()
             let dtConfigs = try decoder.decode([DrawThingsConfigFile].self, from: data)
 
             let presets = dtConfigs.map { dt -> StudioConfigPreset in
-                // Extract model name, removing file extension if present
-                let modelName: String
-                if let model = dt.configuration.model, !model.isEmpty {
-                    // Remove common extensions like .ckpt, .safetensors
-                    let name = (model as NSString).deletingPathExtension
-                    modelName = name.isEmpty ? model : name
-                } else {
-                    modelName = "Unknown"
-                }
+                // Keep full model filename — Draw Things needs the extension to find the model
+                let modelName = dt.configuration.model ?? "Unknown"
 
                 return StudioConfigPreset(
                     id: UUID(),
                     name: dt.name,
                     modelName: modelName,
                     description: "Imported from Draw Things",
-                    width: dt.configuration.targetImageWidth ?? 1024,
-                    height: dt.configuration.targetImageHeight ?? 1024,
+                    width: dt.configuration.width ?? 1024,
+                    height: dt.configuration.height ?? 1024,
                     steps: dt.configuration.steps ?? 30,
                     guidanceScale: Float(dt.configuration.guidanceScale ?? 7.5),
                     samplerName: SamplerMapping.name(for: dt.configuration.sampler ?? 2),
@@ -394,6 +422,7 @@ class ConfigPresetsManager {
                     clipSkip: dt.configuration.clipSkip,
                     strength: dt.configuration.strength.map { Float($0) },
                     stochasticSamplingGamma: dt.configuration.stochasticSamplingGamma.map { Float($0) },
+                    seedMode: dt.configuration.seedMode,
                     isBuiltIn: false,
                     createdAt: Date(),
                     modifiedAt: Date()
@@ -403,8 +432,51 @@ class ConfigPresetsManager {
             logger.info("Imported \(presets.count) presets from Draw Things format")
             return presets
         } catch {
-            logger.error("Draw Things format parse failed: \(error.localizedDescription)")
-            throw ConfigPresetsError.importFailed("Could not parse file: \(error.localizedDescription)")
+            logger.debug("Not Draw Things array format: \(error.localizedDescription)")
+        }
+
+        // Try flat Draw Things config: {"width":1152,"height":768,"model":"...","sampler":9,...}
+        do {
+            let decoder = JSONDecoder()
+            let configData = try decoder.decode(DrawThingsConfigData.self, from: data)
+
+            // Derive display name from model filename (strip extension for readability)
+            let presetName: String
+            if let model = configData.model, !model.isEmpty {
+                let name = (model as NSString).deletingPathExtension
+                presetName = name.isEmpty ? model : name
+            } else {
+                presetName = "Imported Config"
+            }
+
+            // Keep full model filename — Draw Things needs the extension to find the model
+            let modelName = configData.model ?? "Unknown"
+
+            let preset = StudioConfigPreset(
+                id: UUID(),
+                name: presetName,
+                modelName: modelName,
+                description: "Imported from Draw Things",
+                width: configData.width ?? 1024,
+                height: configData.height ?? 1024,
+                steps: configData.steps ?? 30,
+                guidanceScale: Float(configData.guidanceScale ?? 7.5),
+                samplerName: SamplerMapping.name(for: configData.sampler ?? 2),
+                shift: configData.shift.map { Float($0) },
+                clipSkip: configData.clipSkip,
+                strength: configData.strength.map { Float($0) },
+                stochasticSamplingGamma: configData.stochasticSamplingGamma.map { Float($0) },
+                seedMode: configData.seedMode,
+                isBuiltIn: false,
+                createdAt: Date(),
+                modifiedAt: Date()
+            )
+
+            logger.info("Imported 1 preset from flat Draw Things config")
+            return [preset]
+        } catch {
+            logger.error("Flat config parse failed: \(error.localizedDescription)")
+            throw ConfigPresetsError.importFailed("Could not parse file as any known format")
         }
     }
 

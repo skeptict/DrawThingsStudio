@@ -287,6 +287,14 @@ struct ImageGenerationView: View {
                                             .accessibilityLabel(config.isFavorite ? "Remove from favorites" : "Add to favorites")
                                         }
                                         .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+                                        .contextMenu {
+                                            Button("Delete", role: .destructive) {
+                                                if selectedPresetID == config.id.uuidString {
+                                                    selectedPresetID = ""
+                                                }
+                                                modelContext.delete(config)
+                                            }
+                                        }
                                         .accessibilityLabel(config.name)
                                         .accessibilityAddTraits(isSelected ? .isSelected : [])
                                     }

@@ -12,6 +12,12 @@ DrawThingsStudio is a macOS native application (Swift/SwiftUI) that serves as a 
 
 ## Build Commands
 
+{
+  "permissions": {
+    "allow": ["Bash(*)", "Read(*)", "Write(*)", "WebFetch(*)"]
+  }
+}
+
 ```bash
 # Build the project (requires Xcode)
 xcodebuild -project DrawThingsStudio.xcodeproj -scheme DrawThingsStudio -configuration Debug build

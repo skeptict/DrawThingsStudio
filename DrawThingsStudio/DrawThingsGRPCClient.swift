@@ -81,6 +81,9 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
 
             onProgress?(.complete)
 
+            for (idx, img) in images.enumerated() {
+                NSLog("[gRPC] Image %d: %dx%d pixels", idx, img.pixelWidth, img.pixelHeight)
+            }
             NSLog("[gRPC] Generated \(images.count) image(s) via \(isImg2Img ? "img2img" : "txt2img")")
 
             // PlatformImage is NSImage on macOS, so we can return directly
@@ -319,6 +322,25 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             )
         }
 
+        // Detect model family to set appropriate text encoder and shift defaults
+        let modelFamily = LatentModelFamily.detect(from: config.model)
+        let useT5: Bool
+        let useResolutionDependentShift: Bool
+        switch modelFamily {
+        case .flux, .zImage:
+            useT5 = true
+            useResolutionDependentShift = true
+        case .sd3:
+            useT5 = true
+            useResolutionDependentShift = false
+        default:
+            useT5 = false
+            useResolutionDependentShift = false
+        }
+
+        NSLog("[gRPC] Model: %@, detected family: %@, t5=%d, resDependentShift=%d",
+              config.model, modelFamily.rawValue, useT5 ? 1 : 0, useResolutionDependentShift ? 1 : 0)
+
         return DrawThingsConfiguration(
             width: Int32(config.width),
             height: Int32(config.height),
@@ -333,6 +355,8 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             batchSize: Int32(config.batchSize),
             strength: Float(config.strength),
             stochasticSamplingGamma: Float(config.stochasticSamplingGamma),
+            resolutionDependentShift: useResolutionDependentShift,
+            t5TextEncoder: useT5,
             seedMode: mapSeedMode(config.seedMode)
         )
     }
@@ -399,14 +423,15 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
     }
 
     private func mapSeedMode(_ mode: String) -> Int32 {
-        switch mode.lowercased() {
+        let normalized = mode.lowercased().replacingOccurrences(of: " ", with: "")
+        switch normalized {
         case "legacy":
             return 0
-        case "torchcpucompatible", "torch_cpu_compatible":
+        case "torchcpucompatible":
             return 1
-        case "scalealike", "scale_alike":
+        case "scalealike":
             return 2
-        case "nvidiatorchcompatible", "nvidia_torch_compatible":
+        case "nvidiagpucompatible":
             return 3
         default:
             return 2 // Default to Scale Alike

@@ -28,6 +28,7 @@ class ModelConfig {
     var clipSkip: Int?
     var strength: Float?
     var stochasticSamplingGamma: Float?
+    var seedMode: Int?
     var isFavorite: Bool = false
 
     // Metadata
@@ -48,6 +49,7 @@ class ModelConfig {
         clipSkip: Int? = nil,
         strength: Float? = nil,
         stochasticSamplingGamma: Float? = nil,
+        seedMode: Int? = nil,
         isFavorite: Bool = false,
         isBuiltIn: Bool = false
     ) {
@@ -64,6 +66,7 @@ class ModelConfig {
         self.clipSkip = clipSkip
         self.strength = strength
         self.stochasticSamplingGamma = stochasticSamplingGamma
+        self.seedMode = seedMode
         self.isFavorite = isFavorite
         self.isBuiltIn = isBuiltIn
         self.createdAt = Date()

@@ -457,16 +457,12 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		FD31E3EF2F1A0000003E0C4C /* XCRemoteSwiftPackageReference "DT-gRPC-Swift-Client" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/skeptict/DT-gRPC-Swift-Client.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.3;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		FD31E3EF2F1A0000003E0C4C /* XCLocalSwiftPackageReference "DT-gRPC-Swift-Client" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../DT-gRPC-Swift-Client";
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		FD31E3F02F1A0000003E0C4C /* DrawThingsClient */ = {
