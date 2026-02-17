@@ -322,34 +322,45 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             )
         }
 
-        // Detect model family to set appropriate text encoder and shift defaults
+        // Detect model family for text encoder and shift defaults
         let modelFamily = LatentModelFamily.detect(from: config.model)
+        let modelLower = config.model.lowercased()
+
+        // T5 text encoder: needed for Flux, zImage, and SD3 families
         let useT5: Bool
-        let useResolutionDependentShift: Bool
         switch modelFamily {
-        case .flux, .zImage:
+        case .flux, .zImage, .sd3:
             useT5 = true
-            useResolutionDependentShift = true
-        case .sd3:
-            useT5 = true
-            useResolutionDependentShift = false
         default:
             useT5 = false
-            useResolutionDependentShift = false
         }
 
-        // TCD sampler requires non-zero stochasticSamplingGamma to function correctly.
-        // With gamma=0, TCD degenerates and produces noise/static on most models.
-        var effectiveGamma = Float(config.stochasticSamplingGamma)
-        if sampler == .tcd && effectiveGamma < 0.1 {
-            effectiveGamma = 0.3
-            NSLog("[gRPC] TCD sampler: gamma %.2f too low, using %.2f (TCD requires non-zero SSS)",
-                  Float(config.stochasticSamplingGamma), effectiveGamma)
+        // Resolution-dependent shift: use config value if set, otherwise auto-detect
+        // Flux uses resolution-dependent shift; zImage turbo models do NOT
+        let useResolutionDependentShift: Bool
+        if let explicit = config.resolutionDependentShift {
+            useResolutionDependentShift = explicit
+        } else {
+            switch modelFamily {
+            case .flux:
+                useResolutionDependentShift = true
+            default:
+                useResolutionDependentShift = false
+            }
         }
 
-        NSLog("[gRPC] Model: %@, family: %@, sampler: %@, gamma: %.2f, t5=%d, resDependentShift=%d",
-              config.model, modelFamily.rawValue, config.sampler, effectiveGamma,
-              useT5 ? 1 : 0, useResolutionDependentShift ? 1 : 0)
+        // CFG Zero Star: use config value if set, otherwise auto-detect
+        // Turbo/distilled models typically need cfgZeroStar for correct low-guidance output
+        let useCfgZeroStar: Bool
+        if let explicit = config.cfgZeroStar {
+            useCfgZeroStar = explicit
+        } else {
+            useCfgZeroStar = modelLower.contains("turbo")
+        }
+
+        NSLog("[gRPC] Model: %@, family: %@, sampler: %@, gamma: %.2f, t5=%d, resDependentShift=%d, cfgZeroStar=%d",
+              config.model, modelFamily.rawValue, config.sampler, Float(config.stochasticSamplingGamma),
+              useT5 ? 1 : 0, useResolutionDependentShift ? 1 : 0, useCfgZeroStar ? 1 : 0)
 
         return DrawThingsConfiguration(
             width: Int32(config.width),
@@ -364,7 +375,8 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             batchCount: Int32(config.batchCount),
             batchSize: Int32(config.batchSize),
             strength: Float(config.strength),
-            stochasticSamplingGamma: effectiveGamma,
+            cfgZeroStar: useCfgZeroStar,
+            stochasticSamplingGamma: Float(config.stochasticSamplingGamma),
             resolutionDependentShift: useResolutionDependentShift,
             t5TextEncoder: useT5,
             seedMode: mapSeedMode(config.seedMode)

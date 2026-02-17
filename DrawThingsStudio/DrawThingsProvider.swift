@@ -82,6 +82,8 @@ struct DrawThingsGenerationConfig: Codable {
     var batchCount: Int
     var negativePrompt: String
     var loras: [LoRAConfig]
+    var resolutionDependentShift: Bool?
+    var cfgZeroStar: Bool?
 
     struct LoRAConfig: Codable {
         var file: String
@@ -110,7 +112,9 @@ struct DrawThingsGenerationConfig: Codable {
         batchSize: Int = 1,
         batchCount: Int = 1,
         negativePrompt: String = "",
-        loras: [LoRAConfig] = []
+        loras: [LoRAConfig] = [],
+        resolutionDependentShift: Bool? = nil,
+        cfgZeroStar: Bool? = nil
     ) {
         self.width = width
         self.height = height
@@ -127,18 +131,12 @@ struct DrawThingsGenerationConfig: Codable {
         self.batchCount = batchCount
         self.negativePrompt = negativePrompt
         self.loras = loras
+        self.resolutionDependentShift = resolutionDependentShift
+        self.cfgZeroStar = cfgZeroStar
     }
 
     /// Convert to HTTP API request body dictionary
     func toRequestBody(prompt: String) -> [String: Any] {
-        // TCD sampler requires non-zero gamma; enforce minimum to prevent noise/static output
-        let effectiveGamma: Double
-        if sampler == "TCD" && stochasticSamplingGamma < 0.1 {
-            effectiveGamma = 0.3
-        } else {
-            effectiveGamma = stochasticSamplingGamma
-        }
-
         var body: [String: Any] = [
             "prompt": prompt,
             "negative_prompt": negativePrompt,
@@ -151,7 +149,7 @@ struct DrawThingsGenerationConfig: Codable {
             "sampler": sampler,
             "shift": shift,
             "strength": strength,
-            "stochastic_sampling_gamma": effectiveGamma,
+            "stochastic_sampling_gamma": stochasticSamplingGamma,
             "batch_size": batchSize,
             "batch_count": batchCount
         ]

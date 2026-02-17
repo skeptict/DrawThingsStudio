@@ -48,6 +48,7 @@ struct WorkflowBuilderView: View {
                     Label("Open", systemImage: "folder")
                 }
                 .help("Open a workflow JSON file")
+                .accessibilityIdentifier("workflowBuilder_openButton")
 
                 // AI Generation button
                 Button {
@@ -56,6 +57,7 @@ struct WorkflowBuilderView: View {
                     Label("AI Generate", systemImage: "sparkles")
                 }
                 .help("Generate instructions with AI")
+                .accessibilityIdentifier("workflowBuilder_aiGenerateButton")
 
                 // Add instruction menu
                 Menu {
@@ -64,6 +66,7 @@ struct WorkflowBuilderView: View {
                     Label("Add", systemImage: "plus")
                 }
                 .help("Add a new instruction")
+                .accessibilityIdentifier("workflowBuilder_addButton")
 
                 Button {
                     showTemplatesSheet = true
@@ -71,6 +74,7 @@ struct WorkflowBuilderView: View {
                     Label("Templates", systemImage: "doc.on.doc")
                 }
                 .help("Load a workflow template")
+                .accessibilityIdentifier("workflowBuilder_templatesButton")
 
                 Divider()
 
@@ -81,6 +85,7 @@ struct WorkflowBuilderView: View {
                 }
                 .disabled(viewModel.instructions.isEmpty)
                 .help("Save workflow to library")
+                .accessibilityIdentifier("workflowBuilder_saveToLibraryButton")
 
                 Button {
                     showJSONPreview = true
@@ -89,6 +94,7 @@ struct WorkflowBuilderView: View {
                 }
                 .disabled(viewModel.instructions.isEmpty)
                 .help("Preview workflow as JSON")
+                .accessibilityIdentifier("workflowBuilder_previewButton")
 
                 Button {
                     showExecutionSheet = true
@@ -97,6 +103,7 @@ struct WorkflowBuilderView: View {
                 }
                 .disabled(viewModel.instructions.isEmpty)
                 .help("Execute workflow via Draw Things")
+                .accessibilityIdentifier("workflowBuilder_executeButton")
 
                 Button {
                     viewModel.copyToClipboard()
@@ -105,6 +112,7 @@ struct WorkflowBuilderView: View {
                 }
                 .disabled(viewModel.instructions.isEmpty)
                 .help("Copy workflow JSON to clipboard")
+                .accessibilityIdentifier("workflowBuilder_copyButton")
 
                 Button {
                     Task {
@@ -115,6 +123,7 @@ struct WorkflowBuilderView: View {
                 }
                 .disabled(viewModel.instructions.isEmpty)
                 .help("Save workflow to a JSON file")
+                .accessibilityIdentifier("workflowBuilder_saveButton")
 
                 Button {
                     Task {
@@ -126,6 +135,7 @@ struct WorkflowBuilderView: View {
                 .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                 .disabled(viewModel.instructions.isEmpty)
                 .help("Export workflow to a JSON file")
+                .accessibilityIdentifier("workflowBuilder_exportButton")
             }
         }
         .sheet(isPresented: $showAIGeneration) {

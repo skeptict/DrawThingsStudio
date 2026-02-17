@@ -193,6 +193,8 @@ final class ImageGenerationViewModel: ObservableObject {
         if let seedMode = modelConfig.seedMode {
             config.seedMode = SeedModeMapping.name(for: seedMode)
         }
+        config.resolutionDependentShift = modelConfig.resolutionDependentShift
+        config.cfgZeroStar = modelConfig.cfgZeroStar
     }
 
     // MARK: - Private

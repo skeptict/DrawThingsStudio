@@ -458,11 +458,6 @@ struct ImageGenerationView: View {
                             .foregroundColor(.neuTextSecondary)
                             .frame(width: 35)
                     }
-                    if viewModel.config.stochasticSamplingGamma < 0.1 {
-                        Text("TCD requires SSS > 0%. Will use 30% minimum.")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
-                    }
                 }
             }
 

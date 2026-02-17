@@ -35,6 +35,8 @@ struct DrawThingsConfigData: Codable {
     var model: String?
     var batchCount: Int?
     var batchSize: Int?
+    var resolutionDependentShift: Bool?
+    var cfgZeroStar: Bool?
 
     // We preserve other fields when round-tripping
     var additionalFields: [String: AnyCodable]?
@@ -42,7 +44,7 @@ struct DrawThingsConfigData: Codable {
     enum CodingKeys: String, CodingKey {
         case width, height, steps, guidanceScale
         case sampler, shift, strength, stochasticSamplingGamma, clipSkip, seed, seedMode, model
-        case batchCount, batchSize
+        case batchCount, batchSize, resolutionDependentShift, cfgZeroStar
     }
 
     init(
@@ -59,7 +61,9 @@ struct DrawThingsConfigData: Codable {
         seedMode: Int? = nil,
         model: String? = nil,
         batchCount: Int? = nil,
-        batchSize: Int? = nil
+        batchSize: Int? = nil,
+        resolutionDependentShift: Bool? = nil,
+        cfgZeroStar: Bool? = nil
     ) {
         self.width = width
         self.height = height
@@ -75,6 +79,8 @@ struct DrawThingsConfigData: Codable {
         self.model = model
         self.batchCount = batchCount
         self.batchSize = batchSize
+        self.resolutionDependentShift = resolutionDependentShift
+        self.cfgZeroStar = cfgZeroStar
     }
 
     init(from decoder: Decoder) throws {
@@ -93,6 +99,8 @@ struct DrawThingsConfigData: Codable {
         model = try container.decodeIfPresent(String.self, forKey: .model)
         batchCount = try container.decodeIfPresent(Int.self, forKey: .batchCount)
         batchSize = try container.decodeIfPresent(Int.self, forKey: .batchSize)
+        resolutionDependentShift = try container.decodeIfPresent(Bool.self, forKey: .resolutionDependentShift)
+        cfgZeroStar = try container.decodeIfPresent(Bool.self, forKey: .cfgZeroStar)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -111,6 +119,8 @@ struct DrawThingsConfigData: Codable {
         try container.encodeIfPresent(model, forKey: .model)
         try container.encodeIfPresent(batchCount, forKey: .batchCount)
         try container.encodeIfPresent(batchSize, forKey: .batchSize)
+        try container.encodeIfPresent(resolutionDependentShift, forKey: .resolutionDependentShift)
+        try container.encodeIfPresent(cfgZeroStar, forKey: .cfgZeroStar)
     }
 }
 
@@ -132,6 +142,8 @@ struct StudioConfigPreset: Codable, Identifiable {
     var strength: Float?
     var stochasticSamplingGamma: Float?
     var seedMode: Int?
+    var resolutionDependentShift: Bool?
+    var cfgZeroStar: Bool?
     var isBuiltIn: Bool
     var createdAt: Date
     var modifiedAt: Date
@@ -151,6 +163,8 @@ struct StudioConfigPreset: Codable, Identifiable {
         strength: Float? = nil,
         stochasticSamplingGamma: Float? = nil,
         seedMode: Int? = nil,
+        resolutionDependentShift: Bool? = nil,
+        cfgZeroStar: Bool? = nil,
         isBuiltIn: Bool,
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
@@ -169,6 +183,8 @@ struct StudioConfigPreset: Codable, Identifiable {
         self.strength = strength
         self.stochasticSamplingGamma = stochasticSamplingGamma
         self.seedMode = seedMode
+        self.resolutionDependentShift = resolutionDependentShift
+        self.cfgZeroStar = cfgZeroStar
         self.isBuiltIn = isBuiltIn
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
@@ -189,6 +205,8 @@ struct StudioConfigPreset: Codable, Identifiable {
         self.strength = modelConfig.strength
         self.stochasticSamplingGamma = modelConfig.stochasticSamplingGamma
         self.seedMode = modelConfig.seedMode
+        self.resolutionDependentShift = modelConfig.resolutionDependentShift
+        self.cfgZeroStar = modelConfig.cfgZeroStar
         self.isBuiltIn = modelConfig.isBuiltIn
         self.createdAt = modelConfig.createdAt
         self.modifiedAt = modelConfig.modifiedAt
@@ -209,6 +227,8 @@ struct StudioConfigPreset: Codable, Identifiable {
             strength: strength,
             stochasticSamplingGamma: stochasticSamplingGamma,
             seedMode: seedMode,
+            resolutionDependentShift: resolutionDependentShift,
+            cfgZeroStar: cfgZeroStar,
             isBuiltIn: isBuiltIn
         )
         return config
@@ -369,6 +389,8 @@ class ConfigPresetsManager {
                 strength: dt.configuration.strength.map { Float($0) },
                 stochasticSamplingGamma: dt.configuration.stochasticSamplingGamma.map { Float($0) },
                 seedMode: dt.configuration.seedMode,
+                resolutionDependentShift: dt.configuration.resolutionDependentShift,
+                cfgZeroStar: dt.configuration.cfgZeroStar,
                 isBuiltIn: false,
                 createdAt: Date(),
                 modifiedAt: Date()
@@ -423,6 +445,8 @@ class ConfigPresetsManager {
                     strength: dt.configuration.strength.map { Float($0) },
                     stochasticSamplingGamma: dt.configuration.stochasticSamplingGamma.map { Float($0) },
                     seedMode: dt.configuration.seedMode,
+                    resolutionDependentShift: dt.configuration.resolutionDependentShift,
+                    cfgZeroStar: dt.configuration.cfgZeroStar,
                     isBuiltIn: false,
                     createdAt: Date(),
                     modifiedAt: Date()
@@ -467,6 +491,8 @@ class ConfigPresetsManager {
                 strength: configData.strength.map { Float($0) },
                 stochasticSamplingGamma: configData.stochasticSamplingGamma.map { Float($0) },
                 seedMode: configData.seedMode,
+                resolutionDependentShift: configData.resolutionDependentShift,
+                cfgZeroStar: configData.cfgZeroStar,
                 isBuiltIn: false,
                 createdAt: Date(),
                 modifiedAt: Date()

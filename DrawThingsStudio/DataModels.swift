@@ -29,6 +29,8 @@ class ModelConfig {
     var strength: Float?
     var stochasticSamplingGamma: Float?
     var seedMode: Int?
+    var resolutionDependentShift: Bool?
+    var cfgZeroStar: Bool?
     var isFavorite: Bool = false
 
     // Metadata
@@ -50,6 +52,8 @@ class ModelConfig {
         strength: Float? = nil,
         stochasticSamplingGamma: Float? = nil,
         seedMode: Int? = nil,
+        resolutionDependentShift: Bool? = nil,
+        cfgZeroStar: Bool? = nil,
         isFavorite: Bool = false,
         isBuiltIn: Bool = false
     ) {
@@ -67,6 +71,8 @@ class ModelConfig {
         self.strength = strength
         self.stochasticSamplingGamma = stochasticSamplingGamma
         self.seedMode = seedMode
+        self.resolutionDependentShift = resolutionDependentShift
+        self.cfgZeroStar = cfgZeroStar
         self.isFavorite = isFavorite
         self.isBuiltIn = isBuiltIn
         self.createdAt = Date()
