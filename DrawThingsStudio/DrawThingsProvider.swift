@@ -131,6 +131,14 @@ struct DrawThingsGenerationConfig: Codable {
 
     /// Convert to HTTP API request body dictionary
     func toRequestBody(prompt: String) -> [String: Any] {
+        // TCD sampler requires non-zero gamma; enforce minimum to prevent noise/static output
+        let effectiveGamma: Double
+        if sampler == "TCD" && stochasticSamplingGamma < 0.1 {
+            effectiveGamma = 0.3
+        } else {
+            effectiveGamma = stochasticSamplingGamma
+        }
+
         var body: [String: Any] = [
             "prompt": prompt,
             "negative_prompt": negativePrompt,
@@ -143,7 +151,7 @@ struct DrawThingsGenerationConfig: Codable {
             "sampler": sampler,
             "shift": shift,
             "strength": strength,
-            "stochastic_sampling_gamma": stochasticSamplingGamma,
+            "stochastic_sampling_gamma": effectiveGamma,
             "batch_size": batchSize,
             "batch_count": batchCount
         ]

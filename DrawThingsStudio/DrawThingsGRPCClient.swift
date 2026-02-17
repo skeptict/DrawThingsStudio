@@ -338,8 +338,18 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             useResolutionDependentShift = false
         }
 
-        NSLog("[gRPC] Model: %@, detected family: %@, t5=%d, resDependentShift=%d",
-              config.model, modelFamily.rawValue, useT5 ? 1 : 0, useResolutionDependentShift ? 1 : 0)
+        // TCD sampler requires non-zero stochasticSamplingGamma to function correctly.
+        // With gamma=0, TCD degenerates and produces noise/static on most models.
+        var effectiveGamma = Float(config.stochasticSamplingGamma)
+        if sampler == .tcd && effectiveGamma < 0.1 {
+            effectiveGamma = 0.3
+            NSLog("[gRPC] TCD sampler: gamma %.2f too low, using %.2f (TCD requires non-zero SSS)",
+                  Float(config.stochasticSamplingGamma), effectiveGamma)
+        }
+
+        NSLog("[gRPC] Model: %@, family: %@, sampler: %@, gamma: %.2f, t5=%d, resDependentShift=%d",
+              config.model, modelFamily.rawValue, config.sampler, effectiveGamma,
+              useT5 ? 1 : 0, useResolutionDependentShift ? 1 : 0)
 
         return DrawThingsConfiguration(
             width: Int32(config.width),
@@ -354,7 +364,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             batchCount: Int32(config.batchCount),
             batchSize: Int32(config.batchSize),
             strength: Float(config.strength),
-            stochasticSamplingGamma: Float(config.stochasticSamplingGamma),
+            stochasticSamplingGamma: effectiveGamma,
             resolutionDependentShift: useResolutionDependentShift,
             t5TextEncoder: useT5,
             seedMode: mapSeedMode(config.seedMode)
