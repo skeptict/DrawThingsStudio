@@ -9,63 +9,60 @@ import XCTest
 
 final class SettingsTests: XCTestCase {
 
-    let app = XCUIApplication()
+    var app: XCUIApplication { SharedApp.app }
 
-    /// Default values to restore after tests that modify settings
     private let defaultHost = "127.0.0.1"
     private let defaultHTTPPort = "7860"
     private let defaultGRPCPort = "7859"
 
+    override class func setUp() {
+        super.setUp()
+        SharedApp.launchOnce()
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
-        app.launch()
-
-        // Navigate to Settings view
         let settingsButton = app.buttons["sidebar_settings"]
-        XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 10))
         settingsButton.tap()
+        waitForUI(seconds: 1)
     }
 
     override func tearDownWithError() throws {
-        // Reset settings to defaults after tests that modify them
         resetSettingsToDefaults()
-        app.terminate()
     }
 
-    /// Reset Draw Things connection settings to default values
     private func resetSettingsToDefaults() {
-        // Only reset if we're in Settings view and fields exist
         let hostField = app.textFields["settings_drawThingsHost"]
         guard hostField.waitForExistence(timeout: 1) else { return }
 
-        // Reset host
         if let currentHost = hostField.value as? String, currentHost != defaultHost {
             hostField.tap()
-            hostField.doubleTap()
             app.typeKey("a", modifierFlags: .command)
             hostField.typeText(defaultHost)
+            app.typeKey(.tab, modifierFlags: [])
         }
 
-        // Reset HTTP port
+        // Use doubleClick for numeric text fields — tap() may not reliably give keyboard focus
         let httpField = app.textFields["settings_drawThingsHTTPPort"]
-        if httpField.exists, let currentPort = httpField.value as? String, currentPort != defaultHTTPPort {
-            httpField.tap()
-            httpField.doubleTap()
-            app.typeKey("a", modifierFlags: .command)
-            httpField.typeText(defaultHTTPPort)
+        if httpField.exists {
+            let currentPort = httpField.value as? String ?? ""
+            if currentPort != defaultHTTPPort && currentPort != "7,860" {
+                httpField.doubleClick()
+                httpField.typeText(defaultHTTPPort)
+                app.typeKey(.tab, modifierFlags: [])
+            }
         }
 
-        // Reset gRPC port
         let grpcField = app.textFields["settings_drawThingsGRPCPort"]
-        if grpcField.exists, let currentPort = grpcField.value as? String, currentPort != defaultGRPCPort {
-            grpcField.tap()
-            grpcField.doubleTap()
-            app.typeKey("a", modifierFlags: .command)
-            grpcField.typeText(defaultGRPCPort)
+        if grpcField.exists {
+            let currentPort = grpcField.value as? String ?? ""
+            if currentPort != defaultGRPCPort && currentPort != "7,859" {
+                grpcField.doubleClick()
+                grpcField.typeText(defaultGRPCPort)
+                app.typeKey(.tab, modifierFlags: [])
+            }
         }
-
-        // Tab out to commit changes
-        app.typeKey(.tab, modifierFlags: [])
     }
 
     // MARK: - Connection Settings Tests
@@ -94,12 +91,9 @@ final class SettingsTests: XCTestCase {
     @MainActor
     func testTransportPickerExists() throws {
         let transportPicker = app.popUpButtons["settings_transportPicker"]
-
-        // Picker might be a different element type depending on style
         let pickerExists = transportPicker.waitForExistence(timeout: 3) ||
                           app.buttons["settings_transportPicker"].exists ||
                           app.segmentedControls["settings_transportPicker"].exists
-
         XCTAssertTrue(pickerExists, "Transport picker should exist")
     }
 
@@ -110,6 +104,17 @@ final class SettingsTests: XCTestCase {
                       "Test Connection button should exist")
     }
 
+    // MARK: - Default View Picker Tests
+
+    @MainActor
+    func testDefaultViewPickerExists() throws {
+        let picker = app.popUpButtons["settings_defaultViewPicker"]
+        let pickerExists = picker.waitForExistence(timeout: 3) ||
+                          app.buttons["settings_defaultViewPicker"].exists ||
+                          app.segmentedControls["settings_defaultViewPicker"].exists
+        XCTAssertTrue(pickerExists, "Default View picker should exist in Interface section")
+    }
+
     // MARK: - Connection Settings Interaction Tests
 
     @MainActor
@@ -117,13 +122,10 @@ final class SettingsTests: XCTestCase {
         let hostField = app.textFields["settings_drawThingsHost"]
         XCTAssertTrue(hostField.waitForExistence(timeout: 3))
 
-        // Clear and enter new value
         hostField.tap()
-        hostField.doubleTap() // Select word
-        app.typeKey("a", modifierFlags: .command) // Select all
+        app.typeKey("a", modifierFlags: .command)
         hostField.typeText("192.168.1.100")
 
-        // Verify field is still interactive
         XCTAssertTrue(hostField.exists, "Host field should remain accessible")
     }
 
@@ -133,8 +135,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(httpPortField.waitForExistence(timeout: 3))
 
         httpPortField.tap()
-        httpPortField.doubleTap() // Select content
-        app.typeKey("a", modifierFlags: .command) // Select all
+        app.typeKey("a", modifierFlags: .command)
         httpPortField.typeText("8080")
 
         XCTAssertTrue(httpPortField.exists, "HTTP port field should remain accessible")
@@ -146,8 +147,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(grpcPortField.waitForExistence(timeout: 3))
 
         grpcPortField.tap()
-        grpcPortField.doubleTap() // Select content
-        app.typeKey("a", modifierFlags: .command) // Select all
+        app.typeKey("a", modifierFlags: .command)
         grpcPortField.typeText("50051")
 
         XCTAssertTrue(grpcPortField.exists, "gRPC port field should remain accessible")
@@ -161,11 +161,8 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(testButton.waitForExistence(timeout: 3))
 
         testButton.tap()
+        waitForUI(seconds: 2)
 
-        // Wait for connection test to complete (or timeout)
-        sleep(2)
-
-        // App should still be responsive
         XCTAssertTrue(testButton.exists,
                       "App should remain responsive after connection test")
     }
@@ -175,13 +172,11 @@ final class SettingsTests: XCTestCase {
         let testButton = app.buttons["settings_testConnectionButton"]
         XCTAssertTrue(testButton.waitForExistence(timeout: 3))
 
-        // Tap multiple times to test stability
         testButton.tap()
-        sleep(1)
+        waitForUI(seconds: 1)
         testButton.tap()
-        sleep(1)
+        waitForUI(seconds: 1)
 
-        // App should handle multiple taps gracefully
         XCTAssertTrue(testButton.exists,
                       "App should handle multiple connection test taps")
     }
@@ -190,27 +185,22 @@ final class SettingsTests: XCTestCase {
 
     @MainActor
     func testTransportPickerInteraction() throws {
-        // Try different picker element types
         let picker = app.popUpButtons["settings_transportPicker"]
         let button = app.buttons["settings_transportPicker"]
         let segment = app.segmentedControls["settings_transportPicker"]
 
         if picker.waitForExistence(timeout: 2) {
             picker.tap()
-            // Wait for dropdown
-            sleep(1)
-            // Press escape to close
+            waitForUI(seconds: 1)
             app.typeKey(.escape, modifierFlags: [])
         } else if button.exists {
             button.tap()
-            sleep(1)
+            waitForUI(seconds: 1)
             app.typeKey(.escape, modifierFlags: [])
         } else if segment.exists {
-            // Segmented control - just verify it exists
             XCTAssertTrue(segment.exists)
         }
 
-        // App should still be responsive
         let settingsButton = app.buttons["sidebar_settings"]
         XCTAssertTrue(settingsButton.exists,
                       "App should remain responsive after picker interaction")
@@ -223,41 +213,32 @@ final class SettingsTests: XCTestCase {
         let hostField = app.textFields["settings_drawThingsHost"]
         XCTAssertTrue(hostField.waitForExistence(timeout: 3))
 
-        // Store original value to restore later
         let originalValue = hostField.value as? String ?? defaultHost
 
-        // Enter a distinctive test value
         hostField.tap()
-        hostField.doubleTap()
-        app.typeKey("a", modifierFlags: .command) // Select all
-        let testValue = "192.168.1.100" // Use a plausible IP, not random string
+        app.typeKey("a", modifierFlags: .command)
+        let testValue = "192.168.1.100"
         hostField.typeText(testValue)
-        app.typeKey(.tab, modifierFlags: []) // Commit the change
+        app.typeKey(.tab, modifierFlags: [])
 
-        // Navigate away
         app.buttons["sidebar_workflow"].tap()
-        sleep(1)
+        waitForUI(seconds: 1)
 
-        // Navigate back
         app.buttons["sidebar_settings"].tap()
-        sleep(1)
+        waitForUI(seconds: 1)
 
-        // Check if value persisted
         let hostFieldAfter = app.textFields["settings_drawThingsHost"]
         XCTAssertTrue(hostFieldAfter.waitForExistence(timeout: 3),
                       "Host field should exist after navigation")
 
-        // Verify the value was retained (optional, main test is that field exists)
         if let currentValue = hostFieldAfter.value as? String {
             XCTAssertTrue(currentValue.contains("192.168") || currentValue == testValue,
                           "Value should be retained after navigation")
         }
 
-        // Restore original value (tearDown will also reset, but be explicit)
         hostFieldAfter.tap()
-        hostFieldAfter.doubleTap()
         app.typeKey("a", modifierFlags: .command)
         hostFieldAfter.typeText(originalValue.isEmpty ? defaultHost : originalValue)
-        app.typeKey(.tab, modifierFlags: [])
+        app.typeKey(.return, modifierFlags: [])
     }
 }

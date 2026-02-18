@@ -25,8 +25,20 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
     var apiKey: String?
     let providerType: LLMProviderType
 
-    private var baseURL: URL {
-        URL(string: "http://\(host):\(port)/v1")!
+    private var baseURL: URL? {
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = host
+        components.port = port
+        components.path = "/v1"
+        return components.url
+    }
+
+    private func validatedBaseURL() throws -> URL {
+        guard let baseURL else {
+            throw LLMError.invalidConfiguration("Invalid \(providerType.displayName) address (\(host):\(port))")
+        }
+        return baseURL
     }
 
     private let session: URLSession
@@ -85,6 +97,13 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
         }
 
         do {
+            guard let baseURL else {
+                await MainActor.run {
+                    connectionStatus = .error("Invalid host/port configuration")
+                }
+                return false
+            }
+
             let url = baseURL.appendingPathComponent("models")
             var request = URLRequest(url: url)
             addAuthHeader(to: &request)
@@ -116,7 +135,7 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
     // MARK: - List Models
 
     func listModels() async throws -> [LLMModel] {
-        let url = baseURL.appendingPathComponent("models")
+        let url = try validatedBaseURL().appendingPathComponent("models")
         var request = URLRequest(url: url)
         addAuthHeader(to: &request)
 
@@ -161,7 +180,7 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
         model: String,
         options: LLMGenerationOptions = .default
     ) async throws -> String {
-        let url = baseURL.appendingPathComponent("chat/completions")
+        let url = try validatedBaseURL().appendingPathComponent("chat/completions")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -220,7 +239,7 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
         options: LLMGenerationOptions = .default,
         onToken: @escaping (String) -> Void
     ) async throws -> String {
-        let url = baseURL.appendingPathComponent("chat/completions")
+        let url = try validatedBaseURL().appendingPathComponent("chat/completions")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -285,7 +304,7 @@ class OpenAICompatibleClient: LLMProvider, ObservableObject {
         model: String? = nil,
         options: LLMGenerationOptions = .default
     ) async throws -> String {
-        let url = baseURL.appendingPathComponent("chat/completions")
+        let url = try validatedBaseURL().appendingPathComponent("chat/completions")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

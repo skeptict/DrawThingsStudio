@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @State private var selectedItem: SidebarItem? = .imageInspector
+    @State private var selectedItem: SidebarItem? = SidebarItem(rawValue: AppSettings.shared.defaultSidebarItem) ?? .imageInspector
     @StateObject private var workflowViewModel = WorkflowBuilderViewModel()
     @StateObject private var imageGenViewModel = ImageGenerationViewModel()
     @StateObject private var imageInspectorViewModel = ImageInspectorViewModel()

@@ -9,6 +9,29 @@ import Foundation
 import Combine
 import OSLog
 
+protocol CloudCatalogFetching {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
+}
+
+extension URLSession: CloudCatalogFetching {}
+
+enum CloudCatalogError: LocalizedError {
+    case invalidResponse
+    case badStatusCode(Int)
+    case invalidContentType(String?)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidResponse:
+            return "Invalid cloud catalog response"
+        case .badStatusCode(let code):
+            return "Cloud catalog request failed with status \(code)"
+        case .invalidContentType(let value):
+            return "Unexpected cloud catalog content type: \(value ?? "unknown")"
+        }
+    }
+}
+
 /// Manages fetching and caching of the cloud model catalog from Draw Things GitHub
 @MainActor
 final class CloudModelCatalog: ObservableObject {
@@ -31,10 +54,12 @@ final class CloudModelCatalog: ObservableObject {
     private let cacheKey = "cloudModelCatalog"
     private let cacheDateKey = "cloudModelCatalogDate"
     private let cacheMaxAge: TimeInterval = 24 * 60 * 60  // 24 hours
+    private let fetcher: CloudCatalogFetching
 
     // MARK: - Initialization
 
-    init() {
+    init(fetcher: CloudCatalogFetching = URLSession.shared) {
+        self.fetcher = fetcher
         loadFromCache()
     }
 
@@ -69,6 +94,7 @@ final class CloudModelCatalog: ObservableObject {
             logger.info("Fetched \(self.models.count) cloud models")
         } catch {
             lastError = "Failed to fetch cloud catalog: \(error.localizedDescription)"
+            logger.info("Keeping existing cached cloud catalog after fetch failure")
             logger.error("Cloud catalog fetch failed: \(error.localizedDescription)")
         }
 
@@ -80,22 +106,73 @@ final class CloudModelCatalog: ObservableObject {
     private func fetchFromGitHub() async throws -> [String] {
         var allModels: Set<String> = []
 
-        // Fetch curated models
-        let (modelsData, _) = try await URLSession.shared.data(from: modelsURL)
-        if let modelsText = String(data: modelsData, encoding: .utf8) {
-            let names = parseModelList(modelsText)
-            allModels.formUnion(names)
-        }
-
-        // Fetch builtin models
-        let (builtinData, _) = try await URLSession.shared.data(from: builtinURL)
-        if let builtinText = String(data: builtinData, encoding: .utf8) {
-            let names = parseModelList(builtinText)
-            allModels.formUnion(names)
-        }
+        allModels.formUnion(try await fetchModelList(from: modelsURL))
+        allModels.formUnion(try await fetchModelList(from: builtinURL))
 
         // Sort alphabetically
         return allModels.sorted()
+    }
+
+    private func fetchModelList(from url: URL) async throws -> [String] {
+        let data = try await fetchWithRetry(url: url, maxAttempts: 3)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw CloudCatalogError.invalidResponse
+        }
+        return parseModelList(text)
+    }
+
+    private func fetchWithRetry(url: URL, maxAttempts: Int) async throws -> Data {
+        var attempt = 0
+        var lastError: Error?
+
+        while attempt < maxAttempts {
+            attempt += 1
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 15
+                let (data, response) = try await fetcher.data(for: request)
+                try validateResponse(response, sourceURL: url)
+                return data
+            } catch {
+                lastError = error
+                if !isRetryable(error) || attempt == maxAttempts {
+                    throw error
+                }
+                let delayNanos = UInt64(pow(2.0, Double(attempt - 1)) * 500_000_000)
+                try await Task.sleep(nanoseconds: delayNanos)
+            }
+        }
+
+        throw lastError ?? CloudCatalogError.invalidResponse
+    }
+
+    private func validateResponse(_ response: URLResponse, sourceURL: URL) throws {
+        guard let http = response as? HTTPURLResponse else {
+            throw CloudCatalogError.invalidResponse
+        }
+        guard (200...299).contains(http.statusCode) else {
+            throw CloudCatalogError.badStatusCode(http.statusCode)
+        }
+
+        let contentType = http.value(forHTTPHeaderField: "Content-Type")?.lowercased()
+        if let contentType,
+           !contentType.contains("text/plain"),
+           !contentType.contains("text/"),
+           !contentType.contains("application/octet-stream") {
+            logger.warning("Unexpected content type from \(sourceURL.absoluteString): \(contentType)")
+            throw CloudCatalogError.invalidContentType(contentType)
+        }
+    }
+
+    private func isRetryable(_ error: Error) -> Bool {
+        if case CloudCatalogError.badStatusCode(let code) = error {
+            return code == 429 || code == 500 || code == 502 || code == 503 || code == 504
+        }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return nsError.code == NSURLErrorTimedOut || nsError.code == NSURLErrorCannotConnectToHost || nsError.code == NSURLErrorNetworkConnectionLost
+        }
+        return false
     }
 
     private func parseModelList(_ text: String) -> [String] {

@@ -23,8 +23,19 @@ class DrawThingsHTTPClient: DrawThingsProvider {
     private let sharedSecret: String
     private let session: URLSession
 
-    private var baseURL: URL {
-        URL(string: "http://\(host):\(port)")!
+    private var baseURL: URL? {
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = host
+        components.port = port
+        return components.url
+    }
+
+    private func validatedBaseURL() throws -> URL {
+        guard let baseURL else {
+            throw DrawThingsError.invalidConfiguration("Invalid Draw Things HTTP address (\(host):\(port))")
+        }
+        return baseURL
     }
 
     // MARK: - Initialization
@@ -44,6 +55,11 @@ class DrawThingsHTTPClient: DrawThingsProvider {
 
     func checkConnection() async -> Bool {
         do {
+            guard let baseURL else {
+                logger.error("Invalid Draw Things HTTP address: \(self.host):\(self.port)")
+                return false
+            }
+
             let url = baseURL.appendingPathComponent("sdapi/v1/options")
             var request = URLRequest(url: url)
             request.timeoutInterval = 5
@@ -80,7 +96,7 @@ class DrawThingsHTTPClient: DrawThingsProvider {
         // Use img2img endpoint if source image provided, otherwise txt2img
         let isImg2Img = sourceImage != nil
         let endpoint = isImg2Img ? "sdapi/v1/img2img" : "sdapi/v1/txt2img"
-        let url = baseURL.appendingPathComponent(endpoint)
+        let url = try validatedBaseURL().appendingPathComponent(endpoint)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -93,7 +109,9 @@ class DrawThingsHTTPClient: DrawThingsProvider {
         if let sourceImage = sourceImage {
             if let base64 = imageToBase64(sourceImage) {
                 body["init_images"] = [base64]
-                logger.debug("Using img2img with source image")
+                // A1111-compatible API uses denoising_strength for img2img
+                body["denoising_strength"] = config.strength
+                logger.debug("Using img2img with source image, strength=\(config.strength)")
             }
         }
 
@@ -136,7 +154,7 @@ class DrawThingsHTTPClient: DrawThingsProvider {
     // MARK: - Fetch Models
 
     func fetchModels() async throws -> [DrawThingsModel] {
-        let url = baseURL.appendingPathComponent("sdapi/v1/sd-models")
+        let url = try validatedBaseURL().appendingPathComponent("sdapi/v1/sd-models")
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
         applyAuth(&request)
@@ -199,7 +217,7 @@ class DrawThingsHTTPClient: DrawThingsProvider {
     // MARK: - Fetch LoRAs
 
     func fetchLoRAs() async throws -> [DrawThingsLoRA] {
-        let url = baseURL.appendingPathComponent("sdapi/v1/loras")
+        let url = try validatedBaseURL().appendingPathComponent("sdapi/v1/loras")
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
         applyAuth(&request)

@@ -7,7 +7,6 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "Core", targets: ["Core"]),
         .library(name: "StoryFlow", targets: ["StoryFlow"]),
     ],
     dependencies: [
@@ -16,13 +15,14 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "Core",
-            path: "Sources/Core"
-        ),
-        .target(
             name: "StoryFlow",
             dependencies: [], // Currently independent
             path: "Sources/StoryFlow"
+        ),
+        .testTarget(
+            name: "StoryFlowTests",
+            dependencies: ["StoryFlow"],
+            path: "Tests/StoryFlowTests"
         )
     ]
 )

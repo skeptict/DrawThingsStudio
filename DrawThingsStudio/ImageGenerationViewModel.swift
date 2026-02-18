@@ -32,6 +32,10 @@ final class ImageGenerationViewModel: ObservableObject {
     @Published var connectionStatus: DrawThingsConnectionStatus = .disconnected
     @Published var errorMessage: String?
 
+    // MARK: - img2img Source
+    @Published var inputImage: NSImage?
+    @Published var inputImageName: String?
+
     // MARK: - Private
 
     private var client: (any DrawThingsProvider)?
@@ -103,12 +107,22 @@ final class ImageGenerationViewModel: ObservableObject {
 
                 let images = try await client.generateImage(
                     prompt: prompt,
+                    sourceImage: inputImage,
+                    mask: nil,
                     config: generationConfig,
                     onProgress: { [weak self] progress in
                         self?.progress = progress
                         self?.progressFraction = progress.fraction
                     }
                 )
+
+                guard !images.isEmpty else {
+                    let mode = inputImage != nil ? "img2img" : "txt2img"
+                    errorMessage = "No images returned from Draw Things (\(mode)). Check that the model supports this mode and that Draw Things is ready."
+                    progress = .failed("No images returned")
+                    isGenerating = false
+                    return
+                }
 
                 // Save generated images
                 for image in images {
@@ -172,6 +186,34 @@ final class ImageGenerationViewModel: ObservableObject {
 
     func openOutputFolder() {
         storageManager.openStorageDirectory()
+    }
+
+    // MARK: - img2img Source
+
+    func loadInputImage(from url: URL) {
+        guard let image = NSImage(contentsOf: url) else {
+            errorMessage = "Failed to load image from \(url.lastPathComponent)"
+            return
+        }
+        inputImage = image
+        inputImageName = url.lastPathComponent
+        // Default strength for img2img if currently at 1.0 (txt2img default)
+        if config.strength >= 1.0 {
+            config.strength = 0.7
+        }
+    }
+
+    func loadInputImage(from image: NSImage, name: String) {
+        inputImage = image
+        inputImageName = name
+        if config.strength >= 1.0 {
+            config.strength = 0.7
+        }
+    }
+
+    func clearInputImage() {
+        inputImage = nil
+        inputImageName = nil
     }
 
     // MARK: - Preset Loading

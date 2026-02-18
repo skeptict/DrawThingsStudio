@@ -193,8 +193,14 @@ class WorkflowExecutionViewModel: ObservableObject {
             self?.generationProgress = progress
         }
 
+        guard let executor else {
+            self.errorMessage = "Failed to initialize workflow executor"
+            self.status = .completed(success: false)
+            return
+        }
+
         // Execute
-        let (result, images) = await executor!.execute(instructions: instructions)
+        let (result, images) = await executor.execute(instructions: instructions)
 
         // Update final stats
         self.executionTimeMs = result.executionTimeMs

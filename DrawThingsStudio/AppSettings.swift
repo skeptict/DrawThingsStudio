@@ -13,146 +13,180 @@ import Combine
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
-    private let defaults = UserDefaults.standard
+    private let store: SettingsStore
+    private let keychain: KeychainService
+
+    private enum SecretAccount {
+        static let janAPIKey = "jan.apiKey"
+        static let drawThingsSharedSecret = "drawthings.sharedSecret"
+    }
 
     // MARK: - LLM Provider Settings
 
     @Published var selectedProvider: String {
-        didSet { defaults.set(selectedProvider, forKey: "llm.provider") }
+        didSet { store.set(selectedProvider, forKey: "llm.provider") }
     }
 
     // Ollama Settings
     @Published var ollamaHost: String {
-        didSet { defaults.set(ollamaHost, forKey: "ollama.host") }
+        didSet { store.set(ollamaHost, forKey: "ollama.host") }
     }
     @Published var ollamaPort: Int {
-        didSet { defaults.set(ollamaPort, forKey: "ollama.port") }
+        didSet { store.set(ollamaPort, forKey: "ollama.port") }
     }
     @Published var ollamaDefaultModel: String {
-        didSet { defaults.set(ollamaDefaultModel, forKey: "ollama.defaultModel") }
+        didSet { store.set(ollamaDefaultModel, forKey: "ollama.defaultModel") }
     }
     @Published var ollamaAutoConnect: Bool {
-        didSet { defaults.set(ollamaAutoConnect, forKey: "ollama.autoConnect") }
+        didSet { store.set(ollamaAutoConnect, forKey: "ollama.autoConnect") }
     }
 
     // LM Studio Settings
     @Published var lmStudioHost: String {
-        didSet { defaults.set(lmStudioHost, forKey: "lmstudio.host") }
+        didSet { store.set(lmStudioHost, forKey: "lmstudio.host") }
     }
     @Published var lmStudioPort: Int {
-        didSet { defaults.set(lmStudioPort, forKey: "lmstudio.port") }
+        didSet { store.set(lmStudioPort, forKey: "lmstudio.port") }
     }
 
     // Jan Settings
     @Published var janHost: String {
-        didSet { defaults.set(janHost, forKey: "jan.host") }
+        didSet { store.set(janHost, forKey: "jan.host") }
     }
     @Published var janPort: Int {
-        didSet { defaults.set(janPort, forKey: "jan.port") }
+        didSet { store.set(janPort, forKey: "jan.port") }
     }
     @Published var janAPIKey: String {
-        didSet { defaults.set(janAPIKey, forKey: "jan.apiKey") }
+        didSet {
+            if janAPIKey.isEmpty {
+                _ = keychain.removeValue(for: SecretAccount.janAPIKey)
+            } else {
+                _ = keychain.set(janAPIKey, for: SecretAccount.janAPIKey)
+            }
+        }
     }
 
     // MARK: - Default Generation Settings
 
     @Published var defaultWidth: Int {
-        didSet { defaults.set(defaultWidth, forKey: "defaults.width") }
+        didSet { store.set(defaultWidth, forKey: "defaults.width") }
     }
     @Published var defaultHeight: Int {
-        didSet { defaults.set(defaultHeight, forKey: "defaults.height") }
+        didSet { store.set(defaultHeight, forKey: "defaults.height") }
     }
     @Published var defaultSteps: Int {
-        didSet { defaults.set(defaultSteps, forKey: "defaults.steps") }
+        didSet { store.set(defaultSteps, forKey: "defaults.steps") }
     }
     @Published var defaultGuidanceScale: Double {
-        didSet { defaults.set(defaultGuidanceScale, forKey: "defaults.guidanceScale") }
+        didSet { store.set(defaultGuidanceScale, forKey: "defaults.guidanceScale") }
     }
     @Published var defaultShift: Double {
-        didSet { defaults.set(defaultShift, forKey: "defaults.shift") }
+        didSet { store.set(defaultShift, forKey: "defaults.shift") }
     }
     @Published var defaultSampler: String {
-        didSet { defaults.set(defaultSampler, forKey: "defaults.sampler") }
+        didSet { store.set(defaultSampler, forKey: "defaults.sampler") }
     }
     @Published var defaultStyle: String {
-        didSet { defaults.set(defaultStyle, forKey: "defaults.style") }
+        didSet { store.set(defaultStyle, forKey: "defaults.style") }
     }
 
     // MARK: - Draw Things Settings
 
     @Published var drawThingsHost: String {
-        didSet { defaults.set(drawThingsHost, forKey: "drawthings.host") }
+        didSet { store.set(drawThingsHost, forKey: "drawthings.host") }
     }
     @Published var drawThingsHTTPPort: Int {
-        didSet { defaults.set(drawThingsHTTPPort, forKey: "drawthings.httpPort") }
+        didSet { store.set(drawThingsHTTPPort, forKey: "drawthings.httpPort") }
     }
     @Published var drawThingsGRPCPort: Int {
-        didSet { defaults.set(drawThingsGRPCPort, forKey: "drawthings.grpcPort") }
+        didSet { store.set(drawThingsGRPCPort, forKey: "drawthings.grpcPort") }
     }
     @Published var drawThingsTransport: String {
-        didSet { defaults.set(drawThingsTransport, forKey: "drawthings.transport") }
+        didSet { store.set(drawThingsTransport, forKey: "drawthings.transport") }
     }
     @Published var drawThingsSharedSecret: String {
-        didSet { defaults.set(drawThingsSharedSecret, forKey: "drawthings.sharedSecret") }
+        didSet {
+            if drawThingsSharedSecret.isEmpty {
+                _ = keychain.removeValue(for: SecretAccount.drawThingsSharedSecret)
+            } else {
+                _ = keychain.set(drawThingsSharedSecret, for: SecretAccount.drawThingsSharedSecret)
+            }
+        }
     }
 
     // MARK: - UI Settings
 
     @Published var showValidationWarnings: Bool {
-        didSet { defaults.set(showValidationWarnings, forKey: "ui.showValidationWarnings") }
+        didSet { store.set(showValidationWarnings, forKey: "ui.showValidationWarnings") }
     }
     @Published var autoPreviewJSON: Bool {
-        didSet { defaults.set(autoPreviewJSON, forKey: "ui.autoPreviewJSON") }
+        didSet { store.set(autoPreviewJSON, forKey: "ui.autoPreviewJSON") }
     }
     @Published var compactJSON: Bool {
-        didSet { defaults.set(compactJSON, forKey: "ui.compactJSON") }
+        didSet { store.set(compactJSON, forKey: "ui.compactJSON") }
     }
     @Published var persistInspectorHistory: Bool {
-        didSet { defaults.set(persistInspectorHistory, forKey: "ui.persistInspectorHistory") }
+        didSet { store.set(persistInspectorHistory, forKey: "ui.persistInspectorHistory") }
+    }
+    @Published var defaultSidebarItem: String {
+        didSet { store.set(defaultSidebarItem, forKey: "ui.defaultSidebarItem") }
     }
 
     // MARK: - Init
 
-    init() {
+    init(
+        store: SettingsStore = UserDefaultsSettingsStore(),
+        keychain: KeychainService = MacKeychainService()
+    ) {
+        self.store = store
+        self.keychain = keychain
+
+        if ProcessInfo.processInfo.environment["UI_TESTING"] != "1" {
+            AppSettings.migrateLegacySecretsIfNeeded(store: store, keychain: keychain)
+        }
+
         // Load from defaults or use default values
 
         // Provider selection
-        self.selectedProvider = defaults.string(forKey: "llm.provider") ?? LLMProviderType.ollama.rawValue
+        self.selectedProvider = store.string(forKey: "llm.provider") ?? LLMProviderType.ollama.rawValue
 
         // Ollama
-        self.ollamaHost = defaults.string(forKey: "ollama.host") ?? "localhost"
-        self.ollamaPort = defaults.integer(forKey: "ollama.port") != 0 ? defaults.integer(forKey: "ollama.port") : 11434
-        self.ollamaDefaultModel = defaults.string(forKey: "ollama.defaultModel") ?? "llama3.2"
-        self.ollamaAutoConnect = defaults.object(forKey: "ollama.autoConnect") as? Bool ?? true
+        self.ollamaHost = store.string(forKey: "ollama.host") ?? "localhost"
+        self.ollamaPort = store.integer(forKey: "ollama.port") != 0 ? store.integer(forKey: "ollama.port") : 11434
+        self.ollamaDefaultModel = store.string(forKey: "ollama.defaultModel") ?? "llama3.2"
+        self.ollamaAutoConnect = store.object(forKey: "ollama.autoConnect") as? Bool ?? true
 
         // LM Studio
-        self.lmStudioHost = defaults.string(forKey: "lmstudio.host") ?? "localhost"
-        self.lmStudioPort = defaults.integer(forKey: "lmstudio.port") != 0 ? defaults.integer(forKey: "lmstudio.port") : 1234
+        self.lmStudioHost = store.string(forKey: "lmstudio.host") ?? "localhost"
+        self.lmStudioPort = store.integer(forKey: "lmstudio.port") != 0 ? store.integer(forKey: "lmstudio.port") : 1234
 
         // Jan
-        self.janHost = defaults.string(forKey: "jan.host") ?? "localhost"
-        self.janPort = defaults.integer(forKey: "jan.port") != 0 ? defaults.integer(forKey: "jan.port") : 1337
-        self.janAPIKey = defaults.string(forKey: "jan.apiKey") ?? ""
+        self.janHost = store.string(forKey: "jan.host") ?? "localhost"
+        self.janPort = store.integer(forKey: "jan.port") != 0 ? store.integer(forKey: "jan.port") : 1337
+        // Skip keychain reads during UI tests to prevent authorization dialogs from blocking test startup
+        let isUITesting = ProcessInfo.processInfo.environment["UI_TESTING"] == "1"
+        self.janAPIKey = isUITesting ? "" : (keychain.string(for: SecretAccount.janAPIKey) ?? "")
 
         // Draw Things
-        self.drawThingsHost = defaults.string(forKey: "drawthings.host") ?? "127.0.0.1"
-        self.drawThingsHTTPPort = defaults.integer(forKey: "drawthings.httpPort") != 0 ? defaults.integer(forKey: "drawthings.httpPort") : 7860
-        self.drawThingsGRPCPort = defaults.integer(forKey: "drawthings.grpcPort") != 0 ? defaults.integer(forKey: "drawthings.grpcPort") : 7859
-        self.drawThingsTransport = defaults.string(forKey: "drawthings.transport") ?? DrawThingsTransport.http.rawValue
-        self.drawThingsSharedSecret = defaults.string(forKey: "drawthings.sharedSecret") ?? ""
+        self.drawThingsHost = store.string(forKey: "drawthings.host") ?? "127.0.0.1"
+        self.drawThingsHTTPPort = store.integer(forKey: "drawthings.httpPort") != 0 ? store.integer(forKey: "drawthings.httpPort") : 7860
+        self.drawThingsGRPCPort = store.integer(forKey: "drawthings.grpcPort") != 0 ? store.integer(forKey: "drawthings.grpcPort") : 7859
+        self.drawThingsTransport = store.string(forKey: "drawthings.transport") ?? DrawThingsTransport.http.rawValue
+        self.drawThingsSharedSecret = isUITesting ? "" : (keychain.string(for: SecretAccount.drawThingsSharedSecret) ?? "")
 
-        self.defaultWidth = defaults.integer(forKey: "defaults.width") != 0 ? defaults.integer(forKey: "defaults.width") : 1024
-        self.defaultHeight = defaults.integer(forKey: "defaults.height") != 0 ? defaults.integer(forKey: "defaults.height") : 1024
-        self.defaultSteps = defaults.integer(forKey: "defaults.steps") != 0 ? defaults.integer(forKey: "defaults.steps") : 30
-        self.defaultGuidanceScale = defaults.double(forKey: "defaults.guidanceScale") != 0 ? defaults.double(forKey: "defaults.guidanceScale") : 7.5
-        self.defaultShift = defaults.double(forKey: "defaults.shift") // 0 means not set
-        self.defaultSampler = defaults.string(forKey: "defaults.sampler") ?? ""
-        self.defaultStyle = defaults.string(forKey: "defaults.style") ?? "creative"
+        self.defaultWidth = store.integer(forKey: "defaults.width") != 0 ? store.integer(forKey: "defaults.width") : 1024
+        self.defaultHeight = store.integer(forKey: "defaults.height") != 0 ? store.integer(forKey: "defaults.height") : 1024
+        self.defaultSteps = store.integer(forKey: "defaults.steps") != 0 ? store.integer(forKey: "defaults.steps") : 30
+        self.defaultGuidanceScale = store.double(forKey: "defaults.guidanceScale") != 0 ? store.double(forKey: "defaults.guidanceScale") : 7.5
+        self.defaultShift = store.double(forKey: "defaults.shift") // 0 means not set
+        self.defaultSampler = store.string(forKey: "defaults.sampler") ?? ""
+        self.defaultStyle = store.string(forKey: "defaults.style") ?? "creative"
 
-        self.showValidationWarnings = defaults.object(forKey: "ui.showValidationWarnings") as? Bool ?? true
-        self.autoPreviewJSON = defaults.bool(forKey: "ui.autoPreviewJSON")
-        self.compactJSON = defaults.bool(forKey: "ui.compactJSON")
-        self.persistInspectorHistory = defaults.object(forKey: "ui.persistInspectorHistory") as? Bool ?? true
+        self.showValidationWarnings = store.object(forKey: "ui.showValidationWarnings") as? Bool ?? true
+        self.autoPreviewJSON = store.bool(forKey: "ui.autoPreviewJSON")
+        self.compactJSON = store.bool(forKey: "ui.compactJSON")
+        self.persistInspectorHistory = store.object(forKey: "ui.persistInspectorHistory") as? Bool ?? true
+        self.defaultSidebarItem = store.string(forKey: "ui.defaultSidebarItem") ?? "imageInspector"
     }
 
     // MARK: - Computed Properties
@@ -224,6 +258,18 @@ final class AppSettings: ObservableObject {
 
     // MARK: - Methods
 
+    private static func migrateLegacySecretsIfNeeded(store: SettingsStore, keychain: KeychainService) {
+        if let legacyJanKey = store.string(forKey: SecretAccount.janAPIKey), !legacyJanKey.isEmpty {
+            _ = keychain.set(legacyJanKey, for: SecretAccount.janAPIKey)
+            store.removeObject(forKey: SecretAccount.janAPIKey)
+        }
+
+        if let legacySharedSecret = store.string(forKey: SecretAccount.drawThingsSharedSecret), !legacySharedSecret.isEmpty {
+            _ = keychain.set(legacySharedSecret, for: SecretAccount.drawThingsSharedSecret)
+            store.removeObject(forKey: SecretAccount.drawThingsSharedSecret)
+        }
+    }
+
     func resetToDefaults() {
         selectedProvider = LLMProviderType.ollama.rawValue
 
@@ -257,6 +303,7 @@ final class AppSettings: ObservableObject {
         autoPreviewJSON = false
         compactJSON = false
         persistInspectorHistory = true
+        defaultSidebarItem = "imageInspector"
     }
 }
 
@@ -420,6 +467,14 @@ struct SettingsView: View {
 
                 // Interface
                 neuSettingsSection("Interface", icon: "paintpalette") {
+                    Picker("Default View", selection: $settings.defaultSidebarItem) {
+                        Text("Image Inspector").tag("imageInspector")
+                        Text("Generate Image").tag("generateImage")
+                        Text("Workflow Builder").tag("workflow")
+                        Text("Story Studio").tag("storyStudio")
+                        Text("DT Projects").tag("projectBrowser")
+                    }
+                    .accessibilityIdentifier("settings_defaultViewPicker")
                     Toggle("Show validation warnings", isOn: $settings.showValidationWarnings)
                         .tint(Color.neuAccent)
                     Toggle("Compact JSON format", isOn: $settings.compactJSON)

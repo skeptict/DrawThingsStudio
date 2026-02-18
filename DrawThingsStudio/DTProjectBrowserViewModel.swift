@@ -49,6 +49,7 @@ final class DTProjectBrowserViewModel: ObservableObject {
     private var accessedURLs: [URL] = []   // URLs with active security scope
     private var loadedOffset = 0
     private let pageSize = 200
+    private var loadEntriesTask: Task<Void, Never>?
 
     var filteredEntries: [DTGenerationEntry] {
         guard !searchText.isEmpty else { return entries }
@@ -65,6 +66,7 @@ final class DTProjectBrowserViewModel: ObservableObject {
     }
 
     deinit {
+        loadEntriesTask?.cancel()
         // Balance startAccessingSecurityScopedResource() calls
         for url in accessedURLs {
             url.stopAccessingSecurityScopedResource()
@@ -288,26 +290,32 @@ final class DTProjectBrowserViewModel: ObservableObject {
 
     func loadEntries() {
         guard let project = selectedProject else { return }
+        loadEntriesTask?.cancel()
         isLoading = true
+        errorMessage = nil
         let url = project.url
         let offset = loadedOffset
         let limit = pageSize
 
-        Task {
-            let result: (entries: [DTGenerationEntry], totalCount: Int, error: String?) = await withCheckedContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    guard let db = DTProjectDatabase(fileURL: url) else {
-                        continuation.resume(returning: ([], 0, "Could not open database. The drive may have been ejected or the file may be corrupted."))
-                        return
-                    }
-                    let totalCount = db.entryCount()
-                    var entries = db.fetchEntries(offset: offset, limit: limit)
-                    for i in entries.indices {
-                        entries[i].thumbnail = db.fetchThumbnail(previewId: entries[i].previewId)
-                    }
-                    continuation.resume(returning: (entries, totalCount, nil))
+        loadEntriesTask = Task { [weak self] in
+            guard let self else { return }
+
+            let result = await Task.detached(priority: .userInitiated) { () -> (entries: [DTGenerationEntry], totalCount: Int, error: String?) in
+                guard let db = DTProjectDatabase(fileURL: url) else {
+                    return (entries: [DTGenerationEntry](), totalCount: 0, error: "Could not open database. The drive may have been ejected or the file may be corrupted.")
                 }
-            }
+                let totalCount = db.entryCount()
+                var entries = db.fetchEntries(offset: offset, limit: limit)
+                for i in entries.indices {
+                    if Task.isCancelled {
+                        return (entries: [DTGenerationEntry](), totalCount: totalCount, error: nil)
+                    }
+                    entries[i].thumbnail = db.fetchThumbnail(previewId: entries[i].previewId)
+                }
+                return (entries: entries, totalCount: totalCount, error: nil)
+            }.value
+
+            if Task.isCancelled { return }
 
             if let error = result.error {
                 self.errorMessage = error

@@ -312,6 +312,7 @@ struct DrawThingsLoRA: Identifiable, Hashable {
 // MARK: - Errors
 
 enum DrawThingsError: LocalizedError {
+    case invalidConfiguration(String)
     case connectionFailed(String)
     case requestFailed(Int, String)
     case invalidResponse
@@ -321,6 +322,7 @@ enum DrawThingsError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .invalidConfiguration(let msg): return "Invalid configuration: \(msg)"
         case .connectionFailed(let msg): return "Connection failed: \(msg)"
         case .requestFailed(let code, let msg): return "Request failed (\(code)): \(msg)"
         case .invalidResponse: return "Invalid response from Draw Things"

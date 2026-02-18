@@ -23,8 +23,19 @@ class OllamaClient: LLMProvider, ObservableObject {
     var port: Int
     var defaultModel: String
 
-    private var baseURL: URL {
-        URL(string: "http://\(host):\(port)")!
+    private var baseURL: URL? {
+        var components = URLComponents()
+        components.scheme = "http"
+        components.host = host
+        components.port = port
+        return components.url
+    }
+
+    private func validatedBaseURL() throws -> URL {
+        guard let baseURL else {
+            throw LLMError.invalidConfiguration("Invalid Ollama address (\(host):\(port))")
+        }
+        return baseURL
     }
 
     private let session: URLSession
@@ -54,6 +65,13 @@ class OllamaClient: LLMProvider, ObservableObject {
         }
 
         do {
+            guard let baseURL else {
+                await MainActor.run {
+                    connectionStatus = .error("Invalid host/port configuration")
+                }
+                return false
+            }
+
             let url = baseURL.appendingPathComponent("api/tags")
             let (_, response) = try await session.data(from: url)
 
@@ -82,7 +100,7 @@ class OllamaClient: LLMProvider, ObservableObject {
     // MARK: - List Models
 
     func listModels() async throws -> [LLMModel] {
-        let url = baseURL.appendingPathComponent("api/tags")
+        let url = try validatedBaseURL().appendingPathComponent("api/tags")
 
         let (data, response) = try await session.data(from: url)
 
@@ -148,7 +166,7 @@ class OllamaClient: LLMProvider, ObservableObject {
         options: LLMGenerationOptions = .default,
         onToken: @escaping (String) -> Void
     ) async throws -> String {
-        let url = baseURL.appendingPathComponent("api/generate")
+        let url = try validatedBaseURL().appendingPathComponent("api/generate")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -205,7 +223,7 @@ class OllamaClient: LLMProvider, ObservableObject {
         model: String? = nil,
         options: LLMGenerationOptions = .default
     ) async throws -> String {
-        let url = baseURL.appendingPathComponent("api/chat")
+        let url = try validatedBaseURL().appendingPathComponent("api/chat")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

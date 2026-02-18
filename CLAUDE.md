@@ -73,8 +73,10 @@ Open in Xcode for development: `open DrawThingsStudio.xcodeproj`
 - Discord image URL support (downloads and inspects)
 
 ### UI Testing
-- 64 XCUITest cases covering all views
-- Settings reset in teardown to prevent test pollution
+- 63 XCUITest cases covering all views (7 test classes, single shared app launch per run)
+- `SharedApp` singleton in `UITestsAppHelper.swift` — app launched once, never terminated mid-suite
+- `UI_TESTING=1` launch environment bypasses keychain reads in `AppSettings` (prevents auth dialogs)
+- Settings reset in `tearDownWithError()` to prevent test pollution
 - Accessibility identifiers on all interactive elements
 
 ### DT Project Database Browser
@@ -491,3 +493,16 @@ Instructions → StoryflowExecutor
 - **DT-gRPC-Swift-Client remote dependency:** Switched from local SPM path to remote GitHub dependency; forked to `skeptict/DT-gRPC-Swift-Client` v1.2.3 with model family fix
 - **Workflow Builder tooltips:** Added `.help()` descriptive tooltips to all toolbar icon buttons (Open, AI Generate, Add, Templates, Save to Library, Preview, Execute, Copy, Save, Export)
 - **README updates:** Comprehensive refresh with all features, external drive support, DT-gRPC-Swift-Client and dtm acknowledgments
+
+### Session 13 (Feb 17, 2026)
+- **img2img Support in Generate Image:** Source image drop zone + file picker + thumbnail preview with clear button; HTTP `denoising_strength` fix; gRPC passes `sourceImage` through generation pipeline
+- **Expanded Metadata Panel:** Generate Image detail view now shows all saved config fields (model, sampler, seed, dimensions, steps, guidance, shift, strength, gamma, resolution flags, LoRAs, negative prompt, timestamp) in 3-column LazyVGrid
+- **Configurable Default Opening View:** Settings > Interface "Default View" picker; `AppSettings.defaultSidebarItem` (UserDefaults); `ContentView` reads it on init
+- **Generate button moved above config section** in Generate Image view for better workflow
+- **XCUITest architecture overhaul:**
+  - Replaced per-test `app.launch()` pattern with `SharedApp` singleton (`UITestsAppHelper.swift`) — app launched exactly once per test run, eliminating PID exhaustion from 64 rapid launches
+  - Gutted `DrawThingsStudioUITests.swift` and `DrawThingsStudioUITestsLaunchTests.swift` (removed `testLaunchPerformance` / `testLaunch` that caused 5+2 extra launches)
+  - All 7 test classes converted to `SharedApp.launchOnce()` + `setUpWithError()` navigation pattern
+  - **Keychain bypass:** `app.launchEnvironment["UI_TESTING"] = "1"` + `AppSettings.init()` skips keychain reads and migration when testing — prevents macOS authorization dialogs from blocking test startup
+  - Added `testDefaultViewPickerExists` and img2img tests (`testSourceImageDropZoneExists`, `testClearSourceImageButtonNotVisibleByDefault`)
+  - Full suite now runs 63 tests; 10 known intermittent failures remain (navigation timeouts, state pollution between tests)

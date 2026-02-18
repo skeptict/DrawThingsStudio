@@ -377,6 +377,7 @@ class PromptStyleManager: ObservableObject {
 
 /// Errors that can occur during LLM operations
 enum LLMError: LocalizedError {
+    case invalidConfiguration(String)
     case connectionFailed(String)
     case requestFailed(String)
     case invalidResponse
@@ -386,6 +387,8 @@ enum LLMError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .invalidConfiguration(let details):
+            return "Invalid configuration: \(details)"
         case .connectionFailed(let details):
             return "Connection failed: \(details)"
         case .requestFailed(let details):

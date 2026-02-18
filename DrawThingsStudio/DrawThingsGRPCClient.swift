@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import OSLog
 import DrawThingsClient
 
 /// gRPC-based client for Draw Things image generation
@@ -14,6 +15,8 @@ import DrawThingsClient
 final class DrawThingsGRPCClient: DrawThingsProvider {
 
     let transport: DrawThingsTransport = .grpc
+
+    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "drawthings-grpc")
 
     private let host: String
     private let port: Int
@@ -34,7 +37,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             await client?.connect()
             return client?.isConnected ?? false
         } catch {
-            NSLog("[gRPC] Connection error: \(error)")
+            logger.error("Connection error: \(error.localizedDescription)")
             return false
         }
     }
@@ -67,7 +70,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         onProgress?(.starting)
 
         let isImg2Img = sourceImage != nil
-        NSLog("[gRPC] Starting \(isImg2Img ? "img2img" : "txt2img") generation")
+        logger.info("Starting \(isImg2Img ? "img2img" : "txt2img") generation")
 
         do {
             // Generate the image - pass source image and mask if provided
@@ -82,9 +85,9 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             onProgress?(.complete)
 
             for (idx, img) in images.enumerated() {
-                NSLog("[gRPC] Image %d: %dx%d pixels", idx, img.pixelWidth, img.pixelHeight)
+                logger.debug("Image \(idx): \(img.pixelWidth)x\(img.pixelHeight) pixels")
             }
-            NSLog("[gRPC] Generated \(images.count) image(s) via \(isImg2Img ? "img2img" : "txt2img")")
+            logger.info("Generated \(images.count) image(s) via \(isImg2Img ? "img2img" : "txt2img")")
 
             // PlatformImage is NSImage on macOS, so we can return directly
             return images
@@ -110,7 +113,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         }
 
         if !filesModels.isEmpty {
-            NSLog("[gRPC] Found %d models from files array", filesModels.count)
+            logger.info("Found \(filesModels.count) models from files array")
             return filesModels.map { DrawThingsModel(filename: $0) }
         }
 
@@ -118,13 +121,12 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         if echoReply.hasOverride && !echoReply.override.models.isEmpty {
             let modelNames = extractStrings(from: echoReply.override.models, withExtensions: modelExtensions)
             if !modelNames.isEmpty {
-                NSLog("[gRPC] Found %d models from override binary (%d bytes)", modelNames.count, echoReply.override.models.count)
+                logger.info("Found \(modelNames.count) models from override data")
                 return modelNames.map { DrawThingsModel(filename: $0) }
             }
         }
 
-        NSLog("[gRPC] No models found - files: %d, override.models: %d bytes",
-              echoReply.files.count, echoReply.override.models.count)
+        logger.info("No models found in gRPC echo response")
         return []
     }
 
@@ -141,7 +143,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         }
 
         if !filesLoRAs.isEmpty {
-            NSLog("[gRPC] Found %d LoRAs from files array", filesLoRAs.count)
+            logger.info("Found \(filesLoRAs.count) LoRAs from files array")
             return filesLoRAs.map { DrawThingsLoRA(filename: $0) }
         }
 
@@ -149,13 +151,12 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         if echoReply.hasOverride && !echoReply.override.loras.isEmpty {
             let loraNames = extractStrings(from: echoReply.override.loras, withExtensions: loraExtensions)
             if !loraNames.isEmpty {
-                NSLog("[gRPC] Found %d LoRAs from override binary (%d bytes)", loraNames.count, echoReply.override.loras.count)
+                logger.info("Found \(loraNames.count) LoRAs from override data")
                 return loraNames.map { DrawThingsLoRA(filename: $0) }
             }
         }
 
-        NSLog("[gRPC] No LoRAs found - files: %d, override.loras: %d bytes",
-              echoReply.files.count, echoReply.override.loras.count)
+        logger.info("No LoRAs found in gRPC echo response")
         return []
     }
 
@@ -178,58 +179,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
 
         let reply = try await service.echo()
         cachedEchoReply = reply
-
-        // Write debug info to file since NSLog may not appear in unified log
-        var debug = "[gRPC] Echo debug at \(Date())\n"
-        debug += "Message: \(reply.message)\n"
-        debug += "Files count: \(reply.files.count)\n"
-        if !reply.files.isEmpty {
-            debug += "Files:\n"
-            for file in reply.files.prefix(50) {
-                debug += "  - \(file)\n"
-            }
-            if reply.files.count > 50 {
-                debug += "  ... and \(reply.files.count - 50) more\n"
-            }
-        }
-        debug += "hasOverride: \(reply.hasOverride)\n"
-        if reply.hasOverride {
-            let ov = reply.override
-            debug += "Override bytes - models: \(ov.models.count), loras: \(ov.loras.count), controlNets: \(ov.controlNets.count), TIs: \(ov.textualInversions.count), upscalers: \(ov.upscalers.count)\n"
-
-            // Try to extract strings and show what we found
-            let modelExts = [".ckpt", ".safetensors"]
-            if !ov.models.isEmpty {
-                let extracted = extractStrings(from: ov.models, withExtensions: modelExts)
-                debug += "Extracted \(extracted.count) model names from binary:\n"
-                for name in extracted.prefix(20) {
-                    debug += "  - \(name)\n"
-                }
-                if extracted.count > 20 {
-                    debug += "  ... and \(extracted.count - 20) more\n"
-                }
-                // Also show hex preview
-                let preview = ov.models.prefix(100).map { String(format: "%02x", $0) }.joined(separator: " ")
-                debug += "Models hex preview (first 100 bytes): \(preview)\n"
-            }
-
-            if !ov.loras.isEmpty {
-                let extracted = extractStrings(from: ov.loras, withExtensions: modelExts)
-                debug += "Extracted \(extracted.count) LoRA names from binary:\n"
-                for name in extracted.prefix(20) {
-                    debug += "  - \(name)\n"
-                }
-                if extracted.count > 20 {
-                    debug += "  ... and \(extracted.count - 20) more\n"
-                }
-                // Also show hex preview
-                let preview = ov.loras.prefix(100).map { String(format: "%02x", $0) }.joined(separator: " ")
-                debug += "LoRAs hex preview (first 100 bytes): \(preview)\n"
-            }
-        }
-        let debugURL = URL(fileURLWithPath: "/tmp/dts_grpc_debug.log")
-        try? debug.write(to: debugURL, atomically: true, encoding: .utf8)
-        NSLog("[gRPC] Debug written to /tmp/dts_grpc_debug.log")
+        logger.debug("Echo response received: files=\(reply.files.count), hasOverride=\(reply.hasOverride)")
 
         return reply
     }
@@ -358,9 +308,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             useCfgZeroStar = modelLower.contains("turbo")
         }
 
-        NSLog("[gRPC] Model: %@, family: %@, sampler: %@, gamma: %.2f, t5=%d, resDependentShift=%d, cfgZeroStar=%d",
-              config.model, modelFamily.rawValue, config.sampler, Float(config.stochasticSamplingGamma),
-              useT5 ? 1 : 0, useResolutionDependentShift ? 1 : 0, useCfgZeroStar ? 1 : 0)
+        logger.debug("Model config: model=\(config.model), family=\(modelFamily.rawValue), sampler=\(config.sampler), gamma=\(config.stochasticSamplingGamma), t5=\(useT5), resDependentShift=\(useResolutionDependentShift), cfgZeroStar=\(useCfgZeroStar)")
 
         return DrawThingsConfiguration(
             width: Int32(config.width),

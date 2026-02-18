@@ -55,14 +55,17 @@ struct ImageGenerationView: View {
                 // Preset picker
                 presetSection
 
+                // Source image (img2img)
+                sourceImageSection
+
                 // Prompt
                 promptSection
 
-                // Config controls
-                configSection
-
                 // Generate button
                 generateSection
+
+                // Config controls
+                configSection
             }
             .padding(20)
         }
@@ -99,6 +102,8 @@ struct ImageGenerationView: View {
     }
 
     // MARK: - Preset Section
+
+    @State private var isSourceDropTargeted = false
 
     @State private var isPresetExpanded = false
     @State private var presetSearchText = ""
@@ -371,6 +376,175 @@ struct ImageGenerationView: View {
         }
     }
 
+    // MARK: - Source Image Section (img2img)
+
+    private var sourceImageSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                NeuSectionHeader("Source Image", icon: "photo.on.rectangle")
+                Spacer()
+                if viewModel.inputImage != nil {
+                    Button(action: { viewModel.clearInputImage() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.neuTextSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove source image")
+                    .accessibilityIdentifier("generate_clearSourceImageButton")
+                }
+            }
+
+            if let inputImage = viewModel.inputImage {
+                // Preview of loaded source image
+                HStack(spacing: 12) {
+                    Image(nsImage: inputImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 64, height: 64)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .shadow(color: Color.neuShadowDark.opacity(0.2), radius: 4, x: 2, y: 2)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(viewModel.inputImageName ?? "Source Image")
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text("\(Int(inputImage.size.width))x\(Int(inputImage.size.height))")
+                            .font(.caption2)
+                            .foregroundColor(.neuTextSecondary)
+                        Text("img2img mode")
+                            .font(.caption2)
+                            .foregroundColor(.neuAccent)
+                    }
+
+                    Spacer()
+
+                    Button(action: { openSourceImagePanel() }) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(NeumorphicIconButtonStyle())
+                    .help("Replace source image")
+                }
+                .padding(8)
+                .neuInset(cornerRadius: 12)
+            } else {
+                // Drop zone
+                VStack(spacing: 8) {
+                    Image(systemName: "photo.badge.arrow.down")
+                        .font(.title2)
+                        .foregroundColor(isSourceDropTargeted ? .neuAccent : .neuTextSecondary.opacity(0.5))
+                    Text("Drop image or click to browse")
+                        .font(.caption)
+                        .foregroundColor(.neuTextSecondary)
+                        .accessibilityIdentifier("generate_sourceImageDropZoneLabel")
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("generate_sourceImageDropZone")
+                .frame(maxWidth: .infinity)
+                .frame(height: 80)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(
+                            isSourceDropTargeted ? Color.neuAccent : Color.neuTextSecondary.opacity(0.2),
+                            style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+                        )
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(isSourceDropTargeted ? Color.neuAccent.opacity(0.05) : Color.clear)
+                        )
+                )
+                .onDrop(of: [.fileURL, .png, .tiff, .image], isTargeted: $isSourceDropTargeted) { providers in
+                    handleSourceImageDrop(providers)
+                }
+                .onTapGesture {
+                    openSourceImagePanel()
+                }
+            }
+        }
+    }
+
+    private func openSourceImagePanel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url {
+            viewModel.loadInputImage(from: url)
+        }
+    }
+
+    private func handleSourceImageDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        Task { await loadSourceFromProvider(provider) }
+        return true
+    }
+
+    private func loadSourceFromProvider(_ provider: NSItemProvider) async {
+        // File URL (from Finder)
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            do {
+                if let url = try await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? URL {
+                    await MainActor.run { viewModel.loadInputImage(from: url) }
+                    return
+                }
+                if let data = try await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
+                   let url = URL(dataRepresentation: data, relativeTo: nil),
+                   url.isFileURL {
+                    await MainActor.run { viewModel.loadInputImage(from: url) }
+                    return
+                }
+            } catch { }
+        }
+
+        // PNG data
+        if provider.hasItemConformingToTypeIdentifier(UTType.png.identifier) {
+            do {
+                let data = try await loadSourceData(from: provider, type: .png)
+                if let data = data, let image = NSImage(data: data) {
+                    await MainActor.run { viewModel.loadInputImage(from: image, name: "Dropped PNG") }
+                    return
+                }
+            } catch { }
+        }
+
+        // TIFF data
+        if provider.hasItemConformingToTypeIdentifier(UTType.tiff.identifier) {
+            do {
+                let data = try await loadSourceData(from: provider, type: .tiff)
+                if let data = data, let image = NSImage(data: data) {
+                    await MainActor.run { viewModel.loadInputImage(from: image, name: "Dropped Image") }
+                    return
+                }
+            } catch { }
+        }
+
+        // Generic NSImage fallback
+        if provider.canLoadObject(ofClass: NSImage.self) {
+            do {
+                let image = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<NSImage?, Error>) in
+                    provider.loadObject(ofClass: NSImage.self) { object, error in
+                        if let error = error { cont.resume(throwing: error) }
+                        else { cont.resume(returning: object as? NSImage) }
+                    }
+                }
+                if let image = image {
+                    await MainActor.run { viewModel.loadInputImage(from: image, name: "Dropped Image") }
+                    return
+                }
+            } catch { }
+        }
+    }
+
+    private func loadSourceData(from provider: NSItemProvider, type: UTType) async throws -> Data? {
+        try await withCheckedThrowingContinuation { continuation in
+            provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, error in
+                if let error = error { continuation.resume(throwing: error) }
+                else { continuation.resume(returning: data) }
+            }
+        }
+    }
+
     // MARK: - Config Section
 
     private var configSection: some View {
@@ -504,8 +678,8 @@ struct ImageGenerationView: View {
             } else {
                 Button(action: { viewModel.generate() }) {
                     HStack {
-                        Image(systemName: "wand.and.stars")
-                        Text("Generate")
+                        Image(systemName: viewModel.inputImage != nil ? "photo.on.rectangle.angled" : "wand.and.stars")
+                        Text(viewModel.inputImage != nil ? "Generate (img2img)" : "Generate")
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -623,6 +797,9 @@ struct ImageGenerationView: View {
                 Button("Reveal in Finder") { viewModel.revealInFinder(generatedImage) }
                 Divider()
                 Button("Use Prompt") { viewModel.prompt = generatedImage.prompt }
+                Button("Use as img2img Source") {
+                    viewModel.loadInputImage(from: generatedImage.image, name: "Generated Image")
+                }
                 Divider()
                 Button("Delete", role: .destructive) { viewModel.deleteImage(generatedImage) }
             }
@@ -642,38 +819,93 @@ struct ImageGenerationView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Image info card
-            VStack(alignment: .leading, spacing: 8) {
-                if !generatedImage.prompt.isEmpty {
-                    Text(generatedImage.prompt)
-                        .font(.callout)
-                        .foregroundColor(.primary)
-                        .lineLimit(3)
-                        .textSelection(.enabled)
-                }
-
-                HStack(spacing: 12) {
-                    neuInfoChip("\(generatedImage.config.width)x\(generatedImage.config.height)")
-                    neuInfoChip("\(generatedImage.config.steps) steps")
-                    neuInfoChip(String(format: "%.1f cfg", generatedImage.config.guidanceScale))
-                }
-
-                Text(generatedImage.generatedAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption2)
-                    .foregroundColor(.neuTextSecondary)
-
-                HStack(spacing: 8) {
-                    Button("Copy") { viewModel.copyToClipboard(generatedImage) }
-                        .font(.caption)
-                        .buttonStyle(NeumorphicButtonStyle())
-                    Button("Reveal") { viewModel.revealInFinder(generatedImage) }
-                        .font(.caption)
-                        .buttonStyle(NeumorphicButtonStyle())
-                    Button("Use Prompt") {
-                        viewModel.prompt = generatedImage.prompt
-                        viewModel.negativePrompt = generatedImage.negativePrompt
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if !generatedImage.prompt.isEmpty {
+                        Text(generatedImage.prompt)
+                            .font(.callout)
+                            .foregroundColor(.primary)
+                            .lineLimit(3)
+                            .textSelection(.enabled)
                     }
-                    .font(.caption)
-                    .buttonStyle(NeumorphicButtonStyle())
+
+                    if !generatedImage.negativePrompt.isEmpty {
+                        Text("Neg: \(generatedImage.negativePrompt)")
+                            .font(.caption)
+                            .foregroundColor(.neuTextSecondary)
+                            .lineLimit(2)
+                            .textSelection(.enabled)
+                    }
+
+                    let cfg = generatedImage.config
+                    LazyVGrid(columns: [
+                        GridItem(.flexible(), spacing: 6),
+                        GridItem(.flexible(), spacing: 6),
+                        GridItem(.flexible(), spacing: 6)
+                    ], spacing: 6) {
+                        neuInfoChip("\(cfg.width)x\(cfg.height)")
+                        neuInfoChip("\(cfg.steps) steps")
+                        neuInfoChip(String(format: "%.1f cfg", cfg.guidanceScale))
+                        if !cfg.sampler.isEmpty {
+                            neuInfoChip(cfg.sampler)
+                        }
+                        neuInfoChip("seed \(cfg.seed)")
+                        if !cfg.seedMode.isEmpty {
+                            neuInfoChip(cfg.seedMode)
+                        }
+                        neuInfoChip(String(format: "shift %.1f", cfg.shift))
+                        if cfg.strength < 1.0 {
+                            neuInfoChip(String(format: "str %.2f", cfg.strength))
+                        }
+                        if cfg.stochasticSamplingGamma > 0 && cfg.stochasticSamplingGamma < 1.0 {
+                            neuInfoChip(String(format: "sss %.0f%%", cfg.stochasticSamplingGamma * 100))
+                        }
+                        if let rds = cfg.resolutionDependentShift {
+                            neuInfoChip(rds ? "RDS on" : "RDS off")
+                        }
+                        if let czs = cfg.cfgZeroStar {
+                            neuInfoChip(czs ? "CZS on" : "CZS off")
+                        }
+                    }
+
+                    if !cfg.model.isEmpty {
+                        Text(cfg.model)
+                            .font(.caption2)
+                            .foregroundColor(.neuTextSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+
+                    if !cfg.loras.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "link")
+                                .font(.caption2)
+                                .foregroundColor(.neuTextSecondary)
+                            ForEach(cfg.loras, id: \.file) { lora in
+                                neuInfoChip("\(lora.file) (\(String(format: "%.1f", lora.weight)))")
+                            }
+                        }
+                    }
+
+                    Text(generatedImage.generatedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption2)
+                        .foregroundColor(.neuTextSecondary)
+
+                    HStack(spacing: 8) {
+                        Button("Copy") { viewModel.copyToClipboard(generatedImage) }
+                            .font(.caption)
+                            .buttonStyle(NeumorphicButtonStyle())
+                        Button("Reveal") { viewModel.revealInFinder(generatedImage) }
+                            .font(.caption)
+                            .buttonStyle(NeumorphicButtonStyle())
+                        Button("Use Prompt") {
+                            viewModel.prompt = generatedImage.prompt
+                            viewModel.negativePrompt = generatedImage.negativePrompt
+                        }
+                        .font(.caption)
+                        .buttonStyle(NeumorphicButtonStyle())
+                    }
                 }
             }
             .padding(12)
