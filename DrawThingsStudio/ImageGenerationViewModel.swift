@@ -125,9 +125,24 @@ final class ImageGenerationViewModel: ObservableObject {
                 }
 
                 // Save generated images
+                var savedCount = 0
                 for image in images {
+                    // Ensure the NSImage has a valid bitmap representation before saving.
+                    // Images from gRPC may arrive as CGImage-backed NSImages; force a
+                    // concrete bitmap rep so tiffRepresentation doesn't return nil.
+                    let saveImage: NSImage
+                    if image.tiffRepresentation == nil,
+                       let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                        let rep = NSBitmapImageRep(cgImage: cgImage)
+                        let rebuilt = NSImage(size: image.size)
+                        rebuilt.addRepresentation(rep)
+                        saveImage = rebuilt
+                    } else {
+                        saveImage = image
+                    }
+
                     if let saved = storageManager.saveImage(
-                        image,
+                        saveImage,
                         prompt: prompt,
                         negativePrompt: negativePrompt,
                         config: generationConfig,
@@ -137,7 +152,12 @@ final class ImageGenerationViewModel: ObservableObject {
                         if selectedImage == nil {
                             selectedImage = saved
                         }
+                        savedCount += 1
                     }
+                }
+
+                if savedCount == 0 {
+                    errorMessage = "Image was generated but could not be saved or displayed. Check Console.app for details."
                 }
 
                 progress = .complete

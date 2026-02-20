@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @State private var selectedItem: SidebarItem? = SidebarItem(rawValue: AppSettings.shared.defaultSidebarItem) ?? .imageInspector
@@ -15,6 +16,7 @@ struct ContentView: View {
     @StateObject private var imageInspectorViewModel = ImageInspectorViewModel()
     @StateObject private var storyStudioViewModel = StoryStudioViewModel()
     @StateObject private var projectBrowserViewModel = DTProjectBrowserViewModel()
+    @State private var isDetailDropTargeted = false
 
     var body: some View {
         NavigationSplitView {
@@ -121,8 +123,90 @@ struct ContentView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
+            .onDrop(of: [.fileURL, .url, .png, .tiff, .image], isTargeted: $isDetailDropTargeted) { providers in
+                routeDrop(providers)
+            }
         }
         .focusedSceneValue(\.workflowViewModel, workflowViewModel)
+    }
+
+    // MARK: - Drop Routing
+
+    private func routeDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        switch selectedItem {
+        case .generateImage:
+            Task { await dropIntoGenerate(provider) }
+            return true
+        case .imageInspector, nil:
+            Task { await dropIntoInspector(provider) }
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func dropIntoGenerate(_ provider: NSItemProvider) async {
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            if let url = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? URL, url.isFileURL {
+                await MainActor.run { imageGenViewModel.loadInputImage(from: url) }
+                return
+            }
+            if let data = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
+               let url = URL(dataRepresentation: data, relativeTo: nil), url.isFileURL {
+                await MainActor.run { imageGenViewModel.loadInputImage(from: url) }
+                return
+            }
+        }
+        for type in [UTType.png, UTType.tiff] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
+            if let data = try? await loadDropData(from: provider, type: type), let image = NSImage(data: data) {
+                await MainActor.run { imageGenViewModel.loadInputImage(from: image, name: "Dropped Image") }
+                return
+            }
+        }
+    }
+
+    private func dropIntoInspector(_ provider: NSItemProvider) async {
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            if let url = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? URL {
+                if url.scheme == "https" || url.scheme == "http" {
+                    await MainActor.run { imageInspectorViewModel.loadImage(webURL: url) }
+                } else {
+                    await MainActor.run { imageInspectorViewModel.loadImage(url: url) }
+                }
+                return
+            }
+            if let data = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
+               let url = URL(dataRepresentation: data, relativeTo: nil) {
+                if url.scheme == "https" || url.scheme == "http" {
+                    await MainActor.run { imageInspectorViewModel.loadImage(webURL: url) }
+                } else {
+                    await MainActor.run { imageInspectorViewModel.loadImage(url: url) }
+                }
+                return
+            }
+        }
+        if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
+           let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL,
+           url.scheme == "https" || url.scheme == "http" {
+            await MainActor.run { imageInspectorViewModel.loadImage(webURL: url) }
+            return
+        }
+        for type in [UTType.png, UTType.tiff] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
+            if let data = try? await loadDropData(from: provider, type: type) {
+                await MainActor.run { imageInspectorViewModel.loadImage(data: data, sourceName: "Dropped Image") }
+                return
+            }
+        }
+    }
+
+    private func loadDropData(from provider: NSItemProvider, type: UTType) async throws -> Data? {
+        try await withCheckedThrowingContinuation { continuation in
+            provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume(returning: data) }
+            }
+        }
     }
 
     private func sidebarButton(_ title: String, icon: String, item: SidebarItem) -> some View {

@@ -13,7 +13,7 @@ struct ImageInspectorView: View {
     @ObservedObject var imageGenViewModel: ImageGenerationViewModel
     @Binding var selectedSidebarItem: SidebarItem?
 
-    @State private var isDropTargeted = false
+    @State private var sendImageToGenerate = false
 
     var body: some View {
         HSplitView {
@@ -27,23 +27,6 @@ struct ImageInspectorView: View {
         }
         .padding(20)
         .neuBackground()
-        .onDrop(of: [.fileURL, .url, .png, .tiff, .image], isTargeted: $isDropTargeted) { providers in
-            handleDrop(providers)
-        }
-        .overlay(dropOverlay)
-    }
-
-    // MARK: - Drop Overlay (visual feedback)
-
-    @ViewBuilder
-    private var dropOverlay: some View {
-        if isDropTargeted {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(Color.neuAccent, style: StrokeStyle(lineWidth: 3, dash: [12, 6]))
-                .background(Color.neuAccent.opacity(0.05).clipShape(RoundedRectangle(cornerRadius: 24)))
-                .allowsHitTesting(false)
-                .animation(.easeInOut(duration: 0.2), value: isDropTargeted)
-        }
     }
 
     // MARK: - History Panel
@@ -330,6 +313,12 @@ struct ImageInspectorView: View {
             .accessibilityIdentifier("inspector_sendToGenerateButton")
             .accessibilityLabel("Send to Generate Image")
             .accessibilityHint("Uses this image's prompt and settings in Generate Image")
+
+            Toggle("Include image as img2img source", isOn: $sendImageToGenerate)
+                .font(.caption)
+                .toggleStyle(.checkbox)
+                .disabled(viewModel.selectedImage == nil)
+                .accessibilityIdentifier("inspector_sendImageToggle")
         }
     }
 
@@ -365,6 +354,11 @@ struct ImageInspectorView: View {
             }
         }
 
+        // Optionally send the image as img2img source
+        if sendImageToGenerate, let entry = viewModel.selectedImage {
+            imageGenViewModel.loadInputImage(from: entry.image, name: entry.sourceName)
+        }
+
         selectedSidebarItem = .generateImage
     }
 
@@ -378,105 +372,6 @@ struct ImageInspectorView: View {
         }
     }
 
-    // MARK: - Drop Handling
-
-    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first else { return false }
-        Task { await loadFromProvider(provider) }
-        return true
-    }
-
-    private func loadFromProvider(_ provider: NSItemProvider) async {
-        // 1. File URL (from Finder) — best for metadata
-        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-            do {
-                if let url = try await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? URL {
-                    viewModel.loadImage(url: url)
-                    return
-                }
-                if let data = try await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
-                   let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    // Check if it's a web URL (Discord CDN, etc.)
-                    if url.scheme == "https" || url.scheme == "http" {
-                        viewModel.loadImage(webURL: url)
-                    } else {
-                        viewModel.loadImage(url: url)
-                    }
-                    return
-                }
-            } catch {
-                // Fall through
-            }
-        }
-
-        // 2. Web URL (from Discord — dragging an image often provides a URL)
-        if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-            do {
-                if let url = try await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL {
-                    if url.scheme == "https" || url.scheme == "http" {
-                        viewModel.loadImage(webURL: url)
-                        return
-                    }
-                }
-                if let data = try await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? Data,
-                   let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    if url.scheme == "https" || url.scheme == "http" {
-                        viewModel.loadImage(webURL: url)
-                        return
-                    }
-                }
-            } catch {
-                // Fall through
-            }
-        }
-
-        // 3. PNG data
-        if provider.hasItemConformingToTypeIdentifier(UTType.png.identifier) {
-            do {
-                let data = try await loadData(from: provider, type: .png)
-                if let data = data {
-                    viewModel.loadImage(data: data, sourceName: "Dropped PNG")
-                    return
-                }
-            } catch { }
-        }
-
-        // 4. TIFF data (macOS pasteboard)
-        if provider.hasItemConformingToTypeIdentifier(UTType.tiff.identifier) {
-            do {
-                let data = try await loadData(from: provider, type: .tiff)
-                if let data = data {
-                    viewModel.loadImage(data: data, sourceName: "Dropped Image")
-                    return
-                }
-            } catch { }
-        }
-
-        // 5. Generic NSImage fallback
-        if provider.canLoadObject(ofClass: NSImage.self) {
-            do {
-                let image = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<NSImage?, Error>) in
-                    provider.loadObject(ofClass: NSImage.self) { object, error in
-                        if let error = error { cont.resume(throwing: error) }
-                        else { cont.resume(returning: object as? NSImage) }
-                    }
-                }
-                if let image = image, let tiffData = image.tiffRepresentation {
-                    viewModel.loadImage(data: tiffData, sourceName: "Dropped Image")
-                    return
-                }
-            } catch { }
-        }
-    }
-
-    private func loadData(from provider: NSItemProvider, type: UTType) async throws -> Data? {
-        try await withCheckedThrowingContinuation { continuation in
-            provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, error in
-                if let error = error { continuation.resume(throwing: error) }
-                else { continuation.resume(returning: data) }
-            }
-        }
-    }
 }
 
 // MARK: - History Row View with Hover State

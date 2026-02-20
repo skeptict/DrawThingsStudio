@@ -454,11 +454,26 @@ struct ImageGenerationView: View {
                                 .fill(isSourceDropTargeted ? Color.neuAccent.opacity(0.05) : Color.clear)
                         )
                 )
-                .onDrop(of: [.fileURL, .png, .tiff, .image], isTargeted: $isSourceDropTargeted) { providers in
+                .onDrop(of: [.fileURL, .url, .png, .tiff, .image], isTargeted: $isSourceDropTargeted) { providers in
                     handleSourceImageDrop(providers)
                 }
                 .onTapGesture {
                     openSourceImagePanel()
+                }
+            }
+
+            // Strength (img2img)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Strength").font(.caption).foregroundColor(.neuTextSecondary)
+                HStack(spacing: 8) {
+                    Slider(value: $viewModel.config.strength, in: 0...1, step: 0.05)
+                        .tint(Color.neuAccent)
+                        .accessibilityLabel("Strength")
+                        .accessibilityValue(String(format: "%.0f percent", viewModel.config.strength * 100))
+                    Text(String(format: "%.2f", viewModel.config.strength))
+                        .font(.caption)
+                        .foregroundColor(.neuTextSecondary)
+                        .frame(width: 35)
                 }
             }
         }
@@ -591,6 +606,12 @@ struct ImageGenerationView: View {
                 Spacer()
             }
 
+            // Images
+            HStack(spacing: 12) {
+                neuConfigField("Images", value: $viewModel.config.batchCount)
+                Spacer()
+            }
+
             // Seed & Shift
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -601,21 +622,6 @@ struct ImageGenerationView: View {
                 }
                 neuConfigFieldDouble("Shift", value: $viewModel.config.shift)
                 Spacer()
-            }
-
-            // Strength
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Strength").font(.caption).foregroundColor(.neuTextSecondary)
-                HStack(spacing: 8) {
-                    Slider(value: $viewModel.config.strength, in: 0...1, step: 0.05)
-                        .tint(Color.neuAccent)
-                        .accessibilityLabel("Strength")
-                        .accessibilityValue(String(format: "%.0f percent", viewModel.config.strength * 100))
-                    Text(String(format: "%.2f", viewModel.config.strength))
-                        .font(.caption)
-                        .foregroundColor(.neuTextSecondary)
-                        .frame(width: 35)
-                }
             }
 
             // SSS (Stochastic Sampling) — only for TCD sampler
