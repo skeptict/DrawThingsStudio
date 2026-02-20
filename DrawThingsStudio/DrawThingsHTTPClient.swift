@@ -123,6 +123,7 @@ class DrawThingsHTTPClient: DrawThingsProvider {
             }
         }
 
+        RequestLogger.shared.logHTTPRequest(endpoint: endpoint, body: body)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         logger.debug("Sending \(isImg2Img ? "img2img" : "txt2img") request: prompt=\(prompt.prefix(50))...")

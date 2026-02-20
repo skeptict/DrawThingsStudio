@@ -486,6 +486,30 @@ struct SettingsView: View {
                         .foregroundColor(.neuTextSecondary)
                 }
 
+                // Debug
+                neuSettingsSection("Debug", icon: "ladybug") {
+                    HStack(spacing: 12) {
+                        Button("Open Request Log") {
+                            RequestLogger.shared.openLog()
+                        }
+                        .buttonStyle(NeumorphicButtonStyle())
+                        .help("Opens the request log file showing all payloads sent to Draw Things")
+
+                        Button("Clear Log") {
+                            RequestLogger.shared.clearLog()
+                        }
+                        .buttonStyle(NeumorphicButtonStyle())
+                        .foregroundColor(.red)
+                        .help("Clears the request log file")
+                    }
+                    if let url = RequestLogger.shared.logFileURL {
+                        Text(url.path)
+                            .font(.caption2)
+                            .foregroundColor(.neuTextSecondary)
+                            .textSelection(.enabled)
+                    }
+                }
+
                 // Reset
                 Button("Reset to Defaults") {
                     settings.resetToDefaults()

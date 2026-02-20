@@ -25,6 +25,7 @@ final class ImageGenerationViewModel: ObservableObject {
     @Published var isGenerating = false
     @Published var progress: GenerationProgress = .starting
     @Published var progressFraction: Double = 0
+    @Published var generationImageLabel: String = ""
 
     @Published var generatedImages: [GeneratedImage] = []
     @Published var selectedImage: GeneratedImage?
@@ -102,64 +103,85 @@ final class ImageGenerationViewModel: ObservableObject {
                 }
                 connectionStatus = .connected
 
+                // DTS controls iteration count; always send batchCount=1 to Draw Things
+                // so its local batch setting is overridden by the single-image request.
                 var generationConfig = config
                 generationConfig.negativePrompt = negativePrompt
+                generationConfig.batchCount = 1
+                generationConfig.batchSize = 1
 
-                let images = try await client.generateImage(
-                    prompt: prompt,
-                    sourceImage: inputImage,
-                    mask: nil,
-                    config: generationConfig,
-                    onProgress: { [weak self] progress in
-                        self?.progress = progress
-                        self?.progressFraction = progress.fraction
-                    }
-                )
+                let totalImages = max(1, config.batchCount)
+                var totalSaved = 0
 
-                guard !images.isEmpty else {
-                    let mode = inputImage != nil ? "img2img" : "txt2img"
-                    errorMessage = "No images returned from Draw Things (\(mode)). Check that the model supports this mode and that Draw Things is ready."
-                    progress = .failed("No images returned")
-                    isGenerating = false
-                    return
-                }
+                for imageIndex in 1...totalImages {
+                    try Task.checkCancellation()
 
-                // Save generated images
-                var savedCount = 0
-                for image in images {
-                    // Ensure the NSImage has a valid bitmap representation before saving.
-                    // Images from gRPC may arrive as CGImage-backed NSImages; force a
-                    // concrete bitmap rep so tiffRepresentation doesn't return nil.
-                    let saveImage: NSImage
-                    if image.tiffRepresentation == nil,
-                       let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                        let rep = NSBitmapImageRep(cgImage: cgImage)
-                        let rebuilt = NSImage(size: image.size)
-                        rebuilt.addRepresentation(rep)
-                        saveImage = rebuilt
+                    if totalImages > 1 {
+                        generationImageLabel = "Image \(imageIndex) of \(totalImages)"
                     } else {
-                        saveImage = image
+                        generationImageLabel = ""
                     }
+                    progressFraction = Double(imageIndex - 1) / Double(totalImages)
 
-                    if let saved = storageManager.saveImage(
-                        saveImage,
+                    let images = try await client.generateImage(
                         prompt: prompt,
-                        negativePrompt: negativePrompt,
+                        sourceImage: inputImage,
+                        mask: nil,
                         config: generationConfig,
-                        inferenceTimeMs: nil
-                    ) {
-                        generatedImages.insert(saved, at: 0)
-                        if selectedImage == nil {
-                            selectedImage = saved
+                        onProgress: { [weak self] prog in
+                            guard let self else { return }
+                            self.progress = prog
+                            // Scale fraction within this image's slice
+                            let base = Double(imageIndex - 1) / Double(totalImages)
+                            let slice = 1.0 / Double(totalImages)
+                            self.progressFraction = base + prog.fraction * slice
                         }
-                        savedCount += 1
+                    )
+
+                    guard !images.isEmpty else {
+                        errorMessage = "No images returned for image \(imageIndex). Check that the model is ready."
+                        progress = .failed("No images returned")
+                        isGenerating = false
+                        generationImageLabel = ""
+                        return
+                    }
+
+                    for image in images {
+                        // Ensure the NSImage has a valid bitmap representation before saving.
+                        // Images from gRPC may arrive as CGImage-backed NSImages; force a
+                        // concrete bitmap rep so tiffRepresentation doesn't return nil.
+                        let saveImage: NSImage
+                        if image.tiffRepresentation == nil,
+                           let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                            let rep = NSBitmapImageRep(cgImage: cgImage)
+                            let rebuilt = NSImage(size: image.size)
+                            rebuilt.addRepresentation(rep)
+                            saveImage = rebuilt
+                        } else {
+                            saveImage = image
+                        }
+
+                        if let saved = storageManager.saveImage(
+                            saveImage,
+                            prompt: prompt,
+                            negativePrompt: negativePrompt,
+                            config: generationConfig,
+                            inferenceTimeMs: nil
+                        ) {
+                            generatedImages.insert(saved, at: 0)
+                            if selectedImage == nil {
+                                selectedImage = saved
+                            }
+                            totalSaved += 1
+                        }
                     }
                 }
 
-                if savedCount == 0 {
-                    errorMessage = "Image was generated but could not be saved or displayed. Check Console.app for details."
+                if totalSaved == 0 {
+                    errorMessage = "Image(s) were generated but could not be saved or displayed. Check Console.app for details."
                 }
 
+                generationImageLabel = ""
                 progress = .complete
                 progressFraction = 1.0
 

@@ -66,6 +66,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
 
         // Convert our config to DrawThingsConfiguration
         let grpcConfig = convertConfig(config)
+        RequestLogger.shared.logGRPCRequest(config: grpcConfig, prompt: prompt, negativePrompt: config.negativePrompt)
 
         onProgress?(.starting)
 

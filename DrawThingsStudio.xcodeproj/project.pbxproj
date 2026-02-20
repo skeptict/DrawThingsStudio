@@ -346,7 +346,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
-				MARKETING_VERSION = 0.4.02;
+				MARKETING_VERSION = 0.4.04;
 				PRODUCT_BUNDLE_IDENTIFIER = tanque.org.DrawThingsStudio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -378,7 +378,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
-				MARKETING_VERSION = 0.4.02;
+				MARKETING_VERSION = 0.4.04;
 				PRODUCT_BUNDLE_IDENTIFIER = tanque.org.DrawThingsStudio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -397,7 +397,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.4.02;
+				MARKETING_VERSION = 0.4.04;
 				PRODUCT_BUNDLE_IDENTIFIER = tanque.org.DrawThingsStudioUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -415,7 +415,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.4.02;
+				MARKETING_VERSION = 0.4.04;
 				PRODUCT_BUNDLE_IDENTIFIER = tanque.org.DrawThingsStudioUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -465,7 +465,7 @@
 			repositoryURL = "https://github.com/skeptict/DT-gRPC-Swift-Client.git";
 			requirement = {
 				kind = revision;
-				revision = 2bce564a13fd4f9edf5582a5677aa47363ba1ffe;
+				revision = e2d7dbf307a3a8de1ebfcce8e6f94d135d0ba958;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

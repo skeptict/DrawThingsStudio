@@ -47,27 +47,35 @@ struct ImageGenerationView: View {
     // MARK: - Controls Panel
 
     private var controlsPanel: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 20) {
-                // Connection status
-                connectionStatusBadge
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Connection status
+                    connectionStatusBadge
 
-                // Preset picker
-                presetSection
+                    // Preset picker
+                    presetSection
 
-                // Source image (img2img)
-                sourceImageSection
+                    // Source image (img2img)
+                    sourceImageSection
 
-                // Prompt
-                promptSection
+                    // Prompt
+                    promptSection
 
-                // Generate button
-                generateSection
-
-                // Config controls
-                configSection
+                    // Config controls
+                    configSection
+                }
+                .padding(20)
             }
-            .padding(20)
+
+            // Generate section fixed outside the ScrollView so button clicks
+            // are never intercepted by the ScrollView's scroll gesture recognizer
+            Divider()
+                .padding(.horizontal, 20)
+            generateSection
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
         }
         .neuCard(cornerRadius: 24)
     }
@@ -670,6 +678,12 @@ struct ImageGenerationView: View {
                     NeumorphicProgressBar(value: viewModel.progressFraction)
                         .accessibilityLabel("Generation progress")
                         .accessibilityValue("\(Int(viewModel.progressFraction * 100)) percent")
+                    if !viewModel.generationImageLabel.isEmpty {
+                        Text(viewModel.generationImageLabel)
+                            .font(.caption)
+                            .foregroundColor(.neuTextSecondary)
+                            .accessibilityIdentifier("generate_imageLabel")
+                    }
                     Text(viewModel.progress.description)
                         .font(.caption)
                         .foregroundColor(.neuTextSecondary)
