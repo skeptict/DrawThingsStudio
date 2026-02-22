@@ -9,6 +9,8 @@ import Foundation
 import AppKit
 import Combine
 import OSLog
+import ImageIO
+import UniformTypeIdentifiers
 
 /// Manages persistent storage of generated images and their metadata
 @MainActor
@@ -44,16 +46,50 @@ final class ImageStorageManager: ObservableObject {
         let imageURL = storageDirectory.appendingPathComponent("\(filename).png")
         let metadataURL = storageDirectory.appendingPathComponent("\(filename).json")
 
-        // Save PNG
+        // Build A1111 parameters text (used in both EXIF fields and iTXt chunk)
+        let parametersText = buildA1111Parameters(prompt: prompt, negativePrompt: negativePrompt, config: config)
+
+        // Save PNG with TIFF/IPTC/EXIF metadata embedded via CGImageDestination
+        // (TIFF ImageDescription + IPTC Caption-Abstract appear in Finder Get Info)
         guard let tiffData = image.tiffRepresentation,
               let bitmapRep = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
-            logger.error("Failed to convert image to PNG data")
+              let cgImage = bitmapRep.cgImage else {
+            logger.error("Failed to convert image to CGImage")
             return nil
         }
 
+        let mutableData = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            mutableData, UTType.png.identifier as CFString, 1, nil
+        ) else {
+            logger.error("Failed to create CGImageDestination")
+            return nil
+        }
+
+        let imageProps: [CFString: Any] = [
+            kCGImagePropertyTIFFDictionary: [
+                kCGImagePropertyTIFFImageDescription: parametersText
+            ] as [CFString: Any],
+            kCGImagePropertyIPTCDictionary: [
+                kCGImagePropertyIPTCCaptionAbstract: parametersText
+            ] as [CFString: Any],
+            kCGImagePropertyExifDictionary: [
+                kCGImagePropertyExifUserComment: parametersText
+            ] as [CFString: Any]
+        ]
+
+        CGImageDestinationAddImage(dest, cgImage, imageProps as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else {
+            logger.error("Failed to finalize CGImageDestination")
+            return nil
+        }
+
+        // Also inject A1111 iTXt chunk for compatibility with A1111/ComfyUI tools
+        let basePngData = mutableData as Data
+        let pngWithMeta = injectPNGTextChunk(into: basePngData, keyword: "parameters", text: parametersText)
+
         do {
-            try pngData.write(to: imageURL)
+            try pngWithMeta.write(to: imageURL)
         } catch {
             logger.error("Failed to write image file: \(error.localizedDescription)")
             return nil
@@ -182,6 +218,96 @@ final class ImageStorageManager: ObservableObject {
     }
 
     // MARK: - Private
+
+    // MARK: - PNG Metadata Embedding
+
+    /// Builds an A1111-compatible "parameters" text block.
+    /// Format read back by DTS Image Inspector (parseA1111) and compatible with
+    /// tools like automatic1111, ComfyUI manager, etc.
+    private func buildA1111Parameters(prompt: String, negativePrompt: String, config: DrawThingsGenerationConfig) -> String {
+        var lines: [String] = [prompt]
+
+        if !negativePrompt.isEmpty {
+            lines.append("Negative prompt: \(negativePrompt)")
+        }
+
+        var params: [String] = []
+        params.append("Steps: \(config.steps)")
+        params.append("Sampler: \(config.sampler)")
+        params.append("CFG scale: \(String(format: "%.1f", config.guidanceScale))")
+        if config.seed >= 0 {
+            params.append("Seed: \(config.seed)")
+        }
+        params.append("Size: \(config.width)x\(config.height)")
+        if !config.model.isEmpty {
+            params.append("Model: \(config.model)")
+        }
+        if config.strength < 1.0 {
+            params.append("Denoising strength: \(String(format: "%.2f", config.strength))")
+        }
+
+        lines.append(params.joined(separator: ", "))
+        return lines.joined(separator: "\n")
+    }
+
+    /// Inserts an uncompressed PNG iTXt chunk carrying `keyword` / `text` (UTF-8)
+    /// immediately after the IHDR chunk.  PNG structure:
+    ///   8-byte signature | IHDR (always 25 bytes) | … other chunks … | IEND
+    /// Chunk layout: [4-byte big-endian data-length][4-byte type][data][4-byte CRC32]
+    /// iTXt data:    keyword\0 + compressionFlag(0) + compressionMethod(0) +
+    ///               languageTag\0 + translatedKeyword\0 + text-utf8
+    private func injectPNGTextChunk(into pngData: Data, keyword: String, text: String) -> Data {
+        // Validate PNG signature (8 bytes) + at least one IHDR chunk header (8 bytes)
+        guard pngData.count > 16 else { return pngData }
+
+        // Locate end of IHDR: signature(8) + length(4) + type(4) + data(length) + crc(4)
+        let ihdrDataLength = Int(pngData[8]) << 24 | Int(pngData[9]) << 16 |
+                             Int(pngData[10]) << 8 | Int(pngData[11])
+        let insertOffset = 8 + 4 + 4 + ihdrDataLength + 4  // right after IHDR CRC
+
+        guard insertOffset < pngData.count else { return pngData }
+
+        // Build iTXt chunk data
+        var chunkData = Data()
+        chunkData.append(contentsOf: keyword.utf8)
+        chunkData.append(0)     // null after keyword
+        chunkData.append(0)     // compression flag: 0 = not compressed
+        chunkData.append(0)     // compression method: 0
+        chunkData.append(0)     // language tag: empty, null-terminated
+        chunkData.append(0)     // translated keyword: empty, null-terminated
+        chunkData.append(contentsOf: text.utf8)
+
+        // CRC32 of chunk type bytes + chunk data
+        var crcInput = Data("iTXt".utf8)
+        crcInput.append(chunkData)
+        let checksum = pngCRC32(crcInput)
+
+        // Full chunk: length(4) + type(4) + data + crc(4)
+        var chunk = Data()
+        var lengthBE = UInt32(chunkData.count).bigEndian
+        withUnsafeBytes(of: &lengthBE) { chunk.append(contentsOf: $0) }
+        chunk.append(contentsOf: "iTXt".utf8)
+        chunk.append(chunkData)
+        var crcBE = checksum.bigEndian
+        withUnsafeBytes(of: &crcBE) { chunk.append(contentsOf: $0) }
+
+        // Splice chunk into PNG data right after IHDR
+        var result = pngData
+        result.insert(contentsOf: chunk, at: insertOffset)
+        return result
+    }
+
+    /// CRC-32 using the IEEE 802.3 polynomial (same as used by PNG/zlib).
+    private func pngCRC32(_ data: Data) -> UInt32 {
+        var crc: UInt32 = 0xFFFF_FFFF
+        for byte in data {
+            crc ^= UInt32(byte)
+            for _ in 0..<8 {
+                crc = (crc >> 1) ^ (0xEDB8_8320 & ~((crc & 1) &- 1))
+            }
+        }
+        return ~crc
+    }
 
     private func ensureDirectoryExists() {
         let fileManager = FileManager.default

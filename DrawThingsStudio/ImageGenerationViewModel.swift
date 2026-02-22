@@ -146,7 +146,11 @@ final class ImageGenerationViewModel: ObservableObject {
                         return
                     }
 
-                    for image in images {
+                    // Draw Things may ignore batchCount=1 and return multiple images
+                    // (using its own local batch setting). Only collect as many as still
+                    // needed to reach the user's requested total.
+                    let remaining = totalImages - totalSaved
+                    for image in images.prefix(remaining) {
                         // Ensure the NSImage has a valid bitmap representation before saving.
                         // Images from gRPC may arrive as CGImage-backed NSImages; force a
                         // concrete bitmap rep so tiffRepresentation doesn't return nil.
@@ -174,6 +178,12 @@ final class ImageGenerationViewModel: ObservableObject {
                             }
                             totalSaved += 1
                         }
+                    }
+
+                    // If DT returned enough images to satisfy the full request in one
+                    // call (e.g. its local batch count ≥ totalImages), stop early.
+                    if totalSaved >= totalImages {
+                        break
                     }
                 }
 
