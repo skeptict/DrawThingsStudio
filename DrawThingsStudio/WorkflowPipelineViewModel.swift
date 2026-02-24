@@ -80,9 +80,8 @@ final class WorkflowPipelineViewModel: ObservableObject {
             selectedStepID = steps.last?.id
         }
         // First step never feeds from previous
-        if let firstID = steps.first?.id {
+        if !steps.isEmpty {
             steps[steps.startIndex].useOutputFromPreviousStep = false
-            _ = firstID
         }
         renumberSteps()
     }
@@ -146,13 +145,12 @@ final class WorkflowPipelineViewModel: ObservableObject {
 
                 var previousImage: NSImage? = nil
 
-                for (index, step) in steps.enumerated() {
+                for index in steps.indices {
+                    let step = steps[index]
                     try Task.checkCancellation()
 
                     currentStepIndex = index
-                    if let i = steps.firstIndex(where: { $0.id == step.id }) {
-                        steps[i].isRunning = true
-                    }
+                    steps[index].isRunning = true
 
                     var config = DrawThingsGenerationConfig()
                     config.model = step.model
@@ -178,17 +176,15 @@ final class WorkflowPipelineViewModel: ObservableObject {
                         onProgress: { _ in }
                     )
 
-                    if let i = steps.firstIndex(where: { $0.id == step.id }) {
-                        steps[i].isRunning = false
-                        if let image = images.first {
-                            steps[i].resultImage = image
-                            previousImage = image
-                        }
+                    steps[index].isRunning = false
+                    if let image = images.first {
+                        steps[index].resultImage = image
+                        previousImage = image
                     }
                 }
 
             } catch is CancellationError {
-                errorMessage = "Pipeline cancelled"
+                // User cancelled — clear running state silently
                 for i in steps.indices { steps[i].isRunning = false }
             } catch {
                 errorMessage = error.localizedDescription
@@ -203,8 +199,7 @@ final class WorkflowPipelineViewModel: ObservableObject {
     func cancelPipeline() {
         runTask?.cancel()
         runTask = nil
-        isRunning = false
-        currentStepIndex = -1
-        for i in steps.indices { steps[i].isRunning = false }
+        // State cleanup (isRunning, currentStepIndex, steps[i].isRunning) is handled
+        // by the task's CancellationError catch block, which runs on @MainActor.
     }
 }

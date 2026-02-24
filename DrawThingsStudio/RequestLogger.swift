@@ -7,13 +7,10 @@
 
 import Foundation
 import AppKit
-import OSLog
 import DrawThingsClient
 
 final class RequestLogger {
     static let shared = RequestLogger()
-
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "request-log")
 
     var logFileURL: URL? {
         FileManager.default
@@ -96,7 +93,8 @@ final class RequestLogger {
     // MARK: - Private
 
     private func append(_ text: String) {
-        logger.debug("\(text)")
+        // Do NOT emit to OSLog — request bodies contain user prompts (PII).
+        // The local file already captures everything needed for debugging.
         guard let url = logFileURL,
               let data = text.data(using: .utf8) else { return }
         if let handle = try? FileHandle(forWritingTo: url) {
@@ -108,9 +106,14 @@ final class RequestLogger {
         }
     }
 
-    private func timestamp() -> String {
+    // Reused across calls to avoid allocating a new DateFormatter on every log entry.
+    private static let timestampFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return f.string(from: Date())
+        return f
+    }()
+
+    private func timestamp() -> String {
+        Self.timestampFormatter.string(from: Date())
     }
 }

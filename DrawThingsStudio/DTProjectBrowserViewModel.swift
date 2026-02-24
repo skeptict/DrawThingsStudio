@@ -50,18 +50,25 @@ final class DTProjectBrowserViewModel: ObservableObject {
     private var loadedOffset = 0
     private let pageSize = 200
     private var loadEntriesTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
 
-    var filteredEntries: [DTGenerationEntry] {
-        guard !searchText.isEmpty else { return entries }
-        let query = searchText.lowercased()
-        return entries.filter { entry in
-            entry.prompt.lowercased().contains(query) ||
-            entry.negativePrompt.lowercased().contains(query) ||
-            entry.model.lowercased().contains(query)
-        }
-    }
+    /// Filtered view of `entries` based on `searchText`. Updated reactively via Combine
+    /// so the filter runs once per input change rather than on every view re-evaluation.
+    @Published private(set) var filteredEntries: [DTGenerationEntry] = []
 
     init() {
+        // Keep filteredEntries in sync with entries and searchText
+        Publishers.CombineLatest($entries, $searchText)
+            .map { entries, query -> [DTGenerationEntry] in
+                guard !query.isEmpty else { return entries }
+                let lowercased = query.lowercased()
+                return entries.filter {
+                    $0.prompt.lowercased().contains(lowercased) ||
+                    $0.negativePrompt.lowercased().contains(lowercased) ||
+                    $0.model.lowercased().contains(lowercased)
+                }
+            }
+            .assign(to: &$filteredEntries)
         restoreBookmarks()
     }
 
@@ -137,7 +144,7 @@ final class DTProjectBrowserViewModel: ObservableObject {
         var bookmarks = loadPersistedBookmarks()
         bookmarks.removeAll { data in
             if let resolved = resolveBookmark(data) {
-                return resolved.path == folder.url.path
+                return resolved.standardizedFileURL == folder.url.standardizedFileURL
             }
             return false
         }
@@ -374,6 +381,12 @@ final class DTProjectBrowserViewModel: ObservableObject {
             }
         }
         return url.lastPathComponent
+    }
+
+    /// Projects grouped by their source folder label. Computed once per render cycle
+    /// rather than re-filtering inside each folderSection call.
+    var projectsByFolder: [String: [DTProjectInfo]] {
+        Dictionary(grouping: projects, by: \.folderName)
     }
 
     static func formatFileSize(_ bytes: Int64) -> String {

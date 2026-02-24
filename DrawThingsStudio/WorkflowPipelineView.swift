@@ -11,7 +11,9 @@ import SwiftUI
 
 struct WorkflowPipelineView: View {
     @ObservedObject var viewModel: WorkflowPipelineViewModel
-    @StateObject private var assetManager = DrawThingsAssetManager.shared
+    // DrawThingsAssetManager.shared is a pre-existing singleton — use @ObservedObject,
+    // not @StateObject, since this view does not own or create it.
+    @ObservedObject private var assetManager = DrawThingsAssetManager.shared
 
     var body: some View {
         HStack(spacing: 16) {

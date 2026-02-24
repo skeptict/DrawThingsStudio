@@ -100,6 +100,9 @@ struct ContentView: View {
                     .allowsHitTesting(selectedItem == .storyStudio)
                     .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
+                // Views below use conditional instantiation rather than the opacity/hitTesting
+                // pattern. They are recreated on each selection because they do not require
+                // persistent state across sidebar navigation (no in-flight tasks, etc.).
                 if selectedItem == .projectBrowser {
                     DTProjectBrowserView(
                         viewModel: projectBrowserViewModel,

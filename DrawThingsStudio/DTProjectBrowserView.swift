@@ -128,8 +128,10 @@ struct DTProjectBrowserView: View {
                     LazyVStack(spacing: 2) {
                         // Show folder sections when multiple folders exist
                         if viewModel.folders.count > 1 {
+                            // Precompute once so folderSection doesn't O(n)-scan projects per folder
+                            let byFolder = viewModel.projectsByFolder
                             ForEach(viewModel.folders) { folder in
-                                folderSection(folder)
+                                folderSection(folder, projects: byFolder[folder.label] ?? [])
                             }
                         } else {
                             // Single folder — just list projects directly
@@ -154,7 +156,7 @@ struct DTProjectBrowserView: View {
         .neuBackground()
     }
 
-    private func folderSection(_ folder: BookmarkedFolder) -> some View {
+    private func folderSection(_ folder: BookmarkedFolder, projects folderProjects: [DTProjectInfo]) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Image(systemName: folder.isAvailable ? "folder.fill" : "externaldrive.badge.xmark")
@@ -182,7 +184,6 @@ struct DTProjectBrowserView: View {
                 unavailableFolderBanner(folder)
             }
 
-            let folderProjects = viewModel.projects.filter { $0.folderName == folder.label }
             if folderProjects.isEmpty && folder.isAvailable {
                 Text("No databases in this folder")
                     .font(.caption2)
@@ -383,7 +384,7 @@ private struct DTProjectRow: View {
                     .font(.callout)
                     .fontWeight(.medium)
                     .lineLimit(1)
-                    .foregroundColor(isSelected ? .primary : .primary)
+                    .foregroundColor(.primary)
 
                 Text(DTProjectBrowserViewModel.formatFileSize(project.fileSize))
                     .font(.caption2)

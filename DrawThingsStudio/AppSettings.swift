@@ -404,6 +404,15 @@ struct SettingsView: View {
                     }
                     .accessibilityIdentifier("settings_transportPicker")
 
+                    // Warn when using plaintext HTTP with a non-localhost host
+                    if settings.drawThingsTransportType == .http &&
+                       settings.drawThingsHost != "localhost" &&
+                       settings.drawThingsHost != "127.0.0.1" {
+                        Text("Warning: HTTP transport sends the shared secret unencrypted. Use gRPC for remote connections.")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+
                     neuSettingsRow("Secret") {
                         HStack {
                             if showSharedSecret {

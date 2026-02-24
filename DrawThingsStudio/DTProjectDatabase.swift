@@ -228,7 +228,10 @@ private struct FBReader {
 /// Read-only SQLite reader for Draw Things project databases.
 /// Intentionally NOT @MainActor — all operations are thread-safe for use from background queues.
 final class DTProjectDatabase: @unchecked Sendable {
-    private nonisolated(unsafe) var db: OpaquePointer?
+    // `db` is assigned exactly once in init and never mutated after that, so `let`
+    // is correct. `nonisolated(unsafe)` is still required because OpaquePointer is
+    // not Sendable, but immutability eliminates any real data-race risk.
+    private nonisolated(unsafe) let db: OpaquePointer?
     let fileURL: URL
 
     init?(fileURL: URL) {
@@ -299,17 +302,25 @@ final class DTProjectDatabase: @unchecked Sendable {
         return entries
     }
 
+    /// Known thumbnail table names. Using an enum prevents table-name string interpolation
+    /// in SQL queries, which would otherwise be a SQL injection risk if the value were
+    /// ever derived from external input.
+    private enum ThumbnailTable: String {
+        case half = "thumbnailhistoryhalfnode"
+        case full = "thumbnailhistorynode"
+    }
+
     /// Fetch a JPEG thumbnail for a generation entry.
     /// The thumbnail tables use a single `__pk0` key which matches the `preview_id`
     /// from the TensorHistoryNode FlatBuffer blob.
     func fetchThumbnail(previewId: Int64) -> NSImage? {
         guard previewId > 0 else { return nil }
         // Try half-res first (smaller, faster)
-        if let img = queryThumbnailByPk0(table: "thumbnailhistoryhalfnode", pk0: previewId) {
+        if let img = queryThumbnailByPk0(table: .half, pk0: previewId) {
             return img
         }
         // Fall back to full-res
-        return queryThumbnailByPk0(table: "thumbnailhistorynode", pk0: previewId)
+        return queryThumbnailByPk0(table: .full, pk0: previewId)
     }
 
     // MARK: - Private Helpers
@@ -360,6 +371,9 @@ final class DTProjectDatabase: @unchecked Sendable {
             sampler: Self.samplerName(samplerByte),
             seedMode: Self.seedModeName(seedModeByte),
             shift: shift,
+            // NOTE: stochasticSamplingGamma is not yet parsed from the FlatBuffer blob
+            // because the VTable slot for this field is not yet defined in this reader.
+            // The FlatBuffer schema default is 0.3, so we use that as a safe fallback.
             stochasticSamplingGamma: 0.3,
             wallClock: wallClock,
             loras: loras,
@@ -367,12 +381,13 @@ final class DTProjectDatabase: @unchecked Sendable {
         )
     }
 
-    private func queryThumbnailByPk0(table: String, pk0: Int64) -> NSImage? {
+    private func queryThumbnailByPk0(table: ThumbnailTable, pk0: Int64) -> NSImage? {
         guard let db = db else { return nil }
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
 
-        let sql = "SELECT p FROM \(table) WHERE __pk0 = ? LIMIT 1"
+        // table.rawValue is a compile-time constant — safe from SQL injection.
+        let sql = "SELECT p FROM \(table.rawValue) WHERE __pk0 = ? LIMIT 1"
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
         sqlite3_bind_int64(stmt, 1, pk0)
 
@@ -488,11 +503,12 @@ final class DTProjectDatabase: @unchecked Sendable {
         }
         sqlite3_finalize(stmt)
 
-        // Delete associated thumbnails (best-effort; don't abort the transaction if missing)
+        // Delete associated thumbnails (best-effort; don't abort the transaction if missing).
+        // ThumbnailTable.rawValue is a compile-time constant — safe from SQL injection.
         if previewId > 0 {
-            for table in ["thumbnailhistoryhalfnode", "thumbnailhistorynode"] {
+            for table in [ThumbnailTable.half, ThumbnailTable.full] {
                 var tStmt: OpaquePointer?
-                let sql = "DELETE FROM \(table) WHERE __pk0 = ?"
+                let sql = "DELETE FROM \(table.rawValue) WHERE __pk0 = ?"
                 if sqlite3_prepare_v2(writeDb, sql, -1, &tStmt, nil) == SQLITE_OK {
                     sqlite3_bind_int64(tStmt, 1, previewId)
                     sqlite3_step(tStmt)

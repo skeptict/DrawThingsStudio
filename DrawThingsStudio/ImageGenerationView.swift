@@ -11,11 +11,14 @@ import UniformTypeIdentifiers
 
 struct ImageGenerationView: View {
     @ObservedObject var viewModel: ImageGenerationViewModel
-    @StateObject private var assetManager = DrawThingsAssetManager.shared
+    // DrawThingsAssetManager.shared is a pre-existing singleton — use @ObservedObject,
+    // not @StateObject, since this view does not own or create it.
+    @ObservedObject private var assetManager = DrawThingsAssetManager.shared
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ModelConfig.name) private var modelConfigs: [ModelConfig]
     @State private var selectedPresetID: String = ""
     @State private var showingConfigImport = false
+    @State private var showSourceImagePicker = false
     @State private var importMessage: String?
     @State private var showEnhanceStylePicker = false
     @State private var showEnhanceStyleEditor = false
@@ -39,6 +42,17 @@ struct ImageGenerationView: View {
             allowsMultipleSelection: false
         ) { result in
             handleConfigImport(result)
+        }
+        .fileImporter(
+            isPresented: $showSourceImagePicker,
+            allowedContentTypes: [.png, .jpeg, .image],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                let hasAccess = url.startAccessingSecurityScopedResource()
+                defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+                viewModel.loadInputImage(from: url)
+            }
         }
         .task {
             await viewModel.checkConnection()
@@ -350,7 +364,8 @@ struct ImageGenerationView: View {
                     .font(.caption)
                     .foregroundColor(message.contains("failed") ? .red : .green)
                     .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        Task {
+                            try? await Task.sleep(for: .seconds(3))
                             importMessage = nil
                         }
                     }
@@ -598,13 +613,7 @@ struct ImageGenerationView: View {
     }
 
     private func openSourceImagePanel() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.png, .jpeg, .image]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        if panel.runModal() == .OK, let url = panel.url {
-            viewModel.loadInputImage(from: url)
-        }
+        showSourceImagePicker = true
     }
 
     private func handleSourceImageDrop(_ providers: [NSItemProvider]) -> Bool {
