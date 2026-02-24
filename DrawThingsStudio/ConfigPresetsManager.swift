@@ -298,20 +298,20 @@ final class ConfigPresetsManager {
     static let shared = ConfigPresetsManager()
 
     private let logger = Logger(subsystem: "com.drawthingsstudio", category: "presets")
-    private let fileManager = FileManager.default
 
     /// Directory for storing presets
-    var presetsDirectory: URL {
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    let presetsDirectory: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = appSupport.appendingPathComponent("DrawThingsStudio/Presets", isDirectory: true)
-        try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
-    }
+    }()
 
     /// Path to our native presets file
-    var presetsFilePath: URL {
-        presetsDirectory.appendingPathComponent("config_presets.json")
-    }
+    let presetsFilePath: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("DrawThingsStudio/Presets/config_presets.json")
+    }()
 
     // MARK: - Export
 

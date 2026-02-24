@@ -442,10 +442,11 @@ final class StoryStudioViewModel: ObservableObject {
         panel.allowsMultipleSelection = false
         panel.message = "Select a reference image for \(character.name)"
 
-        if panel.runModal() == .OK, let url = panel.url,
-           let data = try? Data(contentsOf: url) {
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url,
+                  let data = try? Data(contentsOf: url) else { return }
             character.primaryReferenceImageData = data
-            selectedProject?.modifiedAt = Date()
+            self?.selectedProject?.modifiedAt = Date()
         }
     }
 
@@ -455,10 +456,11 @@ final class StoryStudioViewModel: ObservableObject {
         panel.allowsMultipleSelection = false
         panel.message = "Select a reference image for \(setting.name)"
 
-        if panel.runModal() == .OK, let url = panel.url,
-           let data = try? Data(contentsOf: url) {
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url,
+                  let data = try? Data(contentsOf: url) else { return }
             setting.referenceImageData = data
-            selectedProject?.modifiedAt = Date()
+            self?.selectedProject?.modifiedAt = Date()
         }
     }
 }

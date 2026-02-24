@@ -8,7 +8,7 @@
 import Foundation
 
 /// Validates StoryFlow instruction arrays for correctness
-class StoryflowValidator {
+final class StoryflowValidator {
 
     // MARK: - Allowed Keys
 

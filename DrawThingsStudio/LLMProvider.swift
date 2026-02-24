@@ -200,18 +200,18 @@ final class PromptStyleManager: ObservableObject {
     @Published private(set) var styles: [CustomPromptStyle] = []
 
     /// Directory for storing styles
-    nonisolated var stylesDirectory: URL {
-        let fm = FileManager.default
-        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    nonisolated let stylesDirectory: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = appSupport.appendingPathComponent("DrawThingsStudio", isDirectory: true)
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
-    }
+    }()
 
     /// Path to the styles JSON file
-    nonisolated var stylesFilePath: URL {
-        stylesDirectory.appendingPathComponent("enhance_styles.json")
-    }
+    nonisolated let stylesFilePath: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("DrawThingsStudio/enhance_styles.json")
+    }()
 
     init() {
         loadStylesSync()

@@ -8,7 +8,7 @@
 import Foundation
 
 /// Generates StoryFlow instruction arrays for various workflow types
-class StoryflowInstructionGenerator {
+final class StoryflowInstructionGenerator {
 
     // MARK: - Simple Sequences
 
