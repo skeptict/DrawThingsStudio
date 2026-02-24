@@ -559,15 +559,12 @@ struct SettingsView: View {
         testingConnection = true
         connectionResult = nil
 
-        Task {
+        Task { @MainActor in
             let client = settings.createLLMClient()
             let success = await client.checkConnection()
             let providerName = settings.providerType.displayName
-
-            await MainActor.run {
-                testingConnection = false
-                connectionResult = success ? "Success! Connected to \(providerName)" : "Failed to connect"
-            }
+            testingConnection = false
+            connectionResult = success ? "Success! Connected to \(providerName)" : "Failed to connect"
         }
     }
 
@@ -575,14 +572,11 @@ struct SettingsView: View {
         testingDTConnection = true
         dtConnectionResult = nil
 
-        Task {
+        Task { @MainActor in
             let client = settings.createDrawThingsClient()
             let success = await client.checkConnection()
-
-            await MainActor.run {
-                testingDTConnection = false
-                dtConnectionResult = success ? "Success! Connected to Draw Things" : "Failed to connect"
-            }
+            testingDTConnection = false
+            dtConnectionResult = success ? "Success! Connected to Draw Things" : "Failed to connect"
         }
     }
 }

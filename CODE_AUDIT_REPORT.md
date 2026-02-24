@@ -1,8 +1,8 @@
 # DrawThingsStudio Code Audit Report
 
-**Last Run:** 2026-02-24T12:00:00Z
+**Last Run:** 2026-02-24T18:00:00Z
 **App Version:** 0.4.09
-**Scope:** WorkflowPipelineViewModel.swift, WorkflowPipelineView.swift, ImageGenerationView.swift, ImageGenerationViewModel.swift, DTProjectDatabase.swift, DTProjectBrowserViewModel.swift, DTProjectBrowserView.swift, AppSettings.swift, ContentView.swift, RequestLogger.swift — plus broader scan of DrawThingsHTTPClient.swift, DrawThingsGRPCClient.swift, DrawThingsAssetManager.swift, ImageStorageManager.swift, ImageInspectorViewModel.swift, CloudModelCatalog.swift, OllamaClient.swift, StoryflowExecutor.swift, WorkflowBuilderViewModel.swift, KeychainService.swift, SettingsStore.swift
+**Scope:** Full project re-audit — DrawThingsHTTPClient.swift, StoryflowExecutor.swift, WorkflowBuilderViewModel.swift, ImageInspectorViewModel.swift, OllamaClient.swift, OpenAICompatibleClient.swift, DrawThingsGRPCClient.swift, DrawThingsAssetManager.swift, ImageStorageManager.swift, DTProjectBrowserViewModel.swift, WorkflowPipelineView.swift, WorkflowPipelineViewModel.swift, ImageGenerationView.swift, DTProjectBrowserView.swift, AppSettings.swift, ContentView.swift — plus broader scan of StoryStudioView.swift, StoryStudioViewModel.swift, CharacterEditorView.swift, SceneEditorView.swift, StoryProjectLibraryView.swift, StoryDataModels.swift, PromptAssembler.swift, WorkflowBuilderView.swift, WorkflowExecutionView.swift, WorkflowExecutionViewModel.swift, LLMProvider.swift, CloudModelCatalog.swift, DrawThingsProvider.swift, ConfigPresetsManager.swift, DataModels.swift, KeychainService.swift
 **Auditor:** Claude code-quality-auditor agent
 
 ---
@@ -10,11 +10,11 @@
 ## Summary
 
 - Critical Security Issues: 0
-- High Priority: 3
-- Medium Priority: 6
-- Low Priority / Style: 6
+- High Priority: 1
+- Medium Priority: 4
+- Low Priority / Style: 4
 
-All findings from the previous audit (2026-02-24) have been confirmed fixed in the current codebase. This report covers newly identified issues from a fresh full-project scan.
+All findings from the previous two audit cycles have been confirmed fixed in the current codebase (see Applied Fixes table at bottom). This report covers only newly identified issues from the third full-project scan.
 
 ---
 
@@ -22,604 +22,437 @@ All findings from the previous audit (2026-02-24) have been confirmed fixed in t
 
 ---
 
-### [HIGH] `NSOpenPanel.runModal()` Still Called on Main Thread in `DTProjectBrowserViewModel` — `DTProjectBrowserViewModel.swift:102`
+### [HIGH] `WorkflowExecutionViewModel.browseWorkingDirectory()` Calls `NSOpenPanel.runModal()` — `WorkflowExecutionViewModel.swift:243`
 
 **Category:** Best Practice / macOS
 **Severity:** High
 
 **Explanation:**
-The previous audit flagged `NSOpenPanel.runModal()` in `ImageGenerationView.openSourceImagePanel()` and requested it be replaced with `.fileImporter`. The `ImageGenerationView` fix was applied. However, `DTProjectBrowserViewModel.addFolder()` still calls `panel.runModal()` directly from a `@MainActor` function:
+`WorkflowExecutionViewModel.browseWorkingDirectory()` presents an `NSOpenPanel` using the synchronous `.runModal()` call:
 
 ```swift
-guard panel.runModal() == .OK, let url = panel.url else { return }
+func browseWorkingDirectory() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.message = "Select working directory for file operations"
+
+    if panel.runModal() == .OK, let url = panel.url {
+        workingDirectory = url
+    }
+}
 ```
 
-`NSOpenPanel.runModal()` spins a synchronous modal event loop on the main thread. During this time, SwiftUI cannot process layout updates, animations, or any pending main-actor work. The preferred pattern on macOS 13+ is the async `begin(completionHandler:)` method or using SwiftUI's `.fileImporter` modifier. Additionally, `addFolder()` is called both from the view's button action and from `grantAccessView` — passing it through `.fileImporter` would centralize file access consistently with the rest of the project.
+This is the same pattern that was flagged as [HIGH] in the previous audit cycle for `DTProjectBrowserViewModel.addFolder()` and subsequently fixed there (using the async `panel.begin { }` callback). `WorkflowExecutionViewModel` still uses the blocking form. `NSOpenPanel.runModal()` spins a synchronous modal event loop on the main actor, preventing SwiftUI from processing layout updates or animations during the file picker.
+
+The class is `@MainActor`, so this call blocks the main actor for the full duration the user is interacting with the panel (potentially many seconds).
 
 **Current Code:**
 ```swift
-// DTProjectBrowserViewModel.swift:85-102
-func addFolder() {
+// WorkflowExecutionViewModel.swift:236-246
+func browseWorkingDirectory() {
     let panel = NSOpenPanel()
-    panel.title = "Select Folder with Draw Things Projects"
-    ...
-    panel.canCreateDirectories = false
-    ...
-    guard panel.runModal() == .OK, let url = panel.url else { return }
-    ...
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.message = "Select working directory for file operations"
+
+    if panel.runModal() == .OK, let url = panel.url {
+        workingDirectory = url
+    }
 }
 ```
 
 **Improved Code:**
-Move the panel presentation to the view and use the async `begin(completionHandler:)` API. Keep folder processing in the ViewModel but move panel presentation to the view:
+Replace the synchronous `.runModal()` with the async `begin(completionHandler:)` callback, matching the pattern used in `DTProjectBrowserViewModel.addFolder()`:
 
 ```swift
-// In DTProjectBrowserView — add state:
-@State private var showFolderPicker = false
-
-// Add to the view:
-.fileImporter(
-    isPresented: $showFolderPicker,
-    allowedContentTypes: [.folder],
-    allowsMultipleSelection: false
-) { result in
-    if case .success(let urls) = result, let url = urls.first {
-        viewModel.addFolder(url: url)
-    }
-}
-
-// In DTProjectBrowserViewModel, refactor addFolder to accept a URL:
-func addFolder(url: URL) {
-    // ... bookmark + reload logic, no panel needed
-}
-```
-
-Alternatively, if keeping the panel in the ViewModel, use the async form to avoid blocking:
-
-```swift
-func addFolder() {
+func browseWorkingDirectory() {
     let panel = NSOpenPanel()
-    // ... configure ...
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.message = "Select working directory for file operations"
+
+    // Use async form to avoid blocking the main actor during panel interaction.
     panel.begin { [weak self] response in
         guard response == .OK, let url = panel.url else { return }
-        self?.processNewFolder(url: url)
+        self?.workingDirectory = url
     }
 }
 ```
 
----
-
-### [HIGH] `OSLog` in `DrawThingsHTTPClient` Emits Prompt and Model Data — `DrawThingsHTTPClient.swift:114,129`
-
-**Category:** Security / Logging
-**Severity:** High
-
-**Explanation:**
-`DrawThingsHTTPClient.generateImage` contains two `logger.debug` calls that emit generation details to the system log:
-
-```swift
-logger.debug("Using img2img with source image, strength=\(config.strength)")
-...
-logger.debug("Sending \(isImg2Img ? "img2img" : "txt2img") request: prompt=\(prompt.prefix(50))...")
-```
-
-The second line logs the first 50 characters of the user's prompt at `debug` level via OSLog. On macOS, `debug`-level entries from a production app are only visible to processes with appropriate entitlements, and are not preserved across reboots. However, during active `log stream` sessions or when Console.app is open, these entries are visible system-wide. The prompt is user content (PII) and logging it — even truncated — is inconsistent with the project's existing decision to remove prompt logging from `RequestLogger.append()`.
-
-The same issue exists at `DrawThingsHTTPClient.swift:163` (`"Fetching models from \(url.absoluteString)"`) and in `DrawThingsGRPCClient.swift:312` which logs model name, family, sampler, gamma, and flags via `logger.debug`. These are less sensitive but represent the same pattern.
-
-**Current Code:**
-```swift
-// DrawThingsHTTPClient.swift:114
-logger.debug("Using img2img with source image, strength=\(config.strength)")
-
-// DrawThingsHTTPClient.swift:129
-logger.debug("Sending \(isImg2Img ? "img2img" : "txt2img") request: prompt=\(prompt.prefix(50))...")
-```
-
-**Improved Code:**
-Remove the prompt content from the debug log. Log only the generation mode and non-PII parameters:
-
-```swift
-// Safe: no user content, just generation metadata
-logger.debug("Starting \(isImg2Img ? "img2img" : "txt2img") request")
-// If strength is needed for debugging:
-if isImg2Img {
-    logger.debug("img2img strength: \(config.strength, format: .fixed(precision: 2))")
-}
-```
-
-For the gRPC client, the `logger.debug` at line 312 of `DrawThingsGRPCClient.swift` logs the model name (a filename, not PII) but also `gamma` and `cfgZeroStar` flags — these are acceptable for debugging and not user PII. The prompt is not logged there. That specific line is acceptable; only the HTTP prompt logging needs fixing.
+Alternatively, if the call site is always a SwiftUI button action (which runs on the main actor), move to `.fileImporter` in `WorkflowExecutionView`, consistent with `ImageGenerationView`.
 
 ---
 
-### [HIGH] `StoryflowExecutor.init` Falls Back to `~/Pictures` — `StoryflowExecutor.swift:170`
-
-**Category:** Security / Sandbox
-**Severity:** High
-
-**Explanation:**
-`StoryflowExecutor.init` has a working-directory fallback:
-
-```swift
-let dir = workingDirectory ?? FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first!
-```
-
-The app is sandboxed. Without the `com.apple.security.assets.pictures.read-write` entitlement (which is not granted), the `~/Pictures` directory inside the sandbox container is not the user's actual Pictures folder. The actual sandboxed path would be `~/Library/Containers/tanque.org.DrawThingsStudio/Data/Pictures`, which is rarely what is intended. More importantly, `WorkflowExecutionViewModel.swift` is the correct caller that sets the working directory properly, but if `StoryflowExecutor` is ever instantiated without an explicit working directory (e.g., from tests or future code), it will silently use the wrong path.
-
-The correct fallback is the same path used in `StoryflowExecutionState.init`:
-
-```swift
-// StoryflowExecutionState.swift:46
-let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-return appSupport.appendingPathComponent("DrawThingsStudio/WorkflowOutput", isDirectory: true)
-```
-
-**Current Code:**
-```swift
-// StoryflowExecutor.swift:170
-let dir = workingDirectory ?? FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first!
-self.state = StoryflowExecutionState(workingDirectory: dir)
-```
-
-**Improved Code:**
-```swift
-// Use the same default as StoryflowExecutionState — not .picturesDirectory
-init(provider: any DrawThingsProvider, workingDirectory: URL? = nil) {
-    self.provider = provider
-    // Default to the sandboxed WorkflowOutput directory, not ~/Pictures
-    // (the app does not have pictures entitlement and ~/Pictures is inaccessible)
-    self.state = workingDirectory.map { StoryflowExecutionState(workingDirectory: $0) }
-               ?? StoryflowExecutionState()  // StoryflowExecutionState.init() uses the correct default
-}
-```
-
-This removes the force-unwrap and aligns the default with the correct sandboxed path used everywhere else.
-
----
-
-### [MEDIUM] `DrawThingsAssetManager.allModels` is a Computed Property With O(n) Set Construction on Every Access — `DrawThingsAssetManager.swift:35`
+### [MEDIUM] `LLMModel.formattedSize` Allocates a New `ByteCountFormatter` Per Call — `LLMProvider.swift:58`
 
 **Category:** Performance
 **Severity:** Medium
 
 **Explanation:**
-`allModels` is a computed property accessed in view bodies (via `assetManager.allModels`):
+`LLMModel.formattedSize` is a computed property on a `struct` that allocates a fresh `ByteCountFormatter` instance every time it is accessed:
 
 ```swift
-var allModels: [DrawThingsModel] {
-    let localFilenames = Set(models.map { $0.filename })
-    let uniqueCloud = cloudCatalog.models.filter { !localFilenames.contains($0.filename) }
-    return models + uniqueCloud
-}
-```
-
-Every SwiftUI body re-evaluation that touches `assetManager.allModels` (which happens in `PipelineStepEditorView` and `ModelSelectorView` inside `ImageGenerationView`) runs this O(n+m) operation: building a `Set` from `models`, then filtering the full `cloudCatalog.models` list (~400 entries). Since `DrawThingsAssetManager` is `@MainActor` with `@Published` properties, any change to `models`, `loras`, `isLoading`, or `lastError` triggers a re-evaluation of all observing views.
-
-**Current Code:**
-```swift
-// DrawThingsAssetManager.swift:35
-var allModels: [DrawThingsModel] {
-    let localFilenames = Set(models.map { $0.filename })
-    let uniqueCloud = cloudCatalog.models.filter { !localFilenames.contains($0.filename) }
-    return models + uniqueCloud
-}
-```
-
-**Improved Code:**
-Cache the result as a `@Published` property and update it only when `models` or cloud catalog models change:
-
-```swift
-@Published private(set) var allModels: [DrawThingsModel] = []
-
-// In fetchAssets() and fetchCloudCatalogIfNeeded(), after updating models:
-private func updateAllModels() {
-    let localFilenames = Set(models.map { $0.filename })
-    let uniqueCloud = cloudCatalog.models.filter { !localFilenames.contains($0.filename) }
-    allModels = models + uniqueCloud
-}
-```
-
-Call `updateAllModels()` after each update to `models` (in `fetchAssets`) and after `cloudCatalog.fetchIfNeeded()` returns.
-
----
-
-### [MEDIUM] `ImageStorageManager.saveImage` Allocates a New `ISO8601DateFormatter` Per Call — `ImageStorageManager.swift:41`
-
-**Category:** Performance
-**Severity:** Medium
-
-**Explanation:**
-`saveImage` allocates and configures a new `ISO8601DateFormatter` instance every time an image is saved:
-
-```swift
-let timestamp = ISO8601DateFormatter().string(from: Date())
-    .replacingOccurrences(of: ":", with: "-")
-    .replacingOccurrences(of: "T", with: "_")
-```
-
-`DateFormatter` and `ISO8601DateFormatter` are expensive to allocate. While image saving is infrequent, this is the same antipattern previously fixed in `RequestLogger.timestamp()`. Consistency and correctness (date formatters are not thread-safe, though `ImageStorageManager` is `@MainActor`) both argue for making it a static constant.
-
-**Current Code:**
-```swift
-// ImageStorageManager.swift:41
-let timestamp = ISO8601DateFormatter().string(from: Date())
-    .replacingOccurrences(of: ":", with: "-")
-    .replacingOccurrences(of: "T", with: "_")
-```
-
-**Improved Code:**
-```swift
-private static let filenameTimestampFormatter: ISO8601DateFormatter = {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withInternetDateTime]
-    return f
-}()
-
-// In saveImage():
-let timestamp = Self.filenameTimestampFormatter.string(from: Date())
-    .replacingOccurrences(of: ":", with: "-")
-    .replacingOccurrences(of: "T", with: "_")
-```
-
----
-
-### [MEDIUM] `DTProjectBrowserViewModel.formatFileSize` Allocates a New `ByteCountFormatter` Per Row — `DTProjectBrowserViewModel.swift:393`
-
-**Category:** Performance
-**Severity:** Medium
-
-**Explanation:**
-`formatFileSize` is a `static func` that creates a new `ByteCountFormatter` on every call:
-
-```swift
-static func formatFileSize(_ bytes: Int64) -> String {
+var formattedSize: String {
+    guard let size = size else { return "Unknown" }
     let formatter = ByteCountFormatter()
+    formatter.allowedUnits = [.useGB, .useMB]
     formatter.countStyle = .file
-    return formatter.string(fromByteCount: bytes)
+    return formatter.string(fromByteCount: size)
 }
 ```
 
-This is called from `DTProjectRow.body` (via `DTProjectBrowserViewModel.formatFileSize(project.fileSize)`) and from `DTDetailPanel` for each project in the list. With potentially hundreds of rows in `LazyVStack`, `ByteCountFormatter` is allocated repeatedly on each render pass. `ByteCountFormatter` is similarly expensive to allocate as `DateFormatter`.
+`LLMModel` is displayed in a `List` or `Picker` (in the AI Generation settings panel and in `AIGenerationView.swift`), where `formattedSize` is accessed in the view body for each model row. `ByteCountFormatter` allocation is expensive — this is the same antipattern previously fixed in `DTProjectBrowserViewModel.formatFileSize` and `ImageStorageManager.saveImage`.
+
+Because `LLMModel` is a `struct` (not a class), a `static` property is not directly available for this particular formatter. The correct fix is a module-level or extension-level `private` static constant.
 
 **Current Code:**
 ```swift
-// DTProjectBrowserViewModel.swift:392
-static func formatFileSize(_ bytes: Int64) -> String {
+// LLMProvider.swift:58-63
+var formattedSize: String {
+    guard let size = size else { return "Unknown" }
     let formatter = ByteCountFormatter()
+    formatter.allowedUnits = [.useGB, .useMB]
     formatter.countStyle = .file
-    return formatter.string(fromByteCount: bytes)
+    return formatter.string(fromByteCount: size)
 }
 ```
 
 **Improved Code:**
 ```swift
-private static let fileSizeFormatter: ByteCountFormatter = {
+// Add a private static formatter in an extension or at module scope:
+private let _llmModelSizeFormatter: ByteCountFormatter = {
     let f = ByteCountFormatter()
+    f.allowedUnits = [.useGB, .useMB]
     f.countStyle = .file
     return f
 }()
 
-static func formatFileSize(_ bytes: Int64) -> String {
-    fileSizeFormatter.string(fromByteCount: bytes)
+// In LLMModel:
+var formattedSize: String {
+    guard let size = size else { return "Unknown" }
+    return _llmModelSizeFormatter.string(fromByteCount: size)
+}
+```
+
+Or move `formattedSize` into a static helper function:
+
+```swift
+extension LLMModel {
+    private static let sizeFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useGB, .useMB]
+        f.countStyle = .file
+        return f
+    }()
+
+    var formattedSize: String {
+        guard let size = size else { return "Unknown" }
+        return Self.sizeFormatter.string(fromByteCount: size)
+    }
 }
 ```
 
 ---
 
-### [MEDIUM] `DrawThingsGRPCClient` Marked `@MainActor` Despite Performing Blocking I/O — `DrawThingsGRPCClient.swift:14`
+### [MEDIUM] `OllamaClient.parseDate` Allocates a New `ISO8601DateFormatter` Per Call — `OllamaClient.swift:248`
 
-**Category:** Best Practice / Swift Concurrency
+**Category:** Performance
 **Severity:** Medium
 
 **Explanation:**
-`DrawThingsGRPCClient` is declared `@MainActor final class`. This means all method calls, including `generateImage`, `fetchModels`, `fetchLoRAs`, and `fetchEchoReply`, execute on the main actor. While these methods are `async` (so they yield during `await` points), the synchronous setup code and state mutations all run on the main actor. This is safe because the gRPC networking happens asynchronously inside `client.generateImage(...)`, but it means:
+`OllamaClient.parseDate(_:)` is called once per model entry returned from `listModels()`. For a user with many Ollama models, this allocates one `ISO8601DateFormatter` per model. `DateFormatter` and its subclasses are expensive to create. This is the same antipattern previously fixed in `RequestLogger.timestamp()` and `ImageStorageManager.saveImage`.
 
-1. The class cannot be used from background actors without hopping to the main actor first.
-2. `cachedEchoReply` (line 166), `client`, and `service` are mutable shared state with no isolation annotations other than the class-level `@MainActor`.
-3. `extractStrings(from:withExtensions:)` at line 193 performs a CPU-intensive loop scanning binary data for string patterns. Calling this from a `@MainActor` context (as it is via `fetchModels`) holds the main actor while scanning potentially large `Data` blobs.
-
-The `extractStrings` method is the most actionable issue — it should be `nonisolated` or moved to a background actor so the main actor is not blocked during binary scanning.
+```swift
+private func parseDate(_ dateString: String?) -> Date? {
+    guard let dateString = dateString else { return nil }
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: dateString)
+}
+```
 
 **Current Code:**
 ```swift
-// DrawThingsGRPCClient.swift:193
-private func extractStrings(from data: Data, withExtensions extensions: [String]) -> [String] {
-    // ... iterates through potentially large Data blob with multiple scanning strategies
+// OllamaClient.swift:247-252
+private func parseDate(_ dateString: String?) -> Date? {
+    guard let dateString = dateString else { return nil }
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: dateString)
 }
 ```
 
 **Improved Code:**
-Mark `extractStrings` as `nonisolated` and call it with `await Task.detached`:
-
 ```swift
-private nonisolated func extractStrings(from data: Data, withExtensions extensions: [String]) -> [String] {
-    // ... same scanning logic ...
-}
+private static let ollamaDateFormatter: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
 
-// In fetchModels(), when calling extractStrings:
-let modelNames = await Task.detached(priority: .userInitiated) {
-    self.extractStrings(from: echoReply.override.models, withExtensions: modelExtensions)
-}.value
+private func parseDate(_ dateString: String?) -> Date? {
+    guard let dateString = dateString else { return nil }
+    return Self.ollamaDateFormatter.date(from: dateString)
+}
 ```
 
-This is consistent with how `DTProjectBrowserViewModel` offloads `DTProjectDatabase` work to `Task.detached`.
+`ISO8601DateFormatter` is thread-safe when used from a single thread; since `OllamaClient` is `@MainActor`, a `static let` is safe here.
 
 ---
 
-### [MEDIUM] `OllamaClient` Uses `await MainActor.run` in a Non-`@MainActor` Class — `OllamaClient.swift:63`
+### [MEDIUM] `SettingsView` Tasks Use `await MainActor.run` When Already on Main Actor — `AppSettings.swift:562,574`
 
 **Category:** Swift Concurrency / Best Practice
 **Severity:** Medium
 
 **Explanation:**
-`OllamaClient` is declared as `class OllamaClient: LLMProvider, ObservableObject` — neither `@MainActor` nor `final`. Yet it has `@Published` properties and wraps all state mutations in `await MainActor.run { ... }`:
+`SettingsView.testConnection()` and `testDTConnection()` create unstructured `Task` blocks and then use `await MainActor.run { }` to update `@State` properties:
 
 ```swift
-func checkConnection() async -> Bool {
-    await MainActor.run {
-        connectionStatus = .connecting
+private func testConnection() {
+    testingConnection = true
+    Task {
+        let client = settings.createLLMClient()
+        let success = await client.checkConnection()
+        let providerName = settings.providerType.displayName
+
+        await MainActor.run {
+            testingConnection = false
+            connectionResult = success ? "..." : "..."
+        }
     }
-    ...
-    await MainActor.run {
-        connectionStatus = .error("Invalid host/port configuration")
-    }
-    ...
-    await MainActor.run {
-        connectionStatus = .connected
-    }
-    ...
 }
 ```
 
-And in `listModels()`:
-```swift
-await MainActor.run {
-    self.availableModels = models
-}
-```
+`SettingsView` is a SwiftUI `View`. In Swift 5.9+, SwiftUI view methods are inferred to run on the main actor, and an unstructured `Task { }` created from a `@MainActor` context inherits that actor. This means the `await MainActor.run { }` wrapper inside the task is redundant — the closures after the `await` already execute on the main actor.
 
-This pattern works but is verbose and fragile. If someone adds a `@Published` mutation without wrapping it in `MainActor.run`, there will be a runtime data race that the compiler does not catch. The established project convention is `@MainActor final class ... : ObservableObject` — `OllamaClient` should follow this pattern. Being `@MainActor` would allow direct mutations and eliminate the `await MainActor.run` boilerplate.
-
-Note that `OllamaClient` is currently only instantiated via `AppSettings.shared.createLLMClient()`, called from `@MainActor` contexts, so adding `@MainActor` should not break any existing call sites.
+The `await MainActor.run` wrapper works correctly but adds unnecessary boilerplate and may confuse readers into thinking the outer context is not already on the main actor. The improved pattern uses `Task { @MainActor in ... }` for clarity, or simply annotates the `Task` closure body directly.
 
 **Current Code:**
 ```swift
-// OllamaClient.swift:13
-class OllamaClient: LLMProvider, ObservableObject {
-    ...
-    @Published var connectionStatus: LLMConnectionStatus = .disconnected
-    @Published var availableModels: [LLMModel] = []
-    ...
-    await MainActor.run { connectionStatus = .connecting }
+// AppSettings.swift:562-572
+Task {
+    let client = settings.createLLMClient()
+    let success = await client.checkConnection()
+    let providerName = settings.providerType.displayName
+
+    await MainActor.run {
+        testingConnection = false
+        connectionResult = success ? "Success! Connected to \(providerName)" : "Failed to connect"
+    }
+}
 ```
 
 **Improved Code:**
 ```swift
-@MainActor
-final class OllamaClient: LLMProvider, ObservableObject {
-    ...
-    @Published var connectionStatus: LLMConnectionStatus = .disconnected
-    @Published var availableModels: [LLMModel] = []
-    ...
-    // Direct mutation is now safe — no MainActor.run wrappers needed:
-    connectionStatus = .connecting
+// The Task inherits the main actor from the view's button action context.
+// Explicit annotation makes isolation clear without the redundant MainActor.run wrapper.
+Task { @MainActor in
+    let client = settings.createLLMClient()
+    let success = await client.checkConnection()
+    let providerName = settings.providerType.displayName
+    testingConnection = false
+    connectionResult = success ? "Success! Connected to \(providerName)" : "Failed to connect"
+}
 ```
 
-The `OpenAICompatibleClient` has the same issue and should receive the same fix.
+Apply the same change to `testDTConnection()`.
 
 ---
 
-### [LOW] `StoryflowExecutor` and `WorkflowBuilderViewModel` Are Not `final` — `StoryflowExecutor.swift:144`, `WorkflowBuilderViewModel.swift:14`
+### [LOW] `WorkflowExecutionViewModel` and `ConfigPresetsManager` and `PromptStyleManager` Are Not `final` — Multiple Files
 
 **Category:** Best Practice / Readability
 **Severity:** Low
 
 **Explanation:**
-The project convention for ViewModels is `@MainActor final class`. `StoryflowExecutor` and `WorkflowBuilderViewModel` are declared as plain `class`:
+Three classes in the project are declared without `final` but are neither subclassed nor designed for subclassing:
 
-```swift
-// StoryflowExecutor.swift:144
-@MainActor
-class StoryflowExecutor {
+- `WorkflowExecutionViewModel` at `WorkflowExecutionViewModel.swift:70`: declared `@MainActor class WorkflowExecutionViewModel: ObservableObject`
+- `ConfigPresetsManager` at `ConfigPresetsManager.swift:297`: declared `@MainActor class ConfigPresetsManager`
+- `PromptStyleManager` at `LLMProvider.swift:193`: declared `@MainActor class PromptStyleManager: ObservableObject`
 
-// WorkflowBuilderViewModel.swift:14
-@MainActor
-class WorkflowBuilderViewModel: ObservableObject {
-```
-
-Neither is subclassed anywhere in the codebase. Marking them `final`:
-1. Enables compiler optimizations (devirtualization of all method calls).
-2. Makes the intent clear that subclassing is not anticipated.
-3. Aligns with the project convention established in every other ViewModel.
+The project convention is `@MainActor final class`. Marking these `final` enables compiler devirtualization, makes the intent clear, and aligns with every other ViewModel and manager in the codebase.
 
 **Current Code:**
 ```swift
+// WorkflowExecutionViewModel.swift:70
 @MainActor
-class StoryflowExecutor { ... }
+class WorkflowExecutionViewModel: ObservableObject {
 
+// ConfigPresetsManager.swift:297
 @MainActor
-class WorkflowBuilderViewModel: ObservableObject { ... }
+class ConfigPresetsManager {
+
+// LLMProvider.swift:193
+@MainActor
+class PromptStyleManager: ObservableObject {
 ```
 
 **Improved Code:**
 ```swift
 @MainActor
-final class StoryflowExecutor { ... }
+final class WorkflowExecutionViewModel: ObservableObject {
 
 @MainActor
-final class WorkflowBuilderViewModel: ObservableObject { ... }
-```
+final class ConfigPresetsManager {
 
-`DrawThingsHTTPClient` (line 13) has the same issue and should also be marked `final` since it is never subclassed.
+@MainActor
+final class PromptStyleManager: ObservableObject {
+```
 
 ---
 
-### [LOW] `StoryflowExecutor.isCancelled` is Not Checked During Active Generation — `StoryflowExecutor.swift:245`
+### [LOW] `ImageInspectorViewModel.storageDirectory` Recomputes `FileManager.urls` on Every Access — `ImageInspectorViewModel.swift:148`
 
-**Category:** Correctness / Responsiveness
+**Category:** Performance
 **Severity:** Low
 
 **Explanation:**
-`isCancelled` is a plain `Bool` checked in the `while` loop condition:
+`storageDirectory` is a computed property that calls `FileManager.default.urls(for:in:)` and `appendingPathComponent` on every access:
 
 ```swift
-while instructionIndex < instructions.count && !isCancelled {
-    ...
-    let (result, images) = await executeInstruction(instruction)
-    ...
+private var storageDirectory: URL {
+    let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    return appSupport.appendingPathComponent("DrawThingsStudio/InspectorHistory", isDirectory: true)
 }
 ```
 
-When `executeInstruction` is in the middle of `await provider.generateImage(...)`, cancellation via `executor.cancel()` sets `isCancelled = true` but the executor won't observe it until `generateImage` returns. For long-running generations (which may take minutes), the cancel button will appear to have no effect until the current step finishes.
-
-This is a structural limitation of using a plain `Bool` rather than structured Swift concurrency (`Task` with cooperative cancellation). The deeper fix would be to refactor `execute` to run inside a `Task` and use `try Task.checkCancellation()`, but that is a larger change. A minimal improvement is to document this behavior:
+This property is accessed in `saveEntryToDisk`, `deleteEntryFromDisk`, `clearPersistedHistory`, `loadHistoryFromDisk`, and `ensureDirectoryExists` — all called during normal operation. While `FileManager.urls(for:in:)` is fast, the path is constant for the lifetime of the process and there is no reason to recompute it. Compare with `ImageStorageManager`, which correctly stores `storageDirectory` as a `let` constant initialized in `init()`.
 
 **Current Code:**
 ```swift
-// StoryflowExecutor.swift:159
-private var isCancelled = false
+// ImageInspectorViewModel.swift:148-151
+private var storageDirectory: URL {
+    let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    return appSupport.appendingPathComponent("DrawThingsStudio/InspectorHistory", isDirectory: true)
+}
 ```
 
 **Improved Code:**
-No code change is strictly required, but add documentation to `cancel()`:
 ```swift
-/// Request cancellation of the currently running workflow.
-/// Cancellation is cooperative: if generation is currently in progress,
-/// the executor will stop after the current step completes.
-/// For immediate cancellation, the caller should also cancel the
-/// underlying provider's network request if supported.
-func cancel() {
-    isCancelled = true
-}
+// Computed once, stored as a constant — consistent with ImageStorageManager pattern.
+private let storageDirectory: URL = {
+    let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    return appSupport.appendingPathComponent("DrawThingsStudio/InspectorHistory", isDirectory: true)
+}()
 ```
 
 ---
 
-### [LOW] `ImageInspectorViewModel.loadImage(webURL:)` Mutates State Across Actor Boundary — `ImageInspectorViewModel.swift:246`
+### [LOW] `WorkflowExecutionViewModel` `onInstructionStart` Closure Uses Guard-let `self` Instead of `[weak self]` Capture — `WorkflowExecutionViewModel.swift:154`
 
-**Category:** Swift Concurrency
+**Category:** Swift Concurrency / Memory
 **Severity:** Low
 
 **Explanation:**
-`loadImage(webURL:)` is an `@MainActor` method that spawns a `Task` and then calls `loadImage(data:sourceName:)` — also an `@MainActor` method — from inside it:
+The callbacks set on `executor` capture `self` weakly, but the `onInstructionStart` closure uses `guard let self = self` in the old pre-Swift-5.3 style, while `onInstructionComplete` and `onProgress` use `self?.` optional chaining. This inconsistency is not a bug — both patterns prevent retain cycles — but the non-uniform approach is slightly confusing:
 
 ```swift
-func loadImage(webURL: URL) {
-    isProcessing = true
-    ...
-    Task {
-        do {
-            let (data, _) = try await URLSession.shared.data(from: webURL)
-            let sourceName = webURL.lastPathComponent
-            loadImage(data: data, sourceName: sourceName)  // calls @MainActor method
-        } catch {
-            errorMessage = "Failed to download image: \(error.localizedDescription)"
-            isProcessing = false
-        }
-    }
+executor?.onInstructionStart = { [weak self] instruction, index, total in
+    guard let self = self else { return }
+    self.currentInstructionIndex = index
+    self.totalInstructions = total
+    // ...
+    self.executionLog.append(entry)
+}
+
+executor?.onInstructionComplete = { [weak self] instruction, result in
+    guard let self = self else { return }
+    // ...
+}
+
+executor?.onProgress = { [weak self] progress in
+    self?.generationProgress = progress
 }
 ```
 
-Since both the outer method and `loadImage(data:)` are `@MainActor`, and the `Task` inherits the actor context from its creation site (a `@MainActor` context), this is technically correct. However, the code is misleading: `loadImage(data:sourceName:)` is called without `await` from inside an async `Task`, which implies it's synchronous — yet it also sets `isProcessing = false` internally. After the download, there is a brief window where `isProcessing` is `true` (set before `Task`) but `errorMessage` from a previous failed attempt might still be shown.
+Swift 5.3+ allows `[weak self]` with `guard let self` (shorthand), which is cleaner than the older pattern. More importantly, the `onInstructionStart` closure builds and appends an `ExecutionLogEntry` inside the `guard let self` block — this is correct, but the block is fairly long. The style should be consistent across all three closures.
 
-The cleaner pattern is to make the `Task` body explicitly `@MainActor`:
+This is a style/consistency issue only; there is no functional defect.
 
 **Current Code:**
 ```swift
-func loadImage(webURL: URL) {
-    isProcessing = true
-    errorMessage = nil
-
-    Task {
-        do {
-            let (data, _) = try await URLSession.shared.data(from: webURL)
-            let sourceName = webURL.lastPathComponent
-            loadImage(data: data, sourceName: sourceName)
-        } catch {
-            errorMessage = "Failed to download image: \(error.localizedDescription)"
-            isProcessing = false
-        }
-    }
+// WorkflowExecutionViewModel.swift:154-169
+executor?.onInstructionStart = { [weak self] instruction, index, total in
+    guard let self = self else { return }
+    self.currentInstructionIndex = index
+    ...
 }
 ```
 
 **Improved Code:**
-```swift
-func loadImage(webURL: URL) {
-    isProcessing = true
-    errorMessage = nil
+Uniform weak capture across all three closures using Swift 5.7+ shorthand:
 
-    Task { @MainActor in
-        do {
-            let (data, _) = try await URLSession.shared.data(from: webURL)
-            loadImage(data: data, sourceName: webURL.lastPathComponent)
-        } catch {
-            errorMessage = "Failed to download image: \(error.localizedDescription)"
-            isProcessing = false
-        }
-    }
+```swift
+executor?.onInstructionStart = { [weak self] instruction, index, total in
+    guard let self else { return }   // Swift 5.7 shorthand
+    currentInstructionIndex = index
+    totalInstructions = total
+    // ...
+    executionLog.append(entry)
+}
+
+executor?.onInstructionComplete = { [weak self] instruction, result in
+    guard let self else { return }
+    // ...
+}
+
+executor?.onProgress = { [weak self] progress in
+    guard let self else { return }
+    generationProgress = progress
 }
 ```
 
-The explicit `@MainActor` annotation on the closure makes the isolation guarantee visible at the call site, which matches the project's convention for unstructured tasks.
-
 ---
 
-### [LOW] `WorkflowPipelineView` Accesses `DrawThingsAssetManager.shared.loras` Directly in `PipelineStepEditorView` — `WorkflowPipelineView.swift:396`
+### [LOW] `processNewFolder` Path Comparison Uses `.path` String Equality Instead of Standardized URL Equality — `DTProjectBrowserViewModel.swift:111`
 
-**Category:** Architecture / Readability
+**Category:** Correctness / Best Practice
 **Severity:** Low
 
 **Explanation:**
-`PipelineStepEditorView` receives `availableModels` as a parameter (injected from the parent view's `@ObservedObject assetManager`), but for LoRAs it goes directly to the shared singleton:
+`processNewFolder` checks for duplicate folder additions using raw path string comparison:
 
 ```swift
-// WorkflowPipelineView.swift:395
-LoRAConfigurationView(
-    availableLoRAs: DrawThingsAssetManager.shared.loras,
-    selectedLoRAs: $step.loras
-)
+if folders.contains(where: { $0.url.path == url.path }) {
+    // Already have this folder — just refresh
+    reloadAllProjects()
+    return
+}
 ```
 
-This creates an inconsistency within the same view: models are passed through the view hierarchy, but LoRAs bypass it. Since `DrawThingsAssetManager.shared.loras` is not observed by `PipelineStepEditorView` (the `@ObservedObject assetManager` is in the parent `WorkflowPipelineView`), changes to `loras` on the singleton after `PipelineStepEditorView` is created won't cause `PipelineStepEditorView` to re-evaluate. In practice this is fine because LoRAs update rarely, but it's architecturally inconsistent.
+This is inconsistent with `removeFolder`, which correctly uses `.standardizedFileURL`:
+
+```swift
+// removeFolder (correct):
+return resolved.standardizedFileURL == folder.url.standardizedFileURL
+```
+
+Using `.path` string comparison can give false negatives for symlinks, trailing slashes, or paths containing `.` or `..` components. For example, `/Users/foo/bar` and `/Users/foo/bar/` would not be considered equal. The previous audit cycle flagged and fixed this exact issue in `removeFolder`, but `processNewFolder` uses the older `.path` comparison pattern.
 
 **Current Code:**
 ```swift
-// WorkflowPipelineView.swift:395
-LoRAConfigurationView(
-    availableLoRAs: DrawThingsAssetManager.shared.loras,
-    selectedLoRAs: $step.loras
-)
+// DTProjectBrowserViewModel.swift:111
+if folders.contains(where: { $0.url.path == url.path }) {
 ```
 
 **Improved Code:**
-Pass LoRAs as a parameter alongside `availableModels`:
-
 ```swift
-// PipelineStepEditorView parameters:
-let availableLoRAs: [DrawThingsLoRA]
-
-// In WorkflowPipelineView, pass from the observed assetManager:
-PipelineStepEditorView(
-    step: $viewModel.steps[index],
-    ...
-    availableModels: assetManager.allModels,
-    availableLoRAs: assetManager.loras,   // <-- injected consistently
-    ...
-)
-
-// In PipelineStepEditorView.body:
-LoRAConfigurationView(
-    availableLoRAs: availableLoRAs,
-    selectedLoRAs: $step.loras
-)
+if folders.contains(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) {
 ```
 
 ---
 
-## Applied Fixes
+## Previous Audit Findings — Status Verification
 
-Previous audit findings (2026-02-24) — all confirmed fixed in current codebase:
+All findings from audit cycles 1 and 2 (2026-02-24) have been verified fixed in the current codebase:
+
+### Cycle 1 Findings (All Fixed)
 
 | Finding | Status | Notes |
 |---------|--------|-------|
@@ -641,23 +474,40 @@ Previous audit findings (2026-02-24) — all confirmed fixed in current codebase
 | [LOW] Mixed view persistence strategies undocumented | Fixed | Comment in `ContentView.swift` |
 | [LOW] Error silently swallowed in `loadSourceFromProvider` | Deferred | Silent catch preserved; not a data loss issue |
 
-New findings from this audit cycle — all applied:
+### Cycle 2 Findings (All Fixed)
 
 | Finding | Status | Notes |
 |---------|--------|-------|
-| [HIGH] `NSOpenPanel.runModal()` in `DTProjectBrowserViewModel.addFolder` | ✅ Fixed | Refactored to `panel.begin { }` async callback; folder processing extracted to `processNewFolder(_:)` |
-| [HIGH] OSLog prompt logging in `DrawThingsHTTPClient` | ✅ Fixed | Removed `prompt.prefix(50)` from `logger.debug`; now logs only generation mode |
-| [HIGH] `StoryflowExecutor.init` falls back to `~/Pictures` | ✅ Fixed | Uses `StoryflowExecutionState()` default (WorkflowOutput path); removed force-unwrap |
-| [MEDIUM] `DrawThingsAssetManager.allModels` recomputed on every access | ✅ Fixed | `@Published private(set) var allModels`; `updateAllModels()` called after each fetch |
-| [MEDIUM] `ISO8601DateFormatter` allocated per `saveImage` call | ✅ Fixed | `private static let filenameFormatter` in `ImageStorageManager` |
-| [MEDIUM] `ByteCountFormatter` allocated per `formatFileSize` call | ✅ Fixed | `private static let fileSizeFormatter` in `DTProjectBrowserViewModel` |
-| [MEDIUM] `DrawThingsGRPCClient.extractStrings` runs on main actor | ✅ Fixed | `nonisolated`; both call sites use `Task.detached(priority: .userInitiated)` |
-| [MEDIUM] `OllamaClient` uses `await MainActor.run` instead of `@MainActor` | ✅ Fixed | `@MainActor final class`; all `await MainActor.run` wrappers removed |
-| [MEDIUM] `OpenAICompatibleClient` same issue | ✅ Fixed | Same fix applied |
-| [LOW] `StoryflowExecutor`, `WorkflowBuilderViewModel`, `DrawThingsHTTPClient` not `final` | ✅ Fixed | All three marked `final` |
-| [LOW] `isCancelled` not checked during active generation | ✅ Fixed | Doc comment added to `cancel()` documenting cooperative cancellation behaviour |
-| [LOW] `ImageInspectorViewModel.loadImage(webURL:)` Task annotation | ✅ Fixed | `Task { @MainActor in ... }` — explicit isolation annotation |
-| [LOW] `PipelineStepEditorView` accesses `DrawThingsAssetManager.shared.loras` directly | ✅ Fixed | `availableLoRAs` param added; injected from parent's `assetManager.loras` |
+| [HIGH] `NSOpenPanel.runModal()` in `DTProjectBrowserViewModel.addFolder` | Fixed | Refactored to `panel.begin { }` async callback; folder processing extracted to `processNewFolder(_:)` |
+| [HIGH] OSLog prompt logging in `DrawThingsHTTPClient` | Fixed | Removed `prompt.prefix(50)` from `logger.debug`; now logs only generation mode |
+| [HIGH] `StoryflowExecutor.init` falls back to `~/Pictures` | Fixed | Uses `StoryflowExecutionState()` default (WorkflowOutput path); removed force-unwrap |
+| [MEDIUM] `DrawThingsAssetManager.allModels` recomputed on every access | Fixed | `@Published private(set) var allModels`; `updateAllModels()` called after each fetch |
+| [MEDIUM] `ISO8601DateFormatter` allocated per `saveImage` call | Fixed | `private static let filenameFormatter` in `ImageStorageManager` |
+| [MEDIUM] `ByteCountFormatter` allocated per `formatFileSize` call | Fixed | `private static let fileSizeFormatter` in `DTProjectBrowserViewModel` |
+| [MEDIUM] `DrawThingsGRPCClient.extractStrings` runs on main actor | Fixed | `nonisolated`; both call sites use `Task.detached(priority: .userInitiated)` |
+| [MEDIUM] `OllamaClient` uses `await MainActor.run` instead of `@MainActor` | Fixed | `@MainActor final class`; all `await MainActor.run` wrappers removed |
+| [MEDIUM] `OpenAICompatibleClient` same issue | Fixed | Same fix applied |
+| [LOW] `StoryflowExecutor`, `WorkflowBuilderViewModel`, `DrawThingsHTTPClient` not `final` | Fixed | All three marked `final` |
+| [LOW] `isCancelled` not checked during active generation | Fixed | Doc comment added to `cancel()` documenting cooperative cancellation behaviour |
+| [LOW] `ImageInspectorViewModel.loadImage(webURL:)` Task annotation | Fixed | `Task { @MainActor in ... }` — explicit isolation annotation |
+| [LOW] `PipelineStepEditorView` accesses `DrawThingsAssetManager.shared.loras` directly | Fixed | `availableLoRAs` param added; injected from parent's `assetManager.loras` |
+
+---
+
+## Applied Fixes
+
+All cycle 3 findings applied (2026-02-24):
+
+| Finding | Status | Notes |
+|---------|--------|-------|
+| [HIGH] `WorkflowExecutionViewModel.browseWorkingDirectory()` calls `NSOpenPanel.runModal()` | ✅ Fixed | Replaced with `panel.begin { [weak self] }` async callback |
+| [MEDIUM] `LLMModel.formattedSize` allocates `ByteCountFormatter` per call | ✅ Fixed | `private static let sizeFormatter` in `LLMModel` |
+| [MEDIUM] `OllamaClient.parseDate` allocates `ISO8601DateFormatter` per call | ✅ Fixed | `private static let ollamaDateFormatter` |
+| [MEDIUM] `SettingsView` uses redundant `await MainActor.run` in test functions | ✅ Fixed | Both tasks now use `Task { @MainActor in }` with direct mutation |
+| [LOW] `WorkflowExecutionViewModel`, `ConfigPresetsManager`, `PromptStyleManager` not `final` | ✅ Fixed | All three marked `final` |
+| [LOW] `ImageInspectorViewModel.storageDirectory` recomputed on every access | ✅ Fixed | `private let storageDirectory: URL = { ... }()` constant |
+| [LOW] Inconsistent `guard let self = self` / `self?.` in executor callbacks | ✅ Fixed | All three closures use Swift 5.7 `guard let self` shorthand |
+| [LOW] `processNewFolder` uses `.path` string comparison | ✅ Fixed | Uses `standardizedFileURL` equality, consistent with `removeFolder` |
 
 ---
 
@@ -673,6 +523,10 @@ New findings from this audit cycle — all applied:
 
 4. **Security-scoped bookmark lifecycle:** `DTProjectBrowserViewModel.deinit` correctly calls `stopAccessingSecurityScopedResource()` for all URLs. Since it lives as `@StateObject` in `ContentView`, `deinit` never runs during normal app use — macOS will clean up security scope on process exit. This is acceptable behavior.
 
-5. **`StoryflowExecutor.isCancelled` cancellation gap:** When a gRPC or HTTP generation is in progress (potentially running for minutes), cancellation via `executor.cancel()` will not interrupt the in-flight network request. The current architecture does not thread cancellation tokens through to the `URLSession` or gRPC transport. This is a known architectural limitation.
+5. **`StoryflowExecutor.isCancelled` cancellation gap:** When a gRPC or HTTP generation is in progress (potentially running for minutes), cancellation via `executor.cancel()` will not interrupt the in-flight network request. The current architecture does not thread cancellation tokens through to the `URLSession` or gRPC transport. This is a known architectural limitation, now documented in `cancel()`.
 
-6. **`SettingsView` uses `@ObservedObject` for singletons:** `SettingsView` declares `@ObservedObject var settings = AppSettings.shared` and `@ObservedObject var styleManager = PromptStyleManager.shared`. These should be `@ObservedObject` (not `@StateObject`) for shared singletons — and they are. No issue.
+6. **`SettingsView` uses `@ObservedObject` for singletons:** `SettingsView` declares `@ObservedObject var settings = AppSettings.shared` and `@ObservedObject var styleManager = PromptStyleManager.shared`. These are correctly `@ObservedObject` (not `@StateObject`) for shared singletons.
+
+7. **`KeychainService`:** Correctly uses `kSecUseDataProtectionKeychain: true` and does not store sensitive data in UserDefaults. Secrets are migrated from UserDefaults to Keychain on first launch via `migrateLegacySecretsIfNeeded`. No issues found.
+
+8. **`CloudModelCatalog`:** Correctly implements exponential backoff retry (3 attempts), validates HTTP status codes and content type, and uses `URLSession` with a 15-second timeout. No security issues found.

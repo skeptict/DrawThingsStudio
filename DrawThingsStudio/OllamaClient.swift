@@ -244,11 +244,15 @@ final class OllamaClient: LLMProvider, ObservableObject {
 
     // MARK: - Helpers
 
+    private static let ollamaDateFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
     private func parseDate(_ dateString: String?) -> Date? {
         guard let dateString = dateString else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: dateString)
+        return Self.ollamaDateFormatter.date(from: dateString)
     }
 }
 

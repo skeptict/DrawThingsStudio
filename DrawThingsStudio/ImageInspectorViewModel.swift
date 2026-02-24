@@ -145,10 +145,11 @@ final class ImageInspectorViewModel: ObservableObject {
 
     // MARK: - Persistence
 
-    private var storageDirectory: URL {
+    // Computed once — path is constant for the process lifetime (consistent with ImageStorageManager).
+    private let storageDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return appSupport.appendingPathComponent("DrawThingsStudio/InspectorHistory", isDirectory: true)
-    }
+    }()
 
     private var isPersistenceEnabled: Bool {
         AppSettings.shared.persistInspectorHistory

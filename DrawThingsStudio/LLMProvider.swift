@@ -57,11 +57,15 @@ struct LLMModel: Identifiable, Codable {
     /// Formatted size string
     var formattedSize: String {
         guard let size = size else { return "Unknown" }
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useGB, .useMB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: size)
+        return Self.sizeFormatter.string(fromByteCount: size)
     }
+
+    private static let sizeFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useGB, .useMB]
+        f.countStyle = .file
+        return f
+    }()
 }
 
 // MARK: - Generation Options
@@ -190,7 +194,7 @@ struct CustomPromptStyle: Codable, Identifiable, Equatable {
 
 /// Manages prompt styles, including loading custom styles from JSON
 @MainActor
-class PromptStyleManager: ObservableObject {
+final class PromptStyleManager: ObservableObject {
     static let shared = PromptStyleManager()
 
     @Published private(set) var styles: [CustomPromptStyle] = []

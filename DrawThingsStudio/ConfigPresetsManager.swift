@@ -294,7 +294,7 @@ enum SeedModeMapping {
 // MARK: - Config Presets Manager
 
 @MainActor
-class ConfigPresetsManager {
+final class ConfigPresetsManager {
     static let shared = ConfigPresetsManager()
 
     private let logger = Logger(subsystem: "com.drawthingsstudio", category: "presets")

@@ -108,7 +108,7 @@ final class DTProjectBrowserViewModel: ObservableObject {
 
     private func processNewFolder(_ url: URL) {
         // Check if this folder is already bookmarked
-        if folders.contains(where: { $0.url.path == url.path }) {
+        if folders.contains(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) {
             // Already have this folder — just refresh
             reloadAllProjects()
             return

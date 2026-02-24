@@ -67,7 +67,7 @@ struct ExecutionLogEntry: Identifiable {
 }
 
 @MainActor
-class WorkflowExecutionViewModel: ObservableObject {
+final class WorkflowExecutionViewModel: ObservableObject {
 
     // MARK: - Published Properties
 
@@ -152,9 +152,9 @@ class WorkflowExecutionViewModel: ObservableObject {
 
         // Set up callbacks
         executor?.onInstructionStart = { [weak self] instruction, index, total in
-            guard let self = self else { return }
-            self.currentInstructionIndex = index
-            self.totalInstructions = total
+            guard let self else { return }
+            currentInstructionIndex = index
+            totalInstructions = total
 
             let entry = ExecutionLogEntry(
                 id: UUID(),
@@ -166,16 +166,16 @@ class WorkflowExecutionViewModel: ObservableObject {
                 result: nil,
                 isCurrentlyExecuting: true
             )
-            self.executionLog.append(entry)
+            executionLog.append(entry)
         }
 
         executor?.onInstructionComplete = { [weak self] instruction, result in
-            guard let self = self else { return }
+            guard let self else { return }
             // Update the last log entry with the result
-            if let lastIndex = self.executionLog.indices.last {
-                self.executionLog[lastIndex] = ExecutionLogEntry(
-                    id: self.executionLog[lastIndex].id,
-                    timestamp: self.executionLog[lastIndex].timestamp,
+            if let lastIndex = executionLog.indices.last {
+                executionLog[lastIndex] = ExecutionLogEntry(
+                    id: executionLog[lastIndex].id,
+                    timestamp: executionLog[lastIndex].timestamp,
                     instructionId: instruction.id,
                     instructionTitle: instruction.title,
                     instructionIcon: instruction.icon,
@@ -186,11 +186,12 @@ class WorkflowExecutionViewModel: ObservableObject {
             }
 
             // Clear generation progress after completion
-            self.generationProgress = nil
+            generationProgress = nil
         }
 
         executor?.onProgress = { [weak self] progress in
-            self?.generationProgress = progress
+            guard let self else { return }
+            generationProgress = progress
         }
 
         guard let executor else {
@@ -240,8 +241,10 @@ class WorkflowExecutionViewModel: ObservableObject {
         panel.allowsMultipleSelection = false
         panel.message = "Select working directory for file operations"
 
-        if panel.runModal() == .OK, let url = panel.url {
-            workingDirectory = url
+        // Use async form to avoid blocking the main actor during panel interaction.
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.workingDirectory = url
         }
     }
 }
