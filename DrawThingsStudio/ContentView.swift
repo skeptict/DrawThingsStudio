@@ -167,6 +167,7 @@ struct ContentView: View {
     }
 
     private func dropIntoInspector(_ provider: NSItemProvider) async {
+        // 1. File URL (Finder) — best for metadata; also handles Discord CDN https URLs
         if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
             if let url = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? URL {
                 if url.scheme == "https" || url.scheme == "http" {
@@ -186,16 +187,38 @@ struct ContentView: View {
                 return
             }
         }
-        if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
-           let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL,
-           url.scheme == "https" || url.scheme == "http" {
-            await MainActor.run { imageInspectorViewModel.loadImage(webURL: url) }
-            return
+        // 2. Web URL — Discord often provides only a URL type (not fileURL)
+        if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+            if let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL,
+               url.scheme == "https" || url.scheme == "http" {
+                await MainActor.run { imageInspectorViewModel.loadImage(webURL: url) }
+                return
+            }
+            if let data = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? Data,
+               let url = URL(dataRepresentation: data, relativeTo: nil),
+               url.scheme == "https" || url.scheme == "http" {
+                await MainActor.run { imageInspectorViewModel.loadImage(webURL: url) }
+                return
+            }
         }
+        // 3. PNG / TIFF data
         for type in [UTType.png, UTType.tiff] where provider.hasItemConformingToTypeIdentifier(type.identifier) {
             if let data = try? await loadDropData(from: provider, type: type) {
                 await MainActor.run { imageInspectorViewModel.loadImage(data: data, sourceName: "Dropped Image") }
                 return
+            }
+        }
+        // 4. Generic NSImage fallback — Discord and some browsers provide this when
+        //    no typed URL or PNG/TIFF representation is available
+        if provider.canLoadObject(ofClass: NSImage.self) {
+            let image: NSImage? = try? await withCheckedThrowingContinuation { cont in
+                provider.loadObject(ofClass: NSImage.self) { object, error in
+                    if let error { cont.resume(throwing: error) }
+                    else { cont.resume(returning: object as? NSImage) }
+                }
+            }
+            if let image, let tiffData = image.tiffRepresentation {
+                await MainActor.run { imageInspectorViewModel.loadImage(data: tiffData, sourceName: "Dropped Image") }
             }
         }
     }
