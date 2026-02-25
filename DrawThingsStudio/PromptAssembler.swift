@@ -61,14 +61,17 @@ struct PromptAssembler {
         characters: [StoryCharacter],
         settings: [StorySetting]
     ) -> AssembledPrompt {
+        // Build once — used in both the override fast-path and the full assembly below
+        let characterMap = Dictionary(uniqueKeysWithValues: characters.map { ($0.id, $0) })
+
         // If there's a full prompt override, use it directly
         if let override = scene.promptOverride, !override.isEmpty {
             return AssembledPrompt(
                 positivePrompt: override,
                 negativePrompt: scene.negativePromptOverride ?? project.baseNegativePrompt ?? "",
-                moodboardImages: collectMoodboardImages(scene: scene, characters: characters, settings: settings),
-                moodboardWeights: collectMoodboardWeights(scene: scene, characters: characters, settings: settings),
-                loras: collectLoRAs(scene: scene, characters: characters),
+                moodboardImages: collectMoodboardImages(scene: scene, characterMap: characterMap, settings: settings),
+                moodboardWeights: collectMoodboardWeights(scene: scene, characterMap: characterMap, settings: settings),
+                loras: collectLoRAs(scene: scene, characterMap: characterMap),
                 sourceImage: nil
             )
         }
@@ -92,7 +95,6 @@ struct PromptAssembler {
         }
 
         // 3. Character fragments
-        let characterMap = Dictionary(uniqueKeysWithValues: characters.map { ($0.id, $0) })
         for presence in scene.characterPresences {
             let charFragment = buildCharacterFragment(
                 presence: presence,
