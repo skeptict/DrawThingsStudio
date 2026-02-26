@@ -10,6 +10,7 @@
 import Foundation
 import AppKit
 import Combine
+import ImageIO
 
 // MARK: - BrowserImage
 
@@ -215,6 +216,7 @@ final class ImageBrowserViewModel: ObservableObject {
 
     private func loadImages() {
         loadTask?.cancel()
+        images = []       // clear stale results immediately so the UI shows the loading state
         isLoading = true
         errorMessage = nil
         let url = directoryURL
@@ -222,66 +224,111 @@ final class ImageBrowserViewModel: ObservableObject {
         loadTask = Task { [weak self] in
             guard let self else { return }
 
-            let result = await Task.detached(priority: .userInitiated) {
-                () -> (images: [BrowserImage], error: String?) in
-                let fm = FileManager.default
-                guard let files = try? fm.contentsOfDirectory(
-                    at: url,
-                    includingPropertiesForKeys: [.creationDateKey],
-                    options: [.skipsHiddenFiles]
-                ) else {
-                    return (images: [], error: "Could not read directory contents.")
-                }
-
-                let pngFiles = files
-                    .filter { $0.pathExtension.lowercased() == "png" }
-                    .sorted { a, b in
-                        let da = (try? a.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-                        let db = (try? b.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-                        return da > db
+            // Phase 1: Directory scan — read file-system metadata only (fast, off main thread)
+            let (fileEntries, scanError): ([(url: URL, date: Date)], String?) =
+                await Task.detached(priority: .userInitiated) {
+                    let fm = FileManager.default
+                    guard let files = try? fm.contentsOfDirectory(
+                        at: url,
+                        includingPropertiesForKeys: [.creationDateKey],
+                        options: [.skipsHiddenFiles]
+                    ) else {
+                        return ([], "Could not read directory contents.")
                     }
-
-                let decoder = JSONDecoder()
-                // Note: JSONEncoder uses default .deferredToDate strategy (Double),
-                // so decoder must also use default (no .iso8601 override).
-
-                var browserImages: [BrowserImage] = []
-                for pngURL in pngFiles {
-                    if Task.isCancelled { break }
-                    let createdAt = (try? pngURL.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date()
-                    let thumbnail = NSImage(contentsOf: pngURL)
-
-                    // Try JSON sidecar (DTS-generated)
-                    let sidecarURL = pngURL.deletingPathExtension().appendingPathExtension("json")
-                    var imageMeta: ImageMetadata? = nil
-                    var pngMeta: PNGMetadata? = nil
-
-                    if let sidecarData = try? Data(contentsOf: sidecarURL),
-                       let decoded = try? decoder.decode(ImageMetadata.self, from: sidecarData) {
-                        imageMeta = decoded
-                    } else {
-                        // Fallback: read embedded PNG metadata
-                        pngMeta = PNGMetadataParser.parse(url: pngURL)
-                    }
-
-                    browserImages.append(BrowserImage(
-                        url: pngURL,
-                        filename: pngURL.lastPathComponent,
-                        createdAt: createdAt,
-                        thumbnail: thumbnail,
-                        imageMetadata: imageMeta,
-                        pngMetadata: pngMeta
-                    ))
-                }
-
-                return (images: browserImages, error: nil)
-            }.value
+                    let sorted: [(url: URL, date: Date)] = files
+                        .filter { $0.pathExtension.lowercased() == "png" }
+                        .compactMap { u in
+                            let d = (try? u.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+                            return (u, d)
+                        }
+                        .sorted { $0.date > $1.date }
+                    return (sorted, nil)
+                }.value
 
             if Task.isCancelled { return }
 
-            self.images = result.images
-            self.isLoading = false
-            if let err = result.error { self.errorMessage = err }
+            if let err = scanError {
+                self.errorMessage = err
+                self.isLoading = false
+                return
+            }
+
+            // Phase 2: Load images in parallel, publish to the UI progressively.
+            //
+            // Key speedup: CGImageSourceCreateThumbnailAtIndex reads only the pixels
+            // needed for a 400pt thumbnail instead of decoding the full-resolution
+            // image like NSImage(contentsOf:) does. For a 2048×2048 PNG this is
+            // roughly 25× less data to decode.
+            //
+            // All child tasks run on the cooperative thread pool (off the main actor).
+            // `for await result in group` resumes on the main actor, so self.images
+            // can be updated directly without an additional MainActor.run hop.
+            let decoder = JSONDecoder()
+            let batchSize = 20  // publish a UI update after every N completed images
+
+            await withTaskGroup(of: BrowserImage?.self) { group in
+                for entry in fileEntries {
+                    let (entryURL, entryDate) = (entry.url, entry.date)
+                    group.addTask {
+                        guard !Task.isCancelled else { return nil }
+
+                        // Fast downscaled thumbnail — reads only what ImageIO needs
+                        // to produce a 400px image (2× for Retina). NSImage(contentsOf:)
+                        // would decode every pixel of the original instead.
+                        let thumbOptions: [CFString: Any] = [
+                            kCGImageSourceShouldCache: false,
+                            kCGImageSourceCreateThumbnailWithTransform: true,
+                            kCGImageSourceCreateThumbnailFromImageAlways: true,
+                            kCGImageSourceThumbnailMaxPixelSize: 400
+                        ]
+                        var thumbnail: NSImage?
+                        if let src = CGImageSourceCreateWithURL(entryURL as CFURL, nil),
+                           let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, thumbOptions as CFDictionary) {
+                            thumbnail = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+                        }
+
+                        // DTS JSON sidecar takes priority; fall back to embedded PNG metadata
+                        let sidecarURL = entryURL.deletingPathExtension().appendingPathExtension("json")
+                        var imageMeta: ImageMetadata? = nil
+                        var pngMeta: PNGMetadata? = nil
+
+                        if let data = try? Data(contentsOf: sidecarURL),
+                           let decoded = try? decoder.decode(ImageMetadata.self, from: data) {
+                            imageMeta = decoded
+                        } else {
+                            pngMeta = PNGMetadataParser.parse(url: entryURL)
+                        }
+
+                        return BrowserImage(
+                            url: entryURL,
+                            filename: entryURL.lastPathComponent,
+                            createdAt: entryDate,
+                            thumbnail: thumbnail,
+                            imageMetadata: imageMeta,
+                            pngMetadata: pngMeta
+                        )
+                    }
+                }
+
+                var accumulated: [BrowserImage] = []
+                accumulated.reserveCapacity(fileEntries.count)
+
+                for await result in group {
+                    if Task.isCancelled { group.cancelAll(); break }
+                    if let img = result { accumulated.append(img) }
+
+                    // Publish intermediate batch — images appear as they complete
+                    // rather than all at once at the end.
+                    if accumulated.count % batchSize == 0 {
+                        self.images = accumulated.sorted { $0.createdAt > $1.createdAt }
+                    }
+                }
+
+                if !Task.isCancelled {
+                    self.images = accumulated.sorted { $0.createdAt > $1.createdAt }
+                    self.isLoading = false
+                }
+            }
         }
     }
 }
