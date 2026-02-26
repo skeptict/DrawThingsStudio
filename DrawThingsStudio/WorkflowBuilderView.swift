@@ -119,17 +119,6 @@ struct WorkflowBuilderView: View {
                         await viewModel.exportWithSavePanel()
                     }
                 } label: {
-                    Label("Save", systemImage: "square.and.arrow.down")
-                }
-                .disabled(viewModel.instructions.isEmpty)
-                .help("Save workflow to a JSON file")
-                .accessibilityIdentifier("workflowBuilder_saveButton")
-
-                Button {
-                    Task {
-                        await viewModel.exportWithSavePanel()
-                    }
-                } label: {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(NeumorphicButtonStyle(isProminent: true))
