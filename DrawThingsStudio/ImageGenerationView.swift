@@ -36,24 +36,33 @@ struct ImageGenerationView: View {
         }
         .padding(20)
         .neuBackground()
-        .fileImporter(
-            isPresented: $showingConfigImport,
-            allowedContentTypes: [.json],
-            allowsMultipleSelection: false
-        ) { result in
-            handleConfigImport(result)
-        }
-        .fileImporter(
-            isPresented: $showSourceImagePicker,
-            allowedContentTypes: [.png, .jpeg, .image],
-            allowsMultipleSelection: false
-        ) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                let hasAccess = url.startAccessingSecurityScopedResource()
-                defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
-                viewModel.loadInputImage(from: url)
+        // Two .fileImporter modifiers cannot share the same view — SwiftUI only
+        // honours the last one.  Attach each to its own Color.clear inside a
+        // background Group so they live on distinct view nodes.
+        .background(
+            Group {
+                Color.clear
+                    .fileImporter(
+                        isPresented: $showingConfigImport,
+                        allowedContentTypes: [.json],
+                        allowsMultipleSelection: false
+                    ) { result in
+                        handleConfigImport(result)
+                    }
+                Color.clear
+                    .fileImporter(
+                        isPresented: $showSourceImagePicker,
+                        allowedContentTypes: [.png, .jpeg, .image],
+                        allowsMultipleSelection: false
+                    ) { result in
+                        if case .success(let urls) = result, let url = urls.first {
+                            let hasAccess = url.startAccessingSecurityScopedResource()
+                            defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+                            viewModel.loadInputImage(from: url)
+                        }
+                    }
             }
-        }
+        )
         .task {
             await viewModel.checkConnection()
             await assetManager.fetchAssets()
