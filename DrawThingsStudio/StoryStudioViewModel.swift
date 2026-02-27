@@ -311,6 +311,12 @@ final class StoryStudioViewModel: ObservableObject {
                     DrawThingsGenerationConfig.LoRAConfig(file: $0.file, weight: $0.weight)
                 }
 
+                // Always generate exactly one image per call — same as ImageGenerationViewModel.
+                // Without this Draw Things may return multiple images if its own batch
+                // count is > 1, which would create unwanted duplicate variants.
+                config.batchCount = 1
+                config.batchSize = 1
+
                 let images = try await client.generateImage(
                     prompt: finalPrompt,
                     config: config,
@@ -320,7 +326,7 @@ final class StoryStudioViewModel: ObservableObject {
                     }
                 )
 
-                // Save variants
+                // Save variants and persist to GeneratedImages on disk
                 for image in images {
                     guard let tiffData = image.tiffRepresentation,
                           let bitmap = NSBitmapImageRep(data: tiffData),
@@ -342,6 +348,16 @@ final class StoryStudioViewModel: ObservableObject {
                     if scene.generatedImageData == nil {
                         scene.generatedImageData = pngData
                     }
+
+                    // Also save to GeneratedImages so the image appears in
+                    // Image Browser and is backed up outside the SwiftData store.
+                    _ = await ImageStorageManager.shared.saveImage(
+                        image,
+                        prompt: finalPrompt,
+                        negativePrompt: assembled.negativePrompt,
+                        config: config,
+                        inferenceTimeMs: nil
+                    )
                 }
 
                 project.modifiedAt = Date()

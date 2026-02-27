@@ -33,6 +33,9 @@ final class WorkflowBuilderViewModel: ObservableObject {
     /// Success message to display
     @Published var successMessage: String?
 
+    /// Draw Things connection status
+    @Published var connectionStatus: DrawThingsConnectionStatus = .disconnected
+
     // MARK: - Services
 
     private let generator = StoryflowInstructionGenerator()
@@ -591,6 +594,15 @@ final class WorkflowBuilderViewModel: ObservableObject {
     /// Clear success message
     func clearSuccess() {
         successMessage = nil
+    }
+
+    // MARK: - Connection
+
+    func checkConnection() async {
+        connectionStatus = .connecting
+        let client = AppSettings.shared.createDrawThingsClient()
+        let connected = await client.checkConnection()
+        connectionStatus = connected ? .connected : .error("Cannot reach Draw Things")
     }
 
     // MARK: - AI Enhancement

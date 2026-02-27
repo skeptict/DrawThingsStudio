@@ -96,6 +96,23 @@ struct WorkflowBuilderView: View {
                 .help("Preview workflow as JSON")
                 .accessibilityIdentifier("workflowBuilder_previewButton")
 
+                // Connection status
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(connectionStatusColor)
+                        .frame(width: 8, height: 8)
+                    Text(viewModel.connectionStatus.displayText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    Task { await viewModel.checkConnection() }
+                } label: {
+                    Label("Refresh Connection", systemImage: "arrow.clockwise")
+                }
+                .help("Check Draw Things connection")
+                .accessibilityIdentifier("workflowBuilder_refreshConnectionButton")
+
                 Button {
                     showExecutionSheet = true
                 } label: {
@@ -159,6 +176,20 @@ struct WorkflowBuilderView: View {
             Text(viewModel.errorMessage ?? "")
         }
         .navigationTitle(viewModel.workflowName)
+        .task {
+            await viewModel.checkConnection()
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var connectionStatusColor: Color {
+        switch viewModel.connectionStatus {
+        case .connected: return .green
+        case .connecting: return .orange
+        case .disconnected: return Color(white: 0.6)
+        case .error: return .red
+        }
     }
 
     // MARK: - Add Instruction Menu
