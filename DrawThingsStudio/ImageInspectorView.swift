@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct ImageInspectorView: View {
     @ObservedObject var viewModel: ImageInspectorViewModel
     @ObservedObject var imageGenViewModel: ImageGenerationViewModel
+    @ObservedObject var workflowViewModel: WorkflowBuilderViewModel
     @Binding var selectedSidebarItem: SidebarItem?
 
     @State private var sendImageToGenerate = false
@@ -319,6 +320,20 @@ struct ImageInspectorView: View {
                 .toggleStyle(.checkbox)
                 .disabled(viewModel.selectedImage == nil)
                 .accessibilityIdentifier("inspector_sendImageToggle")
+
+            Button(action: sendToWorkflow) {
+                HStack {
+                    Image(systemName: "arrow.right.circle.fill")
+                    Text("Send to Workflow Builder")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.large)
+            .disabled(viewModel.selectedImage?.metadata == nil)
+            .accessibilityIdentifier("inspector_sendToWorkflowButton")
+            .accessibilityLabel("Send to Workflow Builder")
+            .accessibilityHint("Loads this image's prompt and config as workflow instructions")
         }
     }
 
@@ -360,6 +375,38 @@ struct ImageInspectorView: View {
         }
 
         selectedSidebarItem = .generateImage
+    }
+
+    private func sendToWorkflow() {
+        guard let selected = viewModel.selectedImage,
+              let meta = selected.metadata else { return }
+
+        var config = DrawThingsConfig()
+        config.width = meta.width
+        config.height = meta.height
+        config.steps = meta.steps
+        if let g = meta.guidanceScale { config.guidanceScale = Float(g) }
+        config.seed = meta.seed
+        config.model = meta.model
+        config.samplerName = meta.sampler
+        if let s = meta.strength { config.strength = Float(s) }
+        if let shift = meta.shift { config.shift = Float(shift) }
+        if meta.hasLoRAs {
+            config.loras = meta.loras.map { ["file": $0.file, "weight": Double($0.weight)] }
+        }
+
+        workflowViewModel.clearAllInstructions()
+        workflowViewModel.workflowName = selected.sourceName
+        workflowViewModel.addInstruction(.note("Imported from Image Inspector: \(selected.sourceName)"))
+        workflowViewModel.addInstruction(.config(config))
+        if let prompt = meta.prompt, !prompt.isEmpty {
+            workflowViewModel.addInstruction(.prompt(prompt))
+        }
+        if let neg = meta.negativePrompt, !neg.isEmpty {
+            workflowViewModel.addInstruction(.negativePrompt(neg))
+        }
+
+        selectedSidebarItem = .workflow
     }
 
     private func openFilePanel() {
