@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import OSLog
 #if os(macOS)
 import AppKit
 #endif
@@ -197,11 +198,14 @@ struct CustomPromptStyle: Codable, Identifiable, Equatable {
 final class PromptStyleManager: ObservableObject {
     static let shared = PromptStyleManager()
 
+    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "prompt-styles")
+
     @Published private(set) var styles: [CustomPromptStyle] = []
 
     /// Directory for storing styles
     nonisolated let stylesDirectory: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
         let dir = appSupport.appendingPathComponent("DrawThingsStudio", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
@@ -209,7 +213,8 @@ final class PromptStyleManager: ObservableObject {
 
     /// Path to the styles JSON file
     nonisolated let stylesFilePath: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return appSupport.appendingPathComponent("DrawThingsStudio/enhance_styles.json")
     }()
 
@@ -230,7 +235,7 @@ final class PromptStyleManager: ObservableObject {
                 let customStyles = try decoder.decode([CustomPromptStyle].self, from: data)
                 loadedStyles = customStyles
             } catch {
-                print("Failed to load custom styles: \(error)")
+                logger.warning("Failed to load custom styles: \(error.localizedDescription)")
             }
         }
 
@@ -276,7 +281,7 @@ final class PromptStyleManager: ObservableObject {
             let data = try encoder.encode(stylesToSave)
             try data.write(to: stylesFilePath)
         } catch {
-            print("Failed to save styles: \(error)")
+            logger.error("Failed to save styles: \(error.localizedDescription)")
         }
     }
 
@@ -299,7 +304,7 @@ final class PromptStyleManager: ObservableObject {
             try data.write(to: stylesFilePath)
             loadStyles()
         } catch {
-            print("Failed to create styles file: \(error)")
+            logger.error("Failed to create styles file: \(error.localizedDescription)")
         }
     }
 

@@ -29,14 +29,21 @@ final class ImageStorageManager: ObservableObject {
     // MARK: - Initialization
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
         self.storageDirectory = appSupport.appendingPathComponent("DrawThingsStudio/GeneratedImages", isDirectory: true)
         ensureDirectoryExists()
     }
 
     // MARK: - Public Methods
 
-    /// Save a generated image to disk with metadata sidecar
+    /// Save a generated image to disk with metadata sidecar.
+    ///
+    /// This method performs synchronous file I/O on the `@MainActor`.  In practice
+    /// image saves are infrequent (one per generation call) and the files are small
+    /// (<5 MB), so the brief stall is acceptable.  If generation throughput increases
+    /// significantly, this should be moved to a detached Task with the `@Published`
+    /// update dispatched back to the main actor.
     func saveImage(_ image: NSImage, prompt: String, negativePrompt: String, config: DrawThingsGenerationConfig, inferenceTimeMs: Int?) -> GeneratedImage? {
         // Ensure directory exists before saving
         ensureDirectoryExists()

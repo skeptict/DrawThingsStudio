@@ -8,6 +8,7 @@
 import Foundation
 import AppKit
 import Combine
+import UniformTypeIdentifiers
 
 // MARK: - Project Info
 
@@ -27,6 +28,7 @@ struct BookmarkedFolder: Identifiable {
     let url: URL
     let label: String       // last path component or volume name
     let isAvailable: Bool   // false if volume is not mounted
+    let bookmarkData: Data? // stored so removeFolder can match without re-resolving all bookmarks
 }
 
 // MARK: - ViewModel
@@ -37,6 +39,9 @@ final class DTProjectBrowserViewModel: ObservableObject {
     @Published var selectedProject: DTProjectInfo?
     @Published var entries: [DTGenerationEntry] = []
     @Published var selectedEntry: DTGenerationEntry?
+    @Published var selectedClip: DTVideoClip?
+    @Published var showAsClips = true
+    @Published var isExporting = false
     @Published var searchText = ""
     @Published var isLoading = false
     @Published var entryCount = 0
@@ -53,23 +58,40 @@ final class DTProjectBrowserViewModel: ObservableObject {
     private var loadEntriesTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
 
-    /// Filtered view of `entries` based on `searchText`. Updated reactively via Combine
-    /// so the filter runs once per input change rather than on every view re-evaluation.
+    /// Filtered view of `entries` based on `searchText`.
     @Published private(set) var filteredEntries: [DTGenerationEntry] = []
+
+    /// Filtered view of entries grouped into clips, based on `searchText`.
+    @Published private(set) var filteredClips: [DTVideoClip] = []
 
     init() {
         // Keep filteredEntries in sync with entries and searchText
         Publishers.CombineLatest($entries, $searchText)
             .map { entries, query -> [DTGenerationEntry] in
                 guard !query.isEmpty else { return entries }
-                let lowercased = query.lowercased()
+                let lc = query.lowercased()
                 return entries.filter {
-                    $0.prompt.lowercased().contains(lowercased) ||
-                    $0.negativePrompt.lowercased().contains(lowercased) ||
-                    $0.model.lowercased().contains(lowercased)
+                    $0.prompt.lowercased().contains(lc) ||
+                    $0.negativePrompt.lowercased().contains(lc) ||
+                    $0.model.lowercased().contains(lc)
                 }
             }
             .assign(to: &$filteredEntries)
+
+        // Keep filteredClips in sync with entries and searchText
+        Publishers.CombineLatest($entries, $searchText)
+            .map { entries, query -> [DTVideoClip] in
+                let clips = DTVideoClip.group(from: entries)
+                guard !query.isEmpty else { return clips }
+                let lc = query.lowercased()
+                return clips.filter {
+                    $0.prompt.lowercased().contains(lc) ||
+                    $0.negativePrompt.lowercased().contains(lc) ||
+                    $0.model.lowercased().contains(lc)
+                }
+            }
+            .assign(to: &$filteredClips)
+
         restoreBookmarks()
     }
 
@@ -124,14 +146,14 @@ final class DTProjectBrowserViewModel: ObservableObject {
             )
             appendBookmark(bookmarkData)
             let label = folderLabel(for: url)
-            folders.append(BookmarkedFolder(id: UUID(), url: url, label: label, isAvailable: true))
+            folders.append(BookmarkedFolder(id: UUID(), url: url, label: label, isAvailable: true, bookmarkData: bookmarkData))
             hasFolderAccess = true
             errorMessage = nil
             reloadAllProjects()
         } catch {
             // Bookmark creation failed; still use for this session
             let label = folderLabel(for: url)
-            folders.append(BookmarkedFolder(id: UUID(), url: url, label: label, isAvailable: true))
+            folders.append(BookmarkedFolder(id: UUID(), url: url, label: label, isAvailable: true, bookmarkData: nil))
             hasFolderAccess = true
             errorMessage = nil
             reloadAllProjects()
@@ -147,13 +169,20 @@ final class DTProjectBrowserViewModel: ObservableObject {
 
         folders.removeAll { $0.id == folder.id }
 
-        // Remove from persisted bookmarks
+        // Remove from persisted bookmarks.
+        // Match by the stored bookmarkData directly (O(1) per bookmark) instead of
+        // re-resolving every bookmark to find the one matching this folder's URL.
         var bookmarks = loadPersistedBookmarks()
-        bookmarks.removeAll { data in
-            if let resolved = resolveBookmark(data) {
-                return resolved.standardizedFileURL == folder.url.standardizedFileURL
+        if let storedData = folder.bookmarkData {
+            bookmarks.removeAll { $0 == storedData }
+        } else {
+            // Fallback for folders added without bookmark data (bookmark creation failed).
+            bookmarks.removeAll { data in
+                if let resolved = resolveBookmark(data) {
+                    return resolved.standardizedFileURL == folder.url.standardizedFileURL
+                }
+                return false
             }
-            return false
         }
         UserDefaults.standard.set(bookmarks, forKey: bookmarksKey)
 
@@ -234,7 +263,7 @@ final class DTProjectBrowserViewModel: ObservableObject {
 
                 let label = folderLabel(for: url)
                 let available = accessible && FileManager.default.fileExists(atPath: url.path)
-                folders.append(BookmarkedFolder(id: UUID(), url: url, label: label, isAvailable: available))
+                folders.append(BookmarkedFolder(id: UUID(), url: url, label: label, isAvailable: available, bookmarkData: updatedBookmarks.last))
 
                 if available {
                     hasAny = true
@@ -374,6 +403,67 @@ final class DTProjectBrowserViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func deleteClip(_ clip: DTVideoClip) async {
+        guard let project = selectedProject else { return }
+        let url = project.url
+        let rowids = clip.frames.map(\.id)
+        let previewIds = clip.frames.map(\.previewId)
+
+        do {
+            try await Task.detached(priority: .userInitiated) {
+                try DTProjectDatabase.deleteEntries(rowids: rowids, previewIds: previewIds, from: url)
+            }.value
+
+            let deleted = Set(rowids)
+            entries.removeAll { deleted.contains($0.id) }
+            if selectedClip?.id == clip.id { selectedClip = nil }
+            if let sel = selectedEntry, deleted.contains(sel.id) { selectedEntry = nil }
+            entryCount    = max(0, entryCount    - rowids.count)
+            loadedOffset  = max(0, loadedOffset  - rowids.count)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Video Export
+
+    func exportClip(_ clip: DTVideoClip, fps: Double) {
+        guard let projectURL = selectedProject?.url else { return }
+
+        let rawName  = String(clip.prompt.prefix(40)).trimmingCharacters(in: .whitespaces)
+        let fileName = rawName.isEmpty ? "clip_\(clip.id)" : rawName
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(fileName).mov"
+        panel.allowedContentTypes = [UTType(filenameExtension: "mov") ?? .movie]
+        panel.canCreateDirectories = true
+        panel.message = "Save video clip as .mov"
+
+        panel.begin { [weak self] response in
+            guard let self, response == .OK, let destURL = panel.url else { return }
+            Task { await self.performExport(clip: clip, fps: fps, projectURL: projectURL, destURL: destURL) }
+        }
+    }
+
+    private func performExport(clip: DTVideoClip, fps: Double, projectURL: URL, destURL: URL) async {
+        isExporting = true
+        errorMessage = nil
+        do {
+            let tempURL = try await Task.detached(priority: .userInitiated) {
+                try await DTVideoExporter.export(clip: clip, fps: fps, projectURL: projectURL)
+            }.value
+
+            if FileManager.default.fileExists(atPath: destURL.path) {
+                try FileManager.default.removeItem(at: destURL)
+            }
+            try FileManager.default.moveItem(at: tempURL, to: destURL)
+            NSWorkspace.shared.activateFileViewerSelecting([destURL])
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isExporting = false
     }
 
     // MARK: - Helpers

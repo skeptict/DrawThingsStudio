@@ -14,6 +14,8 @@ struct DTProjectBrowserView: View {
 
     @State private var entryToDelete: DTGenerationEntry?
     @State private var showDeleteConfirmation = false
+    @State private var clipToDelete: DTVideoClip?
+    @State private var showClipDeleteConfirmation = false
 
     var body: some View {
         Group {
@@ -32,6 +34,15 @@ struct DTProjectBrowserView: View {
             }
         } message: { _ in
             Text("This will permanently remove this generation and its thumbnail from the Draw Things project database. This cannot be undone.\n\nFor best results, close Draw Things before deleting.")
+        }
+        .alert("Delete Clip?", isPresented: $showClipDeleteConfirmation, presenting: clipToDelete) { clip in
+            Button("Cancel", role: .cancel) { clipToDelete = nil }
+            Button("Delete \(clip.frameCount) Frame\(clip.frameCount == 1 ? "" : "s")", role: .destructive) {
+                Task { await viewModel.deleteClip(clip) }
+                clipToDelete = nil
+            }
+        } message: { clip in
+            Text("This will permanently remove all \(clip.frameCount) frame\(clip.frameCount == 1 ? "" : "s") of this clip from the Draw Things project database. This cannot be undone.\n\nFor best results, close Draw Things before deleting.")
         }
     }
 
@@ -221,24 +232,43 @@ struct DTProjectBrowserView: View {
 
     private var thumbnailGridColumn: some View {
         VStack(spacing: 0) {
-            // Header with search
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    TextField("Search prompts, models...", text: $viewModel.searchText)
-                        .textFieldStyle(.plain)
-                        .accessibilityIdentifier("dtProjects_searchField")
-                }
-                .padding(8)
-                .background(Color.neuSurface)
-                .cornerRadius(6)
+            // Header with search and view mode toggle
+            VStack(spacing: 8) {
+                HStack {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                        TextField("Search prompts, models...", text: $viewModel.searchText)
+                            .textFieldStyle(.plain)
+                            .accessibilityIdentifier("dtProjects_searchField")
+                    }
+                    .padding(8)
+                    .background(Color.neuSurface)
+                    .cornerRadius(6)
 
-                if viewModel.entryCount > 0 {
-                    Text("\(viewModel.entryCount) entries")
-                        .font(.caption)
-                        .foregroundColor(.neuTextSecondary)
-                        .fixedSize()
+                    if viewModel.selectedProject != nil {
+                        Picker("View Mode", selection: $viewModel.showAsClips) {
+                            Image(systemName: "play.rectangle.on.rectangle").tag(true)
+                            Image(systemName: "photo.stack").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 72)
+                        .help(viewModel.showAsClips ? "Showing clips (grouped by generation run)" : "Showing individual frames")
+                    }
+
+                    if viewModel.showAsClips {
+                        if !viewModel.filteredClips.isEmpty {
+                            Text("\(viewModel.filteredClips.count) clip\(viewModel.filteredClips.count == 1 ? "" : "s")")
+                                .font(.caption)
+                                .foregroundColor(.neuTextSecondary)
+                                .fixedSize()
+                        }
+                    } else if viewModel.entryCount > 0 {
+                        Text("\(viewModel.entryCount) frames")
+                            .font(.caption)
+                            .foregroundColor(.neuTextSecondary)
+                            .fixedSize()
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -275,7 +305,8 @@ struct DTProjectBrowserView: View {
                 ProgressView("Loading...")
                     .foregroundColor(.neuTextSecondary)
                 Spacer()
-            } else if viewModel.filteredEntries.isEmpty {
+            } else if (viewModel.showAsClips && viewModel.filteredClips.isEmpty) ||
+                      (!viewModel.showAsClips && viewModel.filteredEntries.isEmpty) {
                 Spacer()
                 VStack(spacing: 8) {
                     Image(systemName: viewModel.searchText.isEmpty ? "photo.on.rectangle.angled" : "magnifyingglass")
@@ -289,26 +320,57 @@ struct DTProjectBrowserView: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 220), spacing: 12)], spacing: 12) {
-                        ForEach(viewModel.filteredEntries) { entry in
-                            DTThumbnailCell(
-                                entry: entry,
-                                isSelected: viewModel.selectedEntry?.id == entry.id
-                            )
-                            .onTapGesture {
-                                viewModel.selectedEntry = entry
-                            }
-                            .contextMenu {
-                                Button {
-                                    viewModel.selectedEntry = entry
-                                } label: {
-                                    Label("Select", systemImage: "checkmark.circle")
+                        if viewModel.showAsClips {
+                            ForEach(viewModel.filteredClips) { clip in
+                                DTVideoClipCell(
+                                    clip: clip,
+                                    isSelected: viewModel.selectedClip?.id == clip.id
+                                )
+                                .onTapGesture {
+                                    viewModel.selectedClip = clip
+                                    viewModel.selectedEntry = nil
                                 }
-                                Divider()
-                                Button(role: .destructive) {
-                                    entryToDelete = entry
-                                    showDeleteConfirmation = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+                                .contextMenu {
+                                    if clip.isVideo {
+                                        Button {
+                                            viewModel.exportClip(clip, fps: 8.0)
+                                        } label: {
+                                            Label("Export .mov", systemImage: "square.and.arrow.up")
+                                        }
+                                        Divider()
+                                    }
+                                    Button(role: .destructive) {
+                                        clipToDelete = clip
+                                        showClipDeleteConfirmation = true
+                                    } label: {
+                                        Label(clip.isVideo ? "Delete Clip" : "Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        } else {
+                            ForEach(viewModel.filteredEntries) { entry in
+                                DTThumbnailCell(
+                                    entry: entry,
+                                    isSelected: viewModel.selectedEntry?.id == entry.id
+                                )
+                                .onTapGesture {
+                                    viewModel.selectedEntry = entry
+                                    viewModel.selectedClip = nil
+                                }
+                                .contextMenu {
+                                    Button {
+                                        viewModel.selectedEntry = entry
+                                        viewModel.selectedClip = nil
+                                    } label: {
+                                        Label("Select", systemImage: "checkmark.circle")
+                                    }
+                                    Divider()
+                                    Button(role: .destructive) {
+                                        entryToDelete = entry
+                                        showDeleteConfirmation = true
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
@@ -338,7 +400,18 @@ struct DTProjectBrowserView: View {
 
     private var detailColumn: some View {
         Group {
-            if let entry = viewModel.selectedEntry {
+            if viewModel.showAsClips, let clip = viewModel.selectedClip {
+                DTClipDetailPanel(
+                    clip: clip,
+                    viewModel: viewModel,
+                    imageGenViewModel: imageGenViewModel,
+                    selectedSidebarItem: $selectedSidebarItem,
+                    onDelete: {
+                        clipToDelete = clip
+                        showClipDeleteConfirmation = true
+                    }
+                )
+            } else if let entry = viewModel.selectedEntry {
                 DTDetailPanel(
                     entry: entry,
                     imageGenViewModel: imageGenViewModel,
@@ -405,6 +478,112 @@ private struct DTProjectRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(project.name), \(DTProjectBrowserViewModel.formatFileSize(project.fileSize))")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - Video Clip Cell
+
+private struct DTVideoClipCell: View {
+    let clip: DTVideoClip
+    let isSelected: Bool
+
+    @State private var frameIndex = 0
+    @State private var isHovering = false
+
+    var body: some View {
+        let frame = clip.frames[frameIndex % clip.frames.count]
+
+        VStack(spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                ZStack {
+                    Color.neuBackground.opacity(0.5)
+                    if let thumbnail = frame.thumbnail {
+                        Image(nsImage: thumbnail)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.title)
+                            .foregroundColor(.neuTextSecondary.opacity(0.4))
+                    }
+                }
+                .frame(height: 140)
+                .clipped()
+                .animation(.none, value: frameIndex)
+
+                // Video badge
+                if clip.isVideo {
+                    HStack(spacing: 3) {
+                        Image(systemName: "film.fill")
+                            .font(.system(size: 9))
+                        Text("\(clip.frameCount)")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 3)
+                    .background(.black.opacity(0.6))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .padding(5)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                if !clip.prompt.isEmpty {
+                    Text(clip.prompt)
+                        .font(.caption2)
+                        .lineLimit(2)
+                        .foregroundColor(.primary)
+                } else {
+                    Text("No prompt")
+                        .font(.caption2)
+                        .italic()
+                        .foregroundColor(.neuTextSecondary)
+                }
+                HStack {
+                    if clip.wallClock != Date.distantPast {
+                        Text(clip.wallClock, style: .date)
+                            .font(.system(size: 9))
+                            .foregroundColor(.neuTextSecondary)
+                    }
+                    Spacer()
+                    if clip.width > 0 {
+                        Text("\(clip.width)×\(clip.height)")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.neuTextSecondary)
+                    }
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.neuSurface)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isSelected ? Color.neuAccent : Color.clear, lineWidth: 2)
+        )
+        .shadow(color: Color.neuShadowDark.opacity(0.2), radius: isSelected ? 6 : 3, x: 2, y: 2)
+        .shadow(color: Color.neuShadowLight.opacity(0.6), radius: isSelected ? 6 : 3, x: -2, y: -2)
+        .onHover { isHovering = $0 }
+        .task(id: isHovering) {
+            // Animate through frames at 8 fps while hovering
+            guard clip.isVideo, isHovering else {
+                frameIndex = 0
+                return
+            }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1.0 / 8.0))
+                guard !Task.isCancelled else { break }
+                frameIndex = (frameIndex + 1) % clip.frames.count
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            clip.isVideo
+                ? "\(clip.prompt.isEmpty ? "Clip" : clip.prompt), \(clip.frameCount) frames"
+                : (clip.prompt.isEmpty ? "Image" : clip.prompt)
+        )
     }
 }
 
@@ -482,6 +661,266 @@ private struct DTThumbnailCell: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(entry.prompt.isEmpty ? "Generation \(entry.id)" : entry.prompt)
+    }
+}
+
+// MARK: - Clip Detail Panel
+
+private struct DTClipDetailPanel: View {
+    let clip: DTVideoClip
+    @ObservedObject var viewModel: DTProjectBrowserViewModel
+    @ObservedObject var imageGenViewModel: ImageGenerationViewModel
+    @Binding var selectedSidebarItem: SidebarItem?
+    let onDelete: () -> Void
+
+    @State private var previewFrameIndex = 0
+    @State private var selectedFrameIndex = 0
+    @State private var fps: Double = 8.0
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                animatedPreview
+                if clip.isVideo { filmstrip }
+                if !clip.prompt.isEmpty {
+                    DetailField(label: "Prompt") {
+                        Text(clip.prompt).font(.callout).textSelection(.enabled)
+                    }
+                }
+                if !clip.negativePrompt.isEmpty {
+                    DetailField(label: "Negative Prompt") {
+                        Text(clip.negativePrompt)
+                            .font(.callout)
+                            .foregroundColor(.neuTextSecondary)
+                            .textSelection(.enabled)
+                    }
+                }
+                DetailField(label: "Parameters") {
+                    VStack(spacing: 6) {
+                        if !clip.model.isEmpty     { paramRow("Model",   clip.model) }
+                        if clip.isVideo            { paramRow("Frames",  "\(clip.frameCount)") }
+                        if clip.width > 0          { paramRow("Size",    "\(clip.width) × \(clip.height)") }
+                        if clip.steps > 0          { paramRow("Steps",   "\(clip.steps)") }
+                        paramRow("Guidance", String(format: "%.1f", clip.guidanceScale))
+                        paramRow("Seed",     "\(clip.seed)")
+                        paramRow("Sampler",  clip.sampler)
+                        if clip.strength > 0 && clip.strength < 1 {
+                            paramRow("Strength", String(format: "%.2f", clip.strength))
+                        }
+                        if clip.shift != 1.0       { paramRow("Shift",   String(format: "%.2f", clip.shift)) }
+                        paramRow("Seed Mode", clip.seedMode)
+                    }
+                }
+                if !clip.loras.isEmpty {
+                    DetailField(label: "LoRAs") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(clip.loras, id: \.self) { lora in
+                                HStack {
+                                    Text(lora.file).font(.caption).lineLimit(1)
+                                    Spacer()
+                                    Text(String(format: "%.2f", lora.weight))
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.neuTextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                if clip.wallClock != Date.distantPast {
+                    DetailField(label: "Generated") {
+                        Text(clip.wallClock.formatted(date: .abbreviated, time: .shortened))
+                            .font(.callout).foregroundColor(.neuTextSecondary)
+                    }
+                }
+                actionButtons
+            }
+            .padding(20)
+        }
+        .task {
+            // Slow auto-cycle in detail view at 4fps
+            guard clip.isVideo else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(0.25))
+                guard !Task.isCancelled else { break }
+                previewFrameIndex = (previewFrameIndex + 1) % clip.frames.count
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var animatedPreview: some View {
+        let frame = clip.frames[min(previewFrameIndex, clip.frames.count - 1)]
+        if let thumbnail = frame.thumbnail {
+            Image(nsImage: thumbnail)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .neuCard(cornerRadius: 10)
+                .animation(.none, value: previewFrameIndex)
+        } else {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.neuSurface)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(
+                    clip.width > 0 && clip.height > 0
+                        ? CGFloat(clip.width) / CGFloat(clip.height)
+                        : 1,
+                    contentMode: .fit
+                )
+        }
+    }
+
+    private var filmstrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(clip.frames.indices, id: \.self) { i in
+                    ZStack {
+                        Color.neuBackground.opacity(0.5)
+                        if let thumb = clip.frames[i].thumbnail {
+                            Image(nsImage: thumb)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        }
+                    }
+                    .frame(width: 54, height: 54)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(selectedFrameIndex == i ? Color.neuAccent : Color.neuShadowDark.opacity(0.3), lineWidth: selectedFrameIndex == i ? 2 : 1)
+                    )
+                    .onTapGesture {
+                        selectedFrameIndex = i
+                        previewFrameIndex  = i
+                    }
+                    .overlay(alignment: .bottomTrailing) {
+                        Text("\(i + 1)")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(2)
+                            .background(.black.opacity(0.5))
+                            .clipShape(RoundedRectangle(cornerRadius: 2))
+                            .padding(2)
+                    }
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+        }
+        .frame(height: 66)
+        .neuInset(cornerRadius: 8)
+    }
+
+    private var actionButtons: some View {
+        VStack(spacing: 10) {
+            if clip.isVideo {
+                HStack(spacing: 8) {
+                    Text("FPS")
+                        .font(.caption)
+                        .foregroundColor(.neuTextSecondary)
+                    Picker("FPS", selection: $fps) {
+                        Text("4").tag(4.0)
+                        Text("8").tag(8.0)
+                        Text("12").tag(12.0)
+                        Text("16").tag(16.0)
+                        Text("24").tag(24.0)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 64)
+
+                    Button {
+                        viewModel.exportClip(clip, fps: fps)
+                    } label: {
+                        HStack {
+                            if viewModel.isExporting {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "square.and.arrow.up")
+                            }
+                            Text(viewModel.isExporting ? "Exporting…" : "Export .mov")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(NeumorphicButtonStyle(isProminent: true))
+                    .controlSize(.large)
+                    .disabled(viewModel.isExporting)
+                }
+            }
+
+            // "View Frame" — switches to frames mode and selects the chosen frame
+            Button {
+                viewModel.selectedEntry = clip.frames[min(selectedFrameIndex, clip.frames.count - 1)]
+                viewModel.showAsClips = false
+            } label: {
+                HStack {
+                    Image(systemName: "photo")
+                    Text(clip.isVideo ? "View Frame \(selectedFrameIndex + 1)" : "View Details")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.large)
+
+            Button(action: sendToGenerate) {
+                HStack {
+                    Image(systemName: "arrow.right.circle.fill")
+                    Text("Send to Generate Image")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle(isProminent: !clip.isVideo))
+            .controlSize(.large)
+
+            Button(role: .destructive, action: onDelete) {
+                HStack {
+                    Image(systemName: "trash")
+                    Text(clip.isVideo ? "Delete Clip (\(clip.frameCount) frames)" : "Delete from Project")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.large)
+        }
+        .padding(.top, 4)
+    }
+
+    private func sendToGenerate() {
+        if !clip.prompt.isEmpty        { imageGenViewModel.prompt = clip.prompt }
+        if !clip.negativePrompt.isEmpty { imageGenViewModel.negativePrompt = clip.negativePrompt }
+        if clip.width  > 0             { imageGenViewModel.config.width  = clip.width }
+        if clip.height > 0             { imageGenViewModel.config.height = clip.height }
+        if clip.steps  > 0             { imageGenViewModel.config.steps  = clip.steps }
+        imageGenViewModel.config.guidanceScale = Double(clip.guidanceScale)
+        imageGenViewModel.config.seed          = Int(clip.seed)
+        imageGenViewModel.config.sampler       = clip.sampler
+        imageGenViewModel.config.seedMode      = clip.seedMode
+        if !clip.model.isEmpty         { imageGenViewModel.config.model = clip.model }
+        if clip.strength > 0 && clip.strength < 1 {
+            imageGenViewModel.config.strength = Double(clip.strength)
+        }
+        if clip.shift != 1.0           { imageGenViewModel.config.shift = Double(clip.shift) }
+        imageGenViewModel.config.stochasticSamplingGamma = Double(clip.stochasticSamplingGamma)
+        if !clip.loras.isEmpty {
+            imageGenViewModel.config.loras = clip.loras.map {
+                DrawThingsGenerationConfig.LoRAConfig(file: $0.file, weight: Double($0.weight))
+            }
+        }
+        selectedSidebarItem = .generateImage
+    }
+
+    private func paramRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.neuTextSecondary)
+                .frame(width: 80, alignment: .trailing)
+            Text(value)
+                .font(.system(.caption, design: .monospaced))
+                .lineLimit(1)
+                .textSelection(.enabled)
+            Spacer()
+        }
     }
 }
 

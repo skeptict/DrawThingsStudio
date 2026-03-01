@@ -64,6 +64,54 @@ struct DTGenerationEntry: Identifiable, Hashable {
     }
 }
 
+// MARK: - Video Clip
+
+/// A group of generation entries sharing the same lineage (__pk0).
+/// When a Draw Things video model (e.g. WAN 2.2) generates N frames, each frame
+/// is stored as a separate `tensorhistorynode` row with the same lineage but a
+/// different logicalTime (frame index). Single still images have exactly one frame.
+struct DTVideoClip: Identifiable {
+    let id: Int64                       // lineage (__pk0) — unique per generation run
+    let frames: [DTGenerationEntry]     // sorted ascending by logicalTime
+
+    var isVideo: Bool       { frames.count > 1 }
+    var frameCount: Int     { frames.count }
+
+    // Representative metadata — shared across all frames
+    var prompt: String      { frames.first?.prompt ?? "" }
+    var negativePrompt: String { frames.first?.negativePrompt ?? "" }
+    var model: String       { frames.first?.model ?? "" }
+    var seed: UInt32        { frames.first?.seed ?? 0 }
+    var width: Int          { frames.first?.width ?? 0 }
+    var height: Int         { frames.first?.height ?? 0 }
+    var steps: Int          { frames.first?.steps ?? 0 }
+    var guidanceScale: Float { frames.first?.guidanceScale ?? 0 }
+    var strength: Float     { frames.first?.strength ?? 0 }
+    var sampler: String     { frames.first?.sampler ?? "" }
+    var seedMode: String    { frames.first?.seedMode ?? "" }
+    var shift: Float        { frames.first?.shift ?? 0 }
+    var stochasticSamplingGamma: Float { frames.first?.stochasticSamplingGamma ?? 0.3 }
+    var loras: [DTLoRAEntry] { frames.first?.loras ?? [] }
+    var wallClock: Date     { frames.first?.wallClock ?? Date.distantPast }
+    var thumbnail: NSImage? { frames.first?.thumbnail }
+
+    /// Group a flat list of entries (any order) into clips, sorted newest-first by rowid.
+    static func group(from entries: [DTGenerationEntry]) -> [DTVideoClip] {
+        var byLineage: [Int64: [DTGenerationEntry]] = [:]
+        for entry in entries {
+            byLineage[entry.lineage, default: []].append(entry)
+        }
+        return byLineage.map { lineage, frames in
+            DTVideoClip(id: lineage, frames: frames.sorted { $0.logicalTime < $1.logicalTime })
+        }
+        .sorted { a, b in
+            // frames is already sorted ascending by logicalTime; the last element
+            // has the highest rowid. Using .last?.id is O(1) vs .map(\.id).max() O(K).
+            (a.frames.last?.id ?? 0) > (b.frames.last?.id ?? 0)
+        }
+    }
+}
+
 // MARK: - FlatBuffer Reader
 
 /// Minimal FlatBuffer binary reader for TensorHistoryNode blobs.
@@ -323,6 +371,14 @@ final class DTProjectDatabase: @unchecked Sendable {
         return queryThumbnailByPk0(table: .full, pk0: previewId)
     }
 
+    /// Fetch the highest-quality available thumbnail (full-res first, then half-res).
+    /// Used for video export where quality matters more than speed.
+    func fetchFullSizeThumbnail(previewId: Int64) -> NSImage? {
+        guard previewId > 0 else { return nil }
+        return queryThumbnailByPk0(table: .full, pk0: previewId)
+            ?? queryThumbnailByPk0(table: .half, pk0: previewId)
+    }
+
     // MARK: - Private Helpers
 
     private func parseEntry(rowid: Int64, lineage: Int64, logicalTime: Int64, blob: Data) -> DTGenerationEntry? {
@@ -522,6 +578,75 @@ final class DTProjectDatabase: @unchecked Sendable {
         } else {
             sqlite3_exec(writeDb, "ROLLBACK", nil, nil, nil)
             throw DTProjectDatabaseError.deleteFailed("Row not found or could not be deleted")
+        }
+    }
+
+    /// Permanently delete multiple generation entries (e.g. all frames of a video clip).
+    /// Opens a separate read-write connection; throws `databaseLocked` if Draw Things is open.
+    static func deleteEntries(rowids: [Int64], previewIds: [Int64], from fileURL: URL) throws {
+        guard !rowids.isEmpty else { return }
+
+        var writeDb: OpaquePointer?
+        let openResult = sqlite3_open_v2(
+            fileURL.path, &writeDb,
+            SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX,
+            nil
+        )
+        guard openResult == SQLITE_OK, writeDb != nil else {
+            let code = sqlite3_errcode(writeDb)
+            sqlite3_close(writeDb)
+            throw (code == SQLITE_BUSY || code == SQLITE_LOCKED)
+                ? DTProjectDatabaseError.databaseLocked
+                : DTProjectDatabaseError.cannotOpen("SQLite error \(openResult)")
+        }
+        defer { sqlite3_close(writeDb) }
+
+        let beginResult = sqlite3_exec(writeDb, "BEGIN IMMEDIATE", nil, nil, nil)
+        if beginResult == SQLITE_BUSY || beginResult == SQLITE_LOCKED {
+            throw DTProjectDatabaseError.databaseLocked
+        }
+        guard beginResult == SQLITE_OK else {
+            throw DTProjectDatabaseError.deleteFailed("Could not begin transaction (code \(beginResult))")
+        }
+
+        var allSucceeded = true
+
+        for (rowid, previewId) in zip(rowids, previewIds) {
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(writeDb, "DELETE FROM tensorhistorynode WHERE rowid = ?", -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_int64(stmt, 1, rowid)
+                let stepResult = sqlite3_step(stmt)
+                if stepResult != SQLITE_DONE {
+                    allSucceeded = false
+                }
+            } else {
+                allSucceeded = false
+            }
+            sqlite3_finalize(stmt)
+
+            if previewId > 0 {
+                for table in [ThumbnailTable.half, ThumbnailTable.full] {
+                    var tStmt: OpaquePointer?
+                    let sql = "DELETE FROM \(table.rawValue) WHERE __pk0 = ?"
+                    if sqlite3_prepare_v2(writeDb, sql, -1, &tStmt, nil) == SQLITE_OK {
+                        sqlite3_bind_int64(tStmt, 1, previewId)
+                        let stepResult = sqlite3_step(tStmt)
+                        if stepResult != SQLITE_DONE {
+                            allSucceeded = false
+                        }
+                    } else {
+                        allSucceeded = false
+                    }
+                    sqlite3_finalize(tStmt)
+                }
+            }
+        }
+
+        if allSucceeded {
+            sqlite3_exec(writeDb, "COMMIT", nil, nil, nil)
+        } else {
+            sqlite3_exec(writeDb, "ROLLBACK", nil, nil, nil)
+            throw DTProjectDatabaseError.deleteFailed("One or more DELETE statements failed; transaction rolled back")
         }
     }
 }

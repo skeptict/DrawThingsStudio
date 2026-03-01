@@ -572,8 +572,8 @@ struct StoryStudioView: View {
 
     private func variantThumbnail(variant: SceneVariant) -> some View {
         Group {
-            if let imageData = variant.imageData,
-               let nsImage = NSImage(data: imageData) {
+            // Load from file path (preferred) or legacy imageData blob.
+            if let nsImage = viewModel.imageForVariant(variant) {
                 Image(nsImage: nsImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)

@@ -128,26 +128,27 @@ final class StoryflowExporter {
     ) async throws -> URL? {
         let jsonString = try exportToJSON(instructions: instructions)
 
+        // The caller is always on MainActor — no GCD dispatch needed.
+        // Using DispatchQueue.main.async inside structured concurrency is incorrect;
+        // NSSavePanel.begin can be called directly here.
         return await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                let savePanel = NSSavePanel()
-                savePanel.allowedContentTypes = [.json, .plainText]
-                savePanel.nameFieldStringValue = suggestedFilename
-                savePanel.title = "Save StoryFlow Instructions"
-                savePanel.message = "Choose where to save your StoryFlow instructions"
+            let savePanel = NSSavePanel()
+            savePanel.allowedContentTypes = [.json, .plainText]
+            savePanel.nameFieldStringValue = suggestedFilename
+            savePanel.title = "Save StoryFlow Instructions"
+            savePanel.message = "Choose where to save your StoryFlow instructions"
 
-                savePanel.begin { response in
-                    guard response == .OK, let url = savePanel.url else {
-                        continuation.resume(returning: nil)
-                        return
-                    }
+            savePanel.begin { response in
+                guard response == .OK, let url = savePanel.url else {
+                    continuation.resume(returning: nil)
+                    return
+                }
 
-                    do {
-                        try jsonString.write(to: url, atomically: true, encoding: .utf8)
-                        continuation.resume(returning: url)
-                    } catch {
-                        continuation.resume(returning: nil)
-                    }
+                do {
+                    try jsonString.write(to: url, atomically: true, encoding: .utf8)
+                    continuation.resume(returning: url)
+                } catch {
+                    continuation.resume(returning: nil)
                 }
             }
         }

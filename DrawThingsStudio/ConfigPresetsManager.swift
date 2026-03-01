@@ -301,7 +301,8 @@ final class ConfigPresetsManager {
 
     /// Directory for storing presets
     let presetsDirectory: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
         let dir = appSupport.appendingPathComponent("DrawThingsStudio/Presets", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
@@ -309,7 +310,8 @@ final class ConfigPresetsManager {
 
     /// Path to our native presets file
     let presetsFilePath: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return appSupport.appendingPathComponent("DrawThingsStudio/Presets/config_presets.json")
     }()
 

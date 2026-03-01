@@ -147,7 +147,8 @@ final class ImageInspectorViewModel: ObservableObject {
 
     // Computed once — path is constant for the process lifetime (consistent with ImageStorageManager).
     private let storageDirectory: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return appSupport.appendingPathComponent("DrawThingsStudio/InspectorHistory", isDirectory: true)
     }()
 

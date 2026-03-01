@@ -326,8 +326,9 @@ final class ImageBrowserViewModel: ObservableObject {
 
                 if !Task.isCancelled {
                     self.images = accumulated.sorted { $0.createdAt > $1.createdAt }
-                    self.isLoading = false
                 }
+                // Always reset isLoading — even on cancellation the spinner must stop.
+                self.isLoading = false
             }
         }
     }

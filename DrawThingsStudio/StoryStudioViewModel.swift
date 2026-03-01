@@ -107,9 +107,17 @@ final class StoryStudioViewModel: ObservableObject {
     // MARK: - Chapter Management
 
     func addChapter(title: String) {
+        guard let context = modelContext else {
+            assertionFailure("addChapter called before modelContext was set")
+            return
+        }
         guard let project = selectedProject else { return }
         let nextOrder = (project.chapters.map(\.sortOrder).max() ?? -1) + 1
         let chapter = StoryChapter(title: title, sortOrder: nextOrder)
+        // Insert into context before establishing any relationships.
+        // SwiftData 1.0 (macOS 14) crashes with EXC_BAD_INSTRUCTION if you set
+        // inverse relationships between objects not yet managed by a ModelContext.
+        context.insert(chapter)
         chapter.project = project
         project.chapters.append(chapter)
         project.modifiedAt = Date()
@@ -130,9 +138,14 @@ final class StoryStudioViewModel: ObservableObject {
     // MARK: - Scene Management
 
     func addScene(title: String, to chapter: StoryChapter? = nil) {
+        guard let context = modelContext else {
+            assertionFailure("addScene called before modelContext was set")
+            return
+        }
         guard let targetChapter = chapter ?? selectedChapter else { return }
         let nextOrder = (targetChapter.scenes.map(\.sortOrder).max() ?? -1) + 1
         let scene = StoryScene(title: title, sortOrder: nextOrder)
+        context.insert(scene)
         scene.chapter = targetChapter
         targetChapter.scenes.append(scene)
         selectedProject?.modifiedAt = Date()
@@ -159,6 +172,10 @@ final class StoryStudioViewModel: ObservableObject {
     // MARK: - Character Management
 
     func addCharacter(name: String, promptFragment: String) {
+        guard let context = modelContext else {
+            assertionFailure("addCharacter called before modelContext was set")
+            return
+        }
         guard let project = selectedProject else { return }
         let nextOrder = (project.characters.map(\.sortOrder).max() ?? -1) + 1
         let character = StoryCharacter(
@@ -166,6 +183,7 @@ final class StoryStudioViewModel: ObservableObject {
             promptFragment: promptFragment,
             sortOrder: nextOrder
         )
+        context.insert(character)
         character.project = project
         project.characters.append(character)
         project.modifiedAt = Date()
@@ -187,6 +205,10 @@ final class StoryStudioViewModel: ObservableObject {
     // MARK: - Setting Management
 
     func addSetting(name: String, promptFragment: String) {
+        guard let context = modelContext else {
+            assertionFailure("addSetting called before modelContext was set")
+            return
+        }
         guard let project = selectedProject else { return }
         let nextOrder = (project.settings.map(\.sortOrder).max() ?? -1) + 1
         let setting = StorySetting(
@@ -194,6 +216,7 @@ final class StoryStudioViewModel: ObservableObject {
             promptFragment: promptFragment,
             sortOrder: nextOrder
         )
+        context.insert(setting)
         setting.project = project
         project.settings.append(setting)
         project.modifiedAt = Date()
@@ -217,10 +240,15 @@ final class StoryStudioViewModel: ObservableObject {
     // MARK: - Character Presence in Scenes
 
     func addCharacterToScene(_ character: StoryCharacter) {
+        guard let context = modelContext else {
+            assertionFailure("addCharacterToScene called before modelContext was set")
+            return
+        }
         guard let scene = selectedScene else { return }
         // Don't add if already present
         guard !scene.characterPresences.contains(where: { $0.characterId == character.id }) else { return }
         let presence = SceneCharacterPresence(characterId: character.id)
+        context.insert(presence)
         presence.scene = scene
         scene.characterPresences.append(presence)
         selectedProject?.modifiedAt = Date()
@@ -331,38 +359,41 @@ final class StoryStudioViewModel: ObservableObject {
                     }
                 )
 
-                // Save variants and persist to GeneratedImages on disk
+                // Save variants and persist to GeneratedImages on disk.
+                // Images are stored as files via ImageStorageManager (not as Data
+                // blobs in SwiftData) to prevent SQLite store bloat. The variant
+                // only stores the file path; imageData is intentionally nil.
+                // The resolved seed is stored (config.seed == -1 means random; the
+                // actual seed used is unknowable without Draw Things returning it,
+                // so we store 0 as a placeholder rather than the -1 sentinel which
+                // would make variants appear non-reproducible in the UI).
                 for image in images {
-                    guard let tiffData = image.tiffRepresentation,
-                          let bitmap = NSBitmapImageRep(data: tiffData),
-                          let pngData = bitmap.representation(using: .png, properties: [:]) else {
-                        continue
-                    }
-
-                    let variant = SceneVariant(
-                        prompt: finalPrompt,
-                        negativePrompt: assembled.negativePrompt,
-                        seed: config.seed,
-                        imageData: pngData,
-                        isSelected: scene.variants.isEmpty
-                    )
-                    variant.scene = scene
-                    scene.variants.append(variant)
-
-                    // Set as generated image if first or selected
-                    if scene.generatedImageData == nil {
-                        scene.generatedImageData = pngData
-                    }
-
-                    // Also save to GeneratedImages so the image appears in
-                    // Image Browser and is backed up outside the SwiftData store.
-                    _ = await ImageStorageManager.shared.saveImage(
+                    let savedImage = await ImageStorageManager.shared.saveImage(
                         image,
                         prompt: finalPrompt,
                         negativePrompt: assembled.negativePrompt,
                         config: config,
                         inferenceTimeMs: nil
                     )
+                    let resolvedSeed = config.seed >= 0 ? config.seed : 0
+                    let variant = SceneVariant(
+                        prompt: finalPrompt,
+                        negativePrompt: assembled.negativePrompt,
+                        seed: resolvedSeed,
+                        imageData: nil,
+                        imagePath: savedImage?.filePath?.path,
+                        isSelected: scene.variants.isEmpty
+                    )
+                    variant.scene = scene
+                    scene.variants.append(variant)
+
+                    // Track the selected variant's path for the main preview.
+                    // generatedImageData is no longer populated for new variants;
+                    // views should load from imagePath via imageForVariant().
+                    if scene.generatedImageData == nil, let path = variant.imagePath {
+                        scene.generatedImageData = nil  // explicit: do not write blob
+                        _ = path  // path stored on variant above
+                    }
                 }
 
                 project.modifiedAt = Date()
@@ -415,7 +446,8 @@ final class StoryStudioViewModel: ObservableObject {
         for v in scene.variants {
             v.isSelected = (v.id == variant.id)
         }
-        scene.generatedImageData = variant.imageData
+        // Load image from file path (preferred) or fall back to legacy blob.
+        scene.generatedImageData = imageDataForVariant(variant)
         selectedProject?.modifiedAt = Date()
     }
 
@@ -426,11 +458,31 @@ final class StoryStudioViewModel: ObservableObject {
 
         if wasSelected, let first = scene.variants.first {
             first.isSelected = true
-            scene.generatedImageData = first.imageData
+            scene.generatedImageData = imageDataForVariant(first)
         } else if scene.variants.isEmpty {
             scene.generatedImageData = nil
         }
         selectedProject?.modifiedAt = Date()
+    }
+
+    /// Load image data for a variant from its file path (preferred) or legacy imageData blob.
+    func imageDataForVariant(_ variant: SceneVariant) -> Data? {
+        if let path = variant.imagePath {
+            return try? Data(contentsOf: URL(fileURLWithPath: path))
+        }
+        return variant.imageData
+    }
+
+    /// Load NSImage for a variant, using file path when available.
+    func imageForVariant(_ variant: SceneVariant) -> NSImage? {
+        if let path = variant.imagePath,
+           let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+            return NSImage(data: data)
+        }
+        if let data = variant.imageData {
+            return NSImage(data: data)
+        }
+        return nil
     }
 
     func approveScene() {
@@ -464,10 +516,26 @@ final class StoryStudioViewModel: ObservableObject {
         panel.message = "Select a reference image for \(character.name)"
 
         panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url,
-                  let data = try? Data(contentsOf: url) else { return }
-            character.primaryReferenceImageData = data
-            self?.selectedProject?.modifiedAt = Date()
+            guard response == .OK, let url = panel.url else { return }
+            // Load off the main actor with a size ceiling to prevent OOM crashes
+            // from accidentally large files (allowedContentTypes is a UI hint only).
+            Task { [weak self] in
+                guard let self else { return }
+                let maxBytes = 10 * 1024 * 1024  // 10 MB
+                do {
+                    let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+                    let fileSize = (attrs[.size] as? Int) ?? 0
+                    guard fileSize <= maxBytes else {
+                        self.errorMessage = "Image is too large to use as a reference (max 10 MB)"
+                        return
+                    }
+                    let data = try Data(contentsOf: url)
+                    character.primaryReferenceImageData = data
+                    self.selectedProject?.modifiedAt = Date()
+                } catch {
+                    self.errorMessage = "Could not load image: \(error.localizedDescription)"
+                }
+            }
         }
     }
 
@@ -478,10 +546,26 @@ final class StoryStudioViewModel: ObservableObject {
         panel.message = "Select a reference image for \(setting.name)"
 
         panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url,
-                  let data = try? Data(contentsOf: url) else { return }
-            setting.referenceImageData = data
-            self?.selectedProject?.modifiedAt = Date()
+            guard response == .OK, let url = panel.url else { return }
+            // Load off the main actor with a size ceiling to prevent OOM crashes
+            // from accidentally large files (allowedContentTypes is a UI hint only).
+            Task { [weak self] in
+                guard let self else { return }
+                let maxBytes = 10 * 1024 * 1024  // 10 MB
+                do {
+                    let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+                    let fileSize = (attrs[.size] as? Int) ?? 0
+                    guard fileSize <= maxBytes else {
+                        self.errorMessage = "Image is too large to use as a reference (max 10 MB)"
+                        return
+                    }
+                    let data = try Data(contentsOf: url)
+                    setting.referenceImageData = data
+                    self.selectedProject?.modifiedAt = Date()
+                } catch {
+                    self.errorMessage = "Could not load image: \(error.localizedDescription)"
+                }
+            }
         }
     }
 }
