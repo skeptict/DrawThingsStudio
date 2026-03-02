@@ -485,6 +485,9 @@ final class WorkflowBuilderViewModel: ObservableObject {
 
         addInstruction(.note("Batch folder processing - processes all images in a folder"))
         addInstruction(.config(config))
+        // loop must precede loopLoad; adjust the count to match the number of
+        // input files. loopLoad advances through the folder at each iteration.
+        addInstruction(.loop(count: 10, start: 0))
         addInstruction(.loopLoad("Input_Img"))
         addInstruction(.prompt("Enhancement prompt applied to each image"))
         addInstruction(.loopSave("output_"))
@@ -502,6 +505,8 @@ final class WorkflowBuilderViewModel: ObservableObject {
 
         addInstruction(.note("Video frame processing - for animation or video stylization"))
         addInstruction(.config(config))
+        // loop must precede loopLoad; set count to the number of frames to process.
+        addInstruction(.loop(count: 24, start: 0))
         addInstruction(.loopLoad("frames"))
         addInstruction(.prompt("Stylization prompt for video frames"))
         addInstruction(.frames(24))

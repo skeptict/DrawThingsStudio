@@ -126,13 +126,16 @@ final class StoryStudioViewModel: ObservableObject {
     }
 
     func deleteChapter(_ chapter: StoryChapter) {
-        guard let project = selectedProject else { return }
+        guard let context = modelContext, let project = selectedProject else { return }
         if selectedChapter?.id == chapter.id {
             selectedChapter = nil
             selectedScene = nil
         }
         project.chapters.removeAll { $0.id == chapter.id }
         project.modifiedAt = Date()
+        // context.delete triggers the cascade delete rule on StoryProject.chapters,
+        // removing all nested scenes, presences, and variants from the store.
+        context.delete(chapter)
     }
 
     // MARK: - Scene Management
@@ -154,13 +157,16 @@ final class StoryStudioViewModel: ObservableObject {
     }
 
     func deleteScene(_ scene: StoryScene) {
-        guard let chapter = scene.chapter else { return }
+        guard let context = modelContext, let chapter = scene.chapter else { return }
         if selectedScene?.id == scene.id {
             selectedScene = nil
         }
         chapter.scenes.removeAll { $0.id == scene.id }
         selectedProject?.modifiedAt = Date()
         updateAssembledPrompt()
+        // context.delete triggers cascade rules on StoryScene, removing all
+        // characterPresences and variants from the store.
+        context.delete(scene)
     }
 
     func selectScene(_ scene: StoryScene) {
@@ -190,16 +196,23 @@ final class StoryStudioViewModel: ObservableObject {
     }
 
     func deleteCharacter(_ character: StoryCharacter) {
-        guard let project = selectedProject else { return }
-        // Remove all presences of this character from scenes
+        guard let context = modelContext, let project = selectedProject else { return }
+        // SceneCharacterPresence stores characterId as a plain UUID (not a
+        // @Relationship), so there is no cascade path from StoryCharacter to
+        // its presences. Collect and delete them explicitly before removing the
+        // character, so they don't accumulate as orphans in the SQLite store.
         for chapter in project.chapters {
             for scene in chapter.scenes {
+                let toDelete = scene.characterPresences.filter { $0.characterId == character.id }
                 scene.characterPresences.removeAll { $0.characterId == character.id }
+                toDelete.forEach { context.delete($0) }
             }
         }
         project.characters.removeAll { $0.id == character.id }
         project.modifiedAt = Date()
         updateAssembledPrompt()
+        // Cascade delete rule on StoryCharacter.appearances removes appearances too.
+        context.delete(character)
     }
 
     // MARK: - Setting Management
@@ -223,7 +236,7 @@ final class StoryStudioViewModel: ObservableObject {
     }
 
     func deleteSetting(_ setting: StorySetting) {
-        guard let project = selectedProject else { return }
+        guard let context = modelContext, let project = selectedProject else { return }
         // Clear setting from scenes that use it
         for chapter in project.chapters {
             for scene in chapter.scenes {
@@ -235,6 +248,7 @@ final class StoryStudioViewModel: ObservableObject {
         project.settings.removeAll { $0.id == setting.id }
         project.modifiedAt = Date()
         updateAssembledPrompt()
+        context.delete(setting)
     }
 
     // MARK: - Character Presence in Scenes
@@ -256,10 +270,11 @@ final class StoryStudioViewModel: ObservableObject {
     }
 
     func removeCharacterFromScene(_ presence: SceneCharacterPresence) {
-        guard let scene = selectedScene else { return }
+        guard let context = modelContext, let scene = selectedScene else { return }
         scene.characterPresences.removeAll { $0.id == presence.id }
         selectedProject?.modifiedAt = Date()
         updateAssembledPrompt()
+        context.delete(presence)
     }
 
     // MARK: - Prompt Assembly
@@ -384,6 +399,11 @@ final class StoryStudioViewModel: ObservableObject {
                         imagePath: savedImage?.filePath?.path,
                         isSelected: scene.variants.isEmpty
                     )
+                    // Insert into context before establishing any relationships.
+                    // SwiftData 1.0 (macOS 14) crashes with EXC_BAD_INSTRUCTION if you
+                    // set inverse relationships between objects not yet managed by a
+                    // ModelContext.
+                    modelContext?.insert(variant)
                     variant.scene = scene
                     scene.variants.append(variant)
 
@@ -447,7 +467,7 @@ final class StoryStudioViewModel: ObservableObject {
     }
 
     func deleteVariant(_ variant: SceneVariant) {
-        guard let scene = selectedScene else { return }
+        guard let context = modelContext, let scene = selectedScene else { return }
         let wasSelected = variant.isSelected
         scene.variants.removeAll { $0.id == variant.id }
 
@@ -458,6 +478,7 @@ final class StoryStudioViewModel: ObservableObject {
             scene.generatedImageData = nil
         }
         selectedProject?.modifiedAt = Date()
+        context.delete(variant)
     }
 
     /// Load image data for a variant from its file path (preferred) or legacy imageData blob.
