@@ -245,7 +245,10 @@ final class ImageBrowserViewModel: ObservableObject {
                     return (sorted, nil)
                 }.value
 
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                self.isLoading = false
+                return
+            }
 
             if let err = scanError {
                 self.errorMessage = err

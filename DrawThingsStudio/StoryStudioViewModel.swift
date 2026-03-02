@@ -387,13 +387,8 @@ final class StoryStudioViewModel: ObservableObject {
                     variant.scene = scene
                     scene.variants.append(variant)
 
-                    // Track the selected variant's path for the main preview.
-                    // generatedImageData is no longer populated for new variants;
-                    // views should load from imagePath via imageForVariant().
-                    if scene.generatedImageData == nil, let path = variant.imagePath {
-                        scene.generatedImageData = nil  // explicit: do not write blob
-                        _ = path  // path stored on variant above
-                    }
+                    // generatedImageData is not populated for new variants;
+                    // views load the image via imageForVariant() using variant.imagePath.
                 }
 
                 project.modifiedAt = Date()

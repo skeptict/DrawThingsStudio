@@ -90,17 +90,26 @@ final class RequestLogger {
 
     // MARK: - Private
 
+    /// Serial queue ensures concurrent callers (e.g. HTTP and gRPC in parallel)
+    /// do not interleave writes and corrupt the log file.
+    private let writeQueue = DispatchQueue(
+        label: "com.drawthingsstudio.requestlogger",
+        qos: .background
+    )
+
     private func append(_ text: String) {
         // Do NOT emit to OSLog — request bodies contain user prompts (PII).
         // The local file already captures everything needed for debugging.
         guard let url = logFileURL,
               let data = text.data(using: .utf8) else { return }
-        if let handle = try? FileHandle(forWritingTo: url) {
-            handle.seekToEndOfFile()
-            handle.write(data)
-            try? handle.close()
-        } else {
-            try? data.write(to: url)
+        writeQueue.async {
+            if let handle = try? FileHandle(forWritingTo: url) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                try? handle.close()
+            } else {
+                try? data.write(to: url)
+            }
         }
     }
 

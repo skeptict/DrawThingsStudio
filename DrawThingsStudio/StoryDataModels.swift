@@ -422,7 +422,7 @@ class SceneVariant {
     init(
         prompt: String,
         negativePrompt: String = "",
-        seed: Int = -1,
+        seed: Int = 0,    // 0 = random seed used; pass a positive value for reproducible seeds
         imageData: Data? = nil,
         imagePath: String? = nil,
         isSelected: Bool = false,
