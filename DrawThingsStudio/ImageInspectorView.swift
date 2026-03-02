@@ -243,6 +243,8 @@ struct ImageInspectorView: View {
                     if let model = meta.model { configChip("Model", model) }
                     if let strength = meta.strength { configChip("Strength", String(format: "%.2f", strength)) }
                     if let shift = meta.shift { configChip("Shift", String(format: "%.1f", shift)) }
+                    if let rm = meta.refinerModel, !rm.isEmpty { configChip("Refiner", rm) }
+                    if let rs = meta.refinerStart { configChip("Refiner Start", String(format: "%.0f%%", rs * 100)) }
                 }
             }
         }
@@ -357,6 +359,8 @@ struct ImageInspectorView: View {
         if let model = meta.model { imageGenViewModel.config.model = model }
         if let strength = meta.strength { imageGenViewModel.config.strength = strength }
         if let shift = meta.shift { imageGenViewModel.config.shift = shift }
+        if let rm = meta.refinerModel, !rm.isEmpty { imageGenViewModel.config.refinerModel = rm }
+        if let rs = meta.refinerStart { imageGenViewModel.config.refinerStart = rs }
 
         // Set LoRAs
         if meta.hasLoRAs {

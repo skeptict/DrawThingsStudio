@@ -448,6 +448,10 @@ struct ImageBrowserView: View {
                     DrawThingsGenerationConfig.LoRAConfig(file: $0.file, weight: $0.weight, mode: $0.mode)
                 }
             }
+            if !config.refinerModel.isEmpty {
+                imageGenViewModel.config.refinerModel = config.refinerModel
+                imageGenViewModel.config.refinerStart = config.refinerStart
+            }
         } else if let meta = image.pngMetadata {
             // PNG metadata fallback
             if let prompt = meta.prompt { imageGenViewModel.prompt = prompt }
@@ -466,6 +470,8 @@ struct ImageBrowserView: View {
                     DrawThingsGenerationConfig.LoRAConfig(file: $0.file, weight: $0.weight, mode: $0.mode)
                 }
             }
+            if let rm = meta.refinerModel, !rm.isEmpty { imageGenViewModel.config.refinerModel = rm }
+            if let rs = meta.refinerStart { imageGenViewModel.config.refinerStart = rs }
         }
 
         if sendImageToGenerate, let thumb = image.thumbnail {

@@ -43,6 +43,8 @@ struct PNGMetadata {
     var shift: Double?
     var seedMode: String?
     var loras: [PNGMetadataLoRA] = []
+    var refinerModel: String?
+    var refinerStart: Double?
     var format: PNGMetadataFormat = .unknown
 
     /// Raw v2 config dictionary from Draw Things JSON (camelCase keys)
@@ -371,6 +373,11 @@ struct PNGMetadataParser {
             }
         }
 
+        // Refiner model/start (HTTP short keys and long-form)
+        if let rm = json["refiner_model"] as? String, !rm.isEmpty { meta.refinerModel = rm }
+        if let rs = json["refiner_start"] as? Double { meta.refinerStart = rs }
+        else if let rs = json["refiner_start"] as? Float { meta.refinerStart = Double(rs) }
+
         // Store raw top-level for config export (mask_blur, profile.duration, etc.)
         meta.rawTopLevel = json
 
@@ -387,6 +394,15 @@ struct PNGMetadataParser {
             if meta.guidanceScale == nil {
                 if let g = v2["guidanceScale"] as? Double { meta.guidanceScale = g }
             }
+            // v2 refiner fields
+            if meta.refinerModel == nil {
+                if let rm = v2["refinerModel"] as? String, !rm.isEmpty { meta.refinerModel = rm }
+            }
+            if meta.refinerStart == nil {
+                if let rs = v2["refinerStart"] as? Double { meta.refinerStart = rs }
+                else if let rs = v2["refinerStart"] as? Float { meta.refinerStart = Double(rs) }
+            }
+
             // v2 loras with "file", "weight", "mode" keys
             if meta.loras.isEmpty, let v2Loras = v2["loras"] as? [[String: Any]] {
                 for loraDict in v2Loras {

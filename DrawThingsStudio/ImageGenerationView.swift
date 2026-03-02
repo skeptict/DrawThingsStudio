@@ -785,6 +785,33 @@ struct ImageGenerationView: View {
                 availableLoRAs: assetManager.loras,
                 selectedLoRAs: $viewModel.config.loras
             )
+
+            // Refiner model
+            Divider()
+                .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                NeuSectionHeader("Refiner", icon: "sparkles.rectangle.stack")
+                TextField("Refiner model filename…", text: $viewModel.config.refinerModel)
+                    .textFieldStyle(NeumorphicTextFieldStyle())
+                    .accessibilityLabel("Refiner model filename")
+
+                if !viewModel.config.refinerModel.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Refiner Start").font(.caption).foregroundColor(.neuTextSecondary)
+                        HStack(spacing: 8) {
+                            Slider(value: $viewModel.config.refinerStart, in: 0.0...1.0, step: 0.01)
+                                .tint(Color.neuAccent)
+                                .accessibilityLabel("Refiner Start")
+                                .accessibilityValue(String(format: "%.0f percent", viewModel.config.refinerStart * 100))
+                            Text(String(format: "%.0f%%", viewModel.config.refinerStart * 100))
+                                .font(.caption)
+                                .foregroundColor(.neuTextSecondary)
+                                .frame(width: 35)
+                        }
+                    }
+                }
+            }
         }
     }
 

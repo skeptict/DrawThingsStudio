@@ -84,6 +84,8 @@ struct DrawThingsGenerationConfig: Codable {
     var loras: [LoRAConfig]
     var resolutionDependentShift: Bool?
     var cfgZeroStar: Bool?
+    var refinerModel: String
+    var refinerStart: Double
 
     struct LoRAConfig: Codable {
         var file: String
@@ -114,7 +116,9 @@ struct DrawThingsGenerationConfig: Codable {
         negativePrompt: String = "",
         loras: [LoRAConfig] = [],
         resolutionDependentShift: Bool? = nil,
-        cfgZeroStar: Bool? = nil
+        cfgZeroStar: Bool? = nil,
+        refinerModel: String = "",
+        refinerStart: Double = 0.7
     ) {
         self.width = width
         self.height = height
@@ -133,6 +137,8 @@ struct DrawThingsGenerationConfig: Codable {
         self.loras = loras
         self.resolutionDependentShift = resolutionDependentShift
         self.cfgZeroStar = cfgZeroStar
+        self.refinerModel = refinerModel
+        self.refinerStart = refinerStart
     }
 
     /// Convert to HTTP API request body dictionary
@@ -162,6 +168,11 @@ struct DrawThingsGenerationConfig: Codable {
             body["loras"] = loras.map { lora in
                 ["file": lora.file, "weight": lora.weight, "mode": lora.mode] as [String: Any]
             }
+        }
+
+        if !refinerModel.isEmpty {
+            body["refiner_model"] = refinerModel
+            body["refiner_start"] = refinerStart
         }
 
         return body

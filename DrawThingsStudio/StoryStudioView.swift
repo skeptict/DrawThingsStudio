@@ -1112,6 +1112,39 @@ struct ProjectSettingsSheet: View {
                     }
                 }
             }
+
+            // Refiner model
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Refiner Model")
+                    .font(.subheadline)
+                    .foregroundColor(.neuTextSecondary)
+                TextField("Refiner model filename…", text: Binding(
+                    get: { project.baseRefinerModel ?? "" },
+                    set: { project.baseRefinerModel = $0.isEmpty ? nil : $0 }
+                ))
+                .textFieldStyle(.roundedBorder)
+            }
+
+            if let rm = project.baseRefinerModel, !rm.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Refiner Start")
+                        .font(.subheadline)
+                        .foregroundColor(.neuTextSecondary)
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { Double(project.baseRefinerStart ?? 0.7) },
+                                set: { project.baseRefinerStart = Float($0) }
+                            ),
+                            in: 0...1,
+                            step: 0.01
+                        )
+                        Text(String(format: "%.0f%%", (project.baseRefinerStart ?? 0.7) * 100))
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(width: 40)
+                    }
+                }
+            }
         }
     }
 

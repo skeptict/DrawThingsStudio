@@ -28,6 +28,8 @@ class StoryProject {
     var baseGuidanceScale: Float
     var baseShift: Float
     var baseNegativePrompt: String?
+    var baseRefinerModel: String?
+    var baseRefinerStart: Float?
 
     // Metadata
     var coverImageData: Data?
@@ -56,7 +58,9 @@ class StoryProject {
         baseSteps: Int = 8,
         baseGuidanceScale: Float = 1.0,
         baseShift: Float = 3.0,
-        baseNegativePrompt: String? = nil
+        baseNegativePrompt: String? = nil,
+        baseRefinerModel: String? = nil,
+        baseRefinerStart: Float? = nil
     ) {
         self.id = UUID()
         self.name = name
@@ -71,6 +75,8 @@ class StoryProject {
         self.baseGuidanceScale = baseGuidanceScale
         self.baseShift = baseShift
         self.baseNegativePrompt = baseNegativePrompt
+        self.baseRefinerModel = baseRefinerModel
+        self.baseRefinerStart = baseRefinerStart
         self.createdAt = Date()
         self.modifiedAt = Date()
     }

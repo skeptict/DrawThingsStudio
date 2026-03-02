@@ -104,8 +104,10 @@ struct DTVideoClip: Identifiable {
         let lower = modelName.lowercased()
         // WAN (Wan Video) — wan2.1, wan2.2, wan-video, etc.
         if lower.contains("wan") { return true }
-        // Add further patterns here as Draw Things gains support for more video models.
-        // e.g. CogVideoX, Mochi, LTX-Video, Hunyuan Video, Sora-style models.
+        // LTX-Video 2 — ltx2, ltxv2, ltx-2, ltx-video-2, etc.
+        if lower.contains("ltx") { return true }
+        // Seedance — seedance, seed-dance, etc.
+        if lower.contains("seedance") { return true }
         return false
     }
 

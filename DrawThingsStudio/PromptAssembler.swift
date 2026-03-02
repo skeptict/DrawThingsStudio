@@ -39,6 +39,12 @@ struct AssembledPrompt {
             config.strength = 0.7
         }
 
+        // Apply refiner from project defaults
+        if let rm = project.baseRefinerModel, !rm.isEmpty {
+            config.refinerModel = rm
+            config.refinerStart = Double(project.baseRefinerStart ?? 0.7)
+        }
+
         return config
     }
 }
