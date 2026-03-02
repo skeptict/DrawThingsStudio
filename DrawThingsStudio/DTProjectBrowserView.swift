@@ -234,7 +234,7 @@ struct DTProjectBrowserView: View {
         VStack(spacing: 0) {
             // Header with search and view mode toggle
             VStack(spacing: 8) {
-                HStack {
+                HStack(spacing: 8) {
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.secondary)
@@ -246,29 +246,32 @@ struct DTProjectBrowserView: View {
                     .background(Color.neuSurface)
                     .cornerRadius(6)
 
-                    if viewModel.selectedProject != nil {
-                        Picker("View Mode", selection: $viewModel.showAsClips) {
-                            Image(systemName: "play.rectangle.on.rectangle").tag(true)
-                            Image(systemName: "photo.stack").tag(false)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 72)
-                        .help(viewModel.showAsClips ? "Showing clips (grouped by generation run)" : "Showing individual frames")
-                    }
-
-                    if viewModel.showAsClips {
-                        if !viewModel.filteredClips.isEmpty {
-                            Text("\(viewModel.filteredClips.count) clip\(viewModel.filteredClips.count == 1 ? "" : "s")")
+                    // Count badge
+                    Group {
+                        if viewModel.showAsClips, !viewModel.filteredClips.isEmpty {
+                            Text("\(viewModel.filteredClips.count)")
+                                .font(.caption)
+                                .foregroundColor(.neuTextSecondary)
+                                .fixedSize()
+                        } else if !viewModel.showAsClips, viewModel.entryCount > 0 {
+                            Text("\(viewModel.entryCount)")
                                 .font(.caption)
                                 .foregroundColor(.neuTextSecondary)
                                 .fixedSize()
                         }
-                    } else if viewModel.entryCount > 0 {
-                        Text("\(viewModel.entryCount) frames")
-                            .font(.caption)
-                            .foregroundColor(.neuTextSecondary)
-                            .fixedSize()
                     }
+                }
+
+                if viewModel.selectedProject != nil {
+                    Picker("View Mode", selection: $viewModel.showAsClips) {
+                        Label("Grouped", systemImage: "play.rectangle.on.rectangle").tag(true)
+                        Label("All Frames", systemImage: "photo.stack").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("dtProjects_viewModePicker")
+                    .help(viewModel.showAsClips
+                          ? "Grouped: animation frames collapsed into one clip per generation run"
+                          : "All Frames: every frame shown as a separate image")
                 }
             }
             .padding(.horizontal, 16)
@@ -419,7 +422,10 @@ struct DTProjectBrowserView: View {
                     onDelete: {
                         entryToDelete = entry
                         showDeleteConfirmation = true
-                    }
+                    },
+                    onShowClip: DTVideoClip.isVideoModel(entry.model) ? {
+                        viewModel.showAsClips = true
+                    } : nil
                 )
             } else {
                 VStack(spacing: 12) {
@@ -931,10 +937,31 @@ private struct DTDetailPanel: View {
     @ObservedObject var imageGenViewModel: ImageGenerationViewModel
     @Binding var selectedSidebarItem: SidebarItem?
     let onDelete: () -> Void
+    var onShowClip: (() -> Void)? = nil
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // "Back to clip" banner — shown when this frame is part of a video generation
+                if let onShowClip {
+                    Button(action: onShowClip) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                                .font(.caption.weight(.semibold))
+                            Text("Back to Clip")
+                                .font(.caption.weight(.semibold))
+                            Spacer()
+                            Image(systemName: "play.rectangle.on.rectangle")
+                                .font(.caption)
+                                .foregroundColor(.neuTextSecondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(NeumorphicButtonStyle())
+                }
+
                 // Thumbnail
                 if let thumbnail = entry.thumbnail {
                     Image(nsImage: thumbnail)
