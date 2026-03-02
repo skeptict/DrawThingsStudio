@@ -95,14 +95,48 @@ struct DTVideoClip: Identifiable {
     var wallClock: Date     { frames.first?.wallClock ?? Date.distantPast }
     var thumbnail: NSImage? { frames.first?.thumbnail }
 
+    /// Returns true when the model filename is a known video-generation model.
+    /// Only entries whose model passes this check are grouped into multi-frame clips;
+    /// all other entries are treated as individual still images regardless of their
+    /// shared lineage value (which prevents batch image renders from being incorrectly
+    /// grouped together as if they were video frames).
+    static func isVideoModel(_ modelName: String) -> Bool {
+        let lower = modelName.lowercased()
+        // WAN (Wan Video) — wan2.1, wan2.2, wan-video, etc.
+        if lower.contains("wan") { return true }
+        // Add further patterns here as Draw Things gains support for more video models.
+        // e.g. CogVideoX, Mochi, LTX-Video, Hunyuan Video, Sora-style models.
+        return false
+    }
+
     /// Group a flat list of entries (any order) into clips, sorted newest-first by rowid.
+    ///
+    /// Entries whose model is a known video model are grouped by lineage (__pk0) so that
+    /// all frames of a single video generation run are kept together.
+    /// Entries from still-image models are each placed in their own single-frame clip —
+    /// even if they share a lineage value — so that batch renders are never accidentally
+    /// presented as an animation.
     static func group(from entries: [DTGenerationEntry]) -> [DTVideoClip] {
-        var byLineage: [Int64: [DTGenerationEntry]] = [:]
+        var byKey: [Int64: [DTGenerationEntry]] = [:]
         for entry in entries {
-            byLineage[entry.lineage, default: []].append(entry)
+            if isVideoModel(entry.model) {
+                // Group all frames of this video generation run together.
+                byKey[entry.lineage, default: []].append(entry)
+            } else {
+                // Each still image gets its own clip. Use the negative rowid as the
+                // clip key — rowids are always positive, so there is no collision with
+                // real lineage values.
+                byKey[-entry.id] = [entry]
+            }
         }
-        return byLineage.map { lineage, frames in
-            DTVideoClip(id: lineage, frames: frames.sorted { $0.logicalTime < $1.logicalTime })
+        return byKey.map { key, frames in
+            // Sort frames ascending by logicalTime so frame 0 is first.
+            // Use the map key as the clip ID: for video entries this is the lineage
+            // (positive, unique per generation run); for still-image entries it is
+            // the negative rowid (negative, unique per entry). The two ranges never
+            // overlap, so all clip IDs are globally unique.
+            let sorted = frames.sorted { $0.logicalTime < $1.logicalTime }
+            return DTVideoClip(id: key, frames: sorted)
         }
         .sorted { a, b in
             // frames is already sorted ascending by logicalTime; the last element
