@@ -106,6 +106,15 @@ final class WorkflowBuilderViewModel: ObservableObject {
         hasUnsavedChanges = true
     }
 
+    /// Delete instructions with the given IDs (multi-select deletion)
+    func deleteInstructions(withIDs ids: Set<UUID>) {
+        if let selectedID = selectedInstructionID, ids.contains(selectedID) {
+            selectedInstructionID = nil
+        }
+        instructions.removeAll { ids.contains($0.id) }
+        hasUnsavedChanges = true
+    }
+
     /// Delete currently selected instruction
     func deleteSelectedInstruction() {
         guard let index = selectedIndex else { return }

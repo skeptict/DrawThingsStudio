@@ -41,6 +41,7 @@ struct DrawThingsStudioApp: App {
         let schema = Schema([
             SavedWorkflow.self,
             ModelConfig.self,
+            SavedPipeline.self,
             StoryProject.self,
             StoryCharacter.self,
             CharacterAppearance.self,

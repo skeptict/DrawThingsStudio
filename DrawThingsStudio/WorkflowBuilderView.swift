@@ -18,8 +18,6 @@ struct WorkflowBuilderView: View {
     @State private var showTemplatesSheet = false
     @State private var showAIGeneration = false
     @State private var showSaveToLibrary = false
-    @State private var showExecutionSheet = false
-    @StateObject private var executionViewModel = WorkflowExecutionViewModel()
 
     init(viewModel: WorkflowBuilderViewModel? = nil) {
         self.viewModel = viewModel ?? WorkflowBuilderViewModel()
@@ -114,15 +112,6 @@ struct WorkflowBuilderView: View {
                 .accessibilityIdentifier("workflowBuilder_refreshConnectionButton")
 
                 Button {
-                    showExecutionSheet = true
-                } label: {
-                    Label("Execute", systemImage: "play.fill")
-                }
-                .disabled(viewModel.instructions.isEmpty)
-                .help("Execute workflow via Draw Things")
-                .accessibilityIdentifier("workflowBuilder_executeButton")
-
-                Button {
                     viewModel.copyToClipboard()
                 } label: {
                     Label("Copy", systemImage: "doc.on.clipboard")
@@ -158,13 +147,6 @@ struct WorkflowBuilderView: View {
                 viewModel: viewModel,
                 modelContext: modelContext,
                 isPresented: $showSaveToLibrary
-            )
-        }
-        .sheet(isPresented: $showExecutionSheet) {
-            WorkflowExecutionView(
-                viewModel: executionViewModel,
-                instructions: viewModel.instructions,
-                onDismiss: { showExecutionSheet = false }
             )
         }
         .alert("Error", isPresented: .init(
@@ -256,6 +238,9 @@ struct InstructionListView: View {
     @ObservedObject var viewModel: WorkflowBuilderViewModel
     @State private var showValidation: Bool = false
     @State private var validationResult: ValidationResult?
+    @State private var isMultiSelectMode: Bool = false
+    @State private var multiSelection = Set<UUID>()
+    @State private var showClearConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -264,27 +249,57 @@ struct InstructionListView: View {
                 NeuSectionHeader("Instructions", icon: "list.bullet")
                 Spacer()
 
-                // Validation button
-                Button {
-                    validationResult = viewModel.validate()
-                    showValidation = true
-                } label: {
-                    Image(systemName: validationStatusIcon)
-                        .foregroundColor(validationStatusColor)
+                // Validation button (hidden in multi-select mode)
+                if !isMultiSelectMode {
+                    Button {
+                        validationResult = viewModel.validate()
+                        showValidation = true
+                    } label: {
+                        Image(systemName: validationStatusIcon)
+                            .foregroundColor(validationStatusColor)
+                    }
+                    .buttonStyle(NeumorphicIconButtonStyle())
+                    .help("Validate workflow")
+                    .accessibilityLabel("Validate workflow")
                 }
-                .buttonStyle(NeumorphicIconButtonStyle())
-                .help("Validate workflow")
-                .accessibilityLabel("Validate workflow")
 
-                Text("\(viewModel.instructionCount)")
+                // Multi-select / Done toggle
+                if !viewModel.instructions.isEmpty {
+                    Button(isMultiSelectMode ? "Done" : "Select") {
+                        isMultiSelectMode.toggle()
+                        multiSelection.removeAll()
+                    }
                     .font(.caption)
-                    .foregroundColor(.neuTextSecondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .neuInset(cornerRadius: 6)
-                    .accessibilityLabel("\(viewModel.instructionCount) instructions")
+                    .foregroundColor(.neuAccent)
+                    .buttonStyle(NeumorphicPlainButtonStyle())
+                }
+
+                if !isMultiSelectMode {
+                    Text("\(viewModel.instructionCount)")
+                        .font(.caption)
+                        .foregroundColor(.neuTextSecondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .neuInset(cornerRadius: 6)
+                        .accessibilityLabel("\(viewModel.instructionCount) instructions")
+                }
             }
             .padding(16)
+
+            // Plugin disclaimer
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Exports JSON for Draw Things Pipeline Plugin. For direct generation, use Generate Image.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(8)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 8)
+            .padding(.bottom, 4)
 
             // Validation panel
             if showValidation, let result = validationResult {
@@ -306,6 +321,15 @@ struct InstructionListView: View {
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if isMultiSelectMode {
+                List(selection: $multiSelection) {
+                    ForEach(viewModel.instructions) { instruction in
+                        InstructionRow(instruction: instruction)
+                            .tag(instruction.id)
+                    }
+                }
+                .listStyle(.inset)
+                .scrollContentBackground(.hidden)
             } else {
                 List(selection: $viewModel.selectedInstructionID) {
                     ForEach(viewModel.instructions) { instruction in
@@ -325,54 +349,102 @@ struct InstructionListView: View {
             }
 
             // Footer actions
-            HStack {
-                Button {
-                    viewModel.deleteSelectedInstruction()
-                } label: {
-                    Image(systemName: "trash")
+            if isMultiSelectMode {
+                HStack {
+                    Text(multiSelection.isEmpty ? "Select instructions above" : "\(multiSelection.count) selected")
+                        .font(.caption)
                         .foregroundColor(.neuTextSecondary)
-                }
-                .buttonStyle(NeumorphicIconButtonStyle())
-                .disabled(!viewModel.hasSelection)
-                .help("Delete selected instruction")
-                .accessibilityLabel("Delete selected instruction")
 
-                Button {
-                    viewModel.duplicateSelectedInstruction()
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                        .foregroundColor(.neuTextSecondary)
-                }
-                .buttonStyle(NeumorphicIconButtonStyle())
-                .disabled(!viewModel.hasSelection)
-                .help("Duplicate selected instruction")
-                .accessibilityLabel("Duplicate selected instruction")
+                    Spacer()
 
-                Spacer()
+                    Button("Select All") {
+                        multiSelection = Set(viewModel.instructions.map(\.id))
+                    }
+                    .font(.caption)
+                    .buttonStyle(NeumorphicPlainButtonStyle())
 
-                Button {
-                    viewModel.moveSelectedUp()
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .foregroundColor(.neuTextSecondary)
+                    Button {
+                        viewModel.deleteInstructions(withIDs: multiSelection)
+                        multiSelection.removeAll()
+                        if viewModel.instructions.isEmpty { isMultiSelectMode = false }
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundColor(multiSelection.isEmpty ? .neuTextSecondary : .red)
+                    }
+                    .buttonStyle(NeumorphicIconButtonStyle())
+                    .disabled(multiSelection.isEmpty)
+                    .help("Delete selected instructions")
                 }
-                .buttonStyle(NeumorphicIconButtonStyle())
-                .disabled(!viewModel.hasSelection)
-                .help("Move up")
-                .accessibilityLabel("Move instruction up")
+                .padding(12)
+            } else {
+                HStack {
+                    Button {
+                        viewModel.deleteSelectedInstruction()
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundColor(.neuTextSecondary)
+                    }
+                    .buttonStyle(NeumorphicIconButtonStyle())
+                    .disabled(!viewModel.hasSelection)
+                    .help("Delete selected instruction")
+                    .accessibilityLabel("Delete selected instruction")
 
-                Button {
-                    viewModel.moveSelectedDown()
-                } label: {
-                    Image(systemName: "arrow.down")
-                        .foregroundColor(.neuTextSecondary)
+                    Button {
+                        viewModel.duplicateSelectedInstruction()
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .foregroundColor(.neuTextSecondary)
+                    }
+                    .buttonStyle(NeumorphicIconButtonStyle())
+                    .disabled(!viewModel.hasSelection)
+                    .help("Duplicate selected instruction")
+                    .accessibilityLabel("Duplicate selected instruction")
+
+                    Spacer()
+
+                    Button {
+                        viewModel.moveSelectedUp()
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .foregroundColor(.neuTextSecondary)
+                    }
+                    .buttonStyle(NeumorphicIconButtonStyle())
+                    .disabled(!viewModel.hasSelection)
+                    .help("Move up")
+                    .accessibilityLabel("Move instruction up")
+
+                    Button {
+                        viewModel.moveSelectedDown()
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .foregroundColor(.neuTextSecondary)
+                    }
+                    .buttonStyle(NeumorphicIconButtonStyle())
+                    .disabled(!viewModel.hasSelection)
+                    .help("Move down")
+                    .accessibilityLabel("Move instruction down")
+
+                    // Clear All
+                    Button {
+                        showClearConfirmation = true
+                    } label: {
+                        Image(systemName: "xmark.square")
+                            .foregroundColor(.neuTextSecondary)
+                    }
+                    .buttonStyle(NeumorphicIconButtonStyle())
+                    .disabled(viewModel.instructions.isEmpty)
+                    .help("Clear all instructions")
+                    .confirmationDialog("Clear all instructions?", isPresented: $showClearConfirmation, titleVisibility: .visible) {
+                        Button("Clear All", role: .destructive) {
+                            viewModel.clearAllInstructions()
+                        }
+                        Button("Cancel", role: .cancel) { }
+                    } message: {
+                        Text("This will remove all \(viewModel.instructionCount) instructions. This cannot be undone.")
+                    }
                 }
-                .buttonStyle(NeumorphicIconButtonStyle())
-                .disabled(!viewModel.hasSelection)
-                .help("Move down")
-                .accessibilityLabel("Move instruction down")
+                .padding(12)
             }
-            .padding(12)
         }
         .neuCard(cornerRadius: 24)
     }

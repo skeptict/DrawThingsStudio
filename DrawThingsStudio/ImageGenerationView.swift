@@ -23,18 +23,31 @@ struct ImageGenerationView: View {
     @State private var showEnhanceStylePicker = false
     @State private var showEnhanceStyleEditor = false
     @State private var enhanceError: String?
+    @State private var showSavePipeline = false
 
     var body: some View {
-        HStack(spacing: 20) {
-            // Left panel: Controls
+        HStack(spacing: 0) {
+            // Step list panel (always visible, 160pt wide)
+            stepListPanel
+                .frame(width: 160)
+
+            Divider()
+
+            // Controls panel
             controlsPanel
                 .frame(minWidth: 300, idealWidth: 340, maxWidth: 420)
+                .padding(.leading, 16)
 
-            // Right panel: Gallery
+            Divider()
+
+            // Gallery panel
             galleryPanel
                 .frame(minWidth: 400)
+                .padding(.leading, 16)
         }
-        .padding(20)
+        .padding(.vertical, 20)
+        .padding(.leading, 20)
+        .padding(.trailing, 20)
         .neuBackground()
         // Two .fileImporter modifiers cannot share the same view — SwiftUI only
         // honours the last one.  Attach each to its own Color.clear inside a
@@ -65,6 +78,20 @@ struct ImageGenerationView: View {
         )
         .task {
             await viewModel.checkConnection()
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    showSavePipeline = true
+                } label: {
+                    Label("Save Pipeline", systemImage: "tray.and.arrow.down")
+                }
+                .help("Save this pipeline to the library")
+                .accessibilityIdentifier("generate_savePipelineButton")
+            }
+        }
+        .sheet(isPresented: $showSavePipeline) {
+            SavePipelineSheet(viewModel: viewModel, modelContext: modelContext, isPresented: $showSavePipeline)
         }
     }
 
@@ -102,6 +129,183 @@ struct ImageGenerationView: View {
                 .padding(.bottom, 16)
         }
         .neuCard(cornerRadius: 24)
+    }
+
+    // MARK: - Step List Panel
+
+    @State private var stepRenameID: UUID? = nil
+    @State private var stepRenameText: String = ""
+
+    private var stepListPanel: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack(spacing: 6) {
+                Text("Steps")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.neuTextSecondary)
+                Spacer()
+                Text("\(viewModel.steps.count)")
+                    .font(.caption2)
+                    .foregroundColor(.neuTextSecondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .neuInset(cornerRadius: 4)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            // Steps list
+            ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: 4) {
+                    ForEach(Array(viewModel.steps.enumerated()), id: \.element.id) { index, step in
+                        stepRow(step: step, index: index)
+                    }
+                }
+                .padding(6)
+            }
+
+            Divider()
+
+            // Add step button
+            Button {
+                viewModel.addStep()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(.caption)
+                    Text("Add Step")
+                        .font(.caption)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.neuAccent)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+        }
+        .neuCard(cornerRadius: 16)
+    }
+
+    @ViewBuilder
+    private func stepRow(step: GenerationStep, index: Int) -> some View {
+        let isSelected = viewModel.selectedStepIndex == index
+
+        Button {
+            viewModel.switchStep(to: index)
+        } label: {
+            HStack(spacing: 6) {
+                // Running spinner or step number
+                if step.isRunning {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                        .frame(width: 14, height: 14)
+                } else {
+                    Text("\(index + 1)")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(isSelected ? .neuAccent : .neuTextSecondary)
+                        .frame(width: 14)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(step.name)
+                        .font(.caption)
+                        .fontWeight(isSelected ? .semibold : .regular)
+                        .foregroundColor(isSelected ? .primary : .neuTextSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    if step.useOutputFromPreviousStep && index > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "arrow.turn.down.right")
+                                .font(.system(size: 7))
+                            Text("chains")
+                                .font(.system(size: 9))
+                        }
+                        .foregroundColor(.neuAccent.opacity(0.7))
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                // Last result thumbnail
+                if let lastResult = step.resultImages.first {
+                    Image(nsImage: lastResult.image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 22, height: 22)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? Color.neuAccent.opacity(0.12) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? Color.neuAccent.opacity(0.25) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Rename…") {
+                stepRenameID = step.id
+                stepRenameText = step.name
+            }
+            Button("Duplicate") {
+                viewModel.syncCurrentStepState()
+                var copy = step
+                copy.id = UUID()
+                copy.name = step.name + " Copy"
+                copy.resultImages = []
+                copy.isRunning = false
+                viewModel.steps.insert(copy, at: index + 1)
+            }
+            Divider()
+            Button("Remove", role: .destructive) {
+                viewModel.removeStep(at: index)
+            }
+            .disabled(viewModel.steps.count <= 1)
+        }
+        .popover(isPresented: Binding(
+            get: { stepRenameID == step.id },
+            set: { if !$0 { stepRenameID = nil } }
+        )) {
+            VStack(spacing: 8) {
+                Text("Rename Step")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                TextField("Step name", text: $stepRenameText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 160)
+                    .onSubmit {
+                        if let id = stepRenameID,
+                           let idx = viewModel.steps.firstIndex(where: { $0.id == id }) {
+                            viewModel.steps[idx].name = stepRenameText
+                        }
+                        stepRenameID = nil
+                    }
+                HStack {
+                    Button("Cancel") { stepRenameID = nil }
+                    Button("OK") {
+                        if let id = stepRenameID,
+                           let idx = viewModel.steps.firstIndex(where: { $0.id == id }) {
+                            viewModel.steps[idx].name = stepRenameText
+                        }
+                        stepRenameID = nil
+                    }
+                    .buttonStyle(NeumorphicButtonStyle(isProminent: true))
+                }
+            }
+            .padding(12)
+        }
     }
 
     // MARK: - Connection Status
@@ -534,7 +738,44 @@ struct ImageGenerationView: View {
                 }
             }
 
-            if let inputImage = viewModel.inputImage {
+            // Chain from previous step toggle (only for step index > 0)
+            if viewModel.selectedStepIndex > 0 {
+                let idx = viewModel.selectedStepIndex
+                Toggle(isOn: Binding(
+                    get: { idx < viewModel.steps.count ? viewModel.steps[idx].useOutputFromPreviousStep : false },
+                    set: { newVal in
+                        if idx < viewModel.steps.count {
+                            viewModel.steps[idx].useOutputFromPreviousStep = newVal
+                        }
+                    }
+                )) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.turn.down.right")
+                        Text("Use output from Step \(idx)")
+                            .font(.caption)
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
+            let chainsFromPrevious = viewModel.selectedStepIndex > 0 &&
+                viewModel.selectedStepIndex < viewModel.steps.count &&
+                viewModel.steps[viewModel.selectedStepIndex].useOutputFromPreviousStep
+
+            if chainsFromPrevious {
+                // When chaining from previous step, show an info label instead of drop zone
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.turn.down.right")
+                        .foregroundColor(.neuAccent)
+                    Text("Uses output from Step \(viewModel.selectedStepIndex)")
+                        .font(.caption)
+                        .foregroundColor(.neuTextSecondary)
+                    Spacer()
+                }
+                .padding(10)
+                .neuInset(cornerRadius: 10)
+            } else if let inputImage = viewModel.inputImage {
                 // Preview of loaded source image
                 HStack(spacing: 12) {
                     Image(nsImage: inputImage)
@@ -849,10 +1090,12 @@ struct ImageGenerationView: View {
                 .accessibilityIdentifier("generate_cancelButton")
                 .accessibilityLabel("Cancel generation")
             } else {
-                Button(action: { viewModel.generate() }) {
+                Button(action: { viewModel.generateOrRunPipeline() }) {
                     HStack {
-                        Image(systemName: viewModel.inputImage != nil ? "photo.on.rectangle.angled" : "wand.and.stars")
-                        Text(viewModel.inputImage != nil ? "Generate (img2img)" : "Generate")
+                        Image(systemName: viewModel.steps.count > 1 ? "play.fill" :
+                              (viewModel.inputImage != nil ? "photo.on.rectangle.angled" : "wand.and.stars"))
+                        Text(viewModel.steps.count > 1 ? "Run Pipeline" :
+                             (viewModel.inputImage != nil ? "Generate (img2img)" : "Generate"))
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -862,7 +1105,7 @@ struct ImageGenerationView: View {
                 .disabled(viewModel.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                           viewModel.config.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .accessibilityIdentifier("generate_generateButton")
-                .accessibilityLabel("Generate image")
+                .accessibilityLabel(viewModel.steps.count > 1 ? "Run pipeline" : "Generate image")
                 .accessibilityHint("Sends prompt to Draw Things for image generation")
             }
         }
@@ -1142,5 +1385,113 @@ struct ImageGenerationView: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(Color.neuBackground.opacity(0.6))
             )
+    }
+}
+
+// MARK: - Save Pipeline Sheet
+
+struct SavePipelineSheet: View {
+    @ObservedObject var viewModel: ImageGenerationViewModel
+    var modelContext: ModelContext
+    @Binding var isPresented: Bool
+
+    @State private var name: String = ""
+    @State private var description: String = ""
+    @State private var showSuccess = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Image(systemName: "tray.and.arrow.down.fill")
+                    .font(.title)
+                    .foregroundColor(.accentColor)
+                Text("Save Pipeline")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+            }
+
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Pipeline Name")
+                        .font(.headline)
+                    TextField("Enter a name", text: $name)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Description (optional)")
+                        .font(.headline)
+                    TextField("Brief description", text: $description)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Summary")
+                        .font(.headline)
+                    Label("\(viewModel.steps.count) step\(viewModel.steps.count == 1 ? "" : "s")", systemImage: "list.number")
+                        .foregroundColor(.neuTextSecondary)
+                        .font(.subheadline)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(viewModel.steps.prefix(4).enumerated()), id: \.element.id) { i, step in
+                            HStack(spacing: 6) {
+                                Circle().fill(Color.accentColor).frame(width: 6, height: 6)
+                                Text(step.name + (step.config.model.isEmpty ? "" : " (\(step.config.model.components(separatedBy: "/").last ?? step.config.model))"))
+                                    .font(.caption)
+                                    .foregroundColor(.neuTextSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        if viewModel.steps.count > 4 {
+                            Text("... and \(viewModel.steps.count - 4) more")
+                                .font(.caption)
+                                .foregroundColor(.neuTextSecondary)
+                                .padding(.leading, 12)
+                        }
+                    }
+                    .padding(12)
+                    .neuInset(cornerRadius: 10)
+                }
+            }
+
+            Spacer()
+
+            HStack {
+                Button("Cancel") { isPresented = false }
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button(action: savePipeline) {
+                    Label("Save to Library", systemImage: "checkmark.circle.fill")
+                }
+                .buttonStyle(NeumorphicButtonStyle(isProminent: true))
+                .keyboardShortcut(.defaultAction)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 420, height: 400)
+        .onAppear {
+            name = viewModel.steps.count == 1 ? "My Pipeline" : "Pipeline (\(viewModel.steps.count) steps)"
+        }
+        .alert("Saved!", isPresented: $showSuccess) {
+            Button("OK") { isPresented = false }
+        } message: {
+            Text("Pipeline saved to library.")
+        }
+    }
+
+    private func savePipeline() {
+        guard let data = viewModel.encodedSteps() else { return }
+        let preview = viewModel.steps.map(\.name).joined(separator: " · ")
+        let pipeline = SavedPipeline(
+            name: name.trimmingCharacters(in: .whitespaces),
+            description: description,
+            stepsData: data,
+            stepCount: viewModel.steps.count,
+            stepPreview: preview
+        )
+        modelContext.insert(pipeline)
+        try? modelContext.save()
+        showSuccess = true
     }
 }

@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftData
+import AppKit
 
 // MARK: - Model Config
 
@@ -178,5 +179,68 @@ class SavedWorkflow {
     /// Convenience to get JSON string
     var jsonString: String? {
         String(data: jsonData, encoding: .utf8)
+    }
+}
+
+// MARK: - Codable Pipeline Step
+
+/// Serialisable representation of a GenerationStep (excludes runtime-only fields like resultImages).
+struct CodablePipelineStep: Codable {
+    var id: UUID
+    var name: String
+    var prompt: String
+    var negativePrompt: String
+    var config: DrawThingsGenerationConfig
+    var useOutputFromPreviousStep: Bool
+    var strength: Double
+
+    init(from step: GenerationStep) {
+        id = step.id
+        name = step.name
+        prompt = step.prompt
+        negativePrompt = step.negativePrompt
+        config = step.config
+        useOutputFromPreviousStep = step.useOutputFromPreviousStep
+        strength = step.strength
+    }
+
+    func toGenerationStep() -> GenerationStep {
+        var step = GenerationStep(name: name)
+        step.id = id
+        step.prompt = prompt
+        step.negativePrompt = negativePrompt
+        step.config = config
+        step.useOutputFromPreviousStep = useOutputFromPreviousStep
+        step.strength = strength
+        return step
+    }
+}
+
+// MARK: - Saved Pipeline
+
+/// A saved multi-step generation pipeline stored in the library.
+@Model
+class SavedPipeline {
+    var id: UUID
+    var name: String
+    var pipelineDescription: String
+    var stepsData: Data
+    var stepCount: Int
+    /// Short preview: "Step 1 · Step 2 · Step 3"
+    var stepPreview: String
+    var createdAt: Date
+    var modifiedAt: Date
+    var isFavorite: Bool
+
+    init(name: String, description: String = "", stepsData: Data, stepCount: Int, stepPreview: String) {
+        self.id = UUID()
+        self.name = name
+        self.pipelineDescription = description
+        self.stepsData = stepsData
+        self.stepCount = stepCount
+        self.stepPreview = stepPreview
+        self.createdAt = Date()
+        self.modifiedAt = Date()
+        self.isFavorite = false
     }
 }

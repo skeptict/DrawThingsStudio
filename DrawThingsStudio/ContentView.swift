@@ -12,7 +12,6 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @State private var selectedItem: SidebarItem? = SidebarItem(rawValue: AppSettings.shared.defaultSidebarItem) ?? .imageInspector
     @StateObject private var workflowViewModel = WorkflowBuilderViewModel()
-    @StateObject private var pipelineViewModel = WorkflowPipelineViewModel()
     @StateObject private var imageGenViewModel = ImageGenerationViewModel()
     @StateObject private var imageInspectorViewModel = ImageInspectorViewModel()
     @StateObject private var storyStudioViewModel = StoryStudioViewModel()
@@ -36,8 +35,7 @@ struct ContentView: View {
                     .padding(.top, 8)
 
                 sidebarButton("Image Inspector", icon: "doc.text.magnifyingglass", item: .imageInspector)
-                sidebarButton("Storyflow Builder", icon: "hammer", item: .workflow)
-                sidebarButton("Workflow Builder", icon: "rectangle.stack", item: .workflowBuilder)
+                sidebarButton("StoryFlow", icon: "hammer", item: .workflow)
                 sidebarButton("Generate Image", icon: "photo.badge.plus", item: .generateImage)
                 sidebarButton("Story Studio", icon: "book.pages", item: .storyStudio)
 
@@ -47,6 +45,7 @@ struct ContentView: View {
 
                 sidebarButton("DT Projects", icon: "cylinder.split.1x2", item: .projectBrowser)
                 sidebarButton("Image Browser", icon: "photo.stack", item: .imageBrowser)
+                sidebarButton("Saved Pipelines", icon: "list.number.reverse", item: .savedPipelines)
                 sidebarButton("Saved Workflows", icon: "folder", item: .library)
                 sidebarButton("Templates", icon: "doc.on.doc", item: .templates)
                 sidebarButton("Story Projects", icon: "book.closed", item: .storyProjects)
@@ -72,12 +71,6 @@ struct ContentView: View {
                     .opacity(selectedItem == .workflow ? 1 : 0)
                     .scaleEffect(selectedItem == .workflow ? 1 : 0.98)
                     .allowsHitTesting(selectedItem == .workflow)
-                    .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
-
-                WorkflowPipelineView(viewModel: pipelineViewModel)
-                    .opacity(selectedItem == .workflowBuilder ? 1 : 0)
-                    .scaleEffect(selectedItem == .workflowBuilder ? 1 : 0.98)
-                    .allowsHitTesting(selectedItem == .workflowBuilder)
                     .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
                 ImageGenerationView(viewModel: imageGenViewModel)
@@ -106,7 +99,13 @@ struct ContentView: View {
                 // Views below use conditional instantiation rather than the opacity/hitTesting
                 // pattern. They are recreated on each selection because they do not require
                 // persistent state across sidebar navigation (no in-flight tasks, etc.).
-                if selectedItem == .projectBrowser {
+                if selectedItem == .savedPipelines {
+                    SavedPipelinesView(
+                        imageGenViewModel: imageGenViewModel,
+                        selectedSidebarItem: $selectedItem
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                } else if selectedItem == .projectBrowser {
                     DTProjectBrowserView(
                         viewModel: projectBrowserViewModel,
                         imageGenViewModel: imageGenViewModel,
@@ -289,12 +288,12 @@ struct ContentView: View {
 
 enum SidebarItem: String, Identifiable {
     case workflow
-    case workflowBuilder
     case generateImage
     case imageInspector
     case storyStudio
     case projectBrowser
     case imageBrowser
+    case savedPipelines
     case library
     case templates
     case storyProjects
@@ -1406,6 +1405,211 @@ struct WorkflowTemplate: Identifiable {
             ]
         )
     ]
+}
+
+// MARK: - Saved Pipelines View
+
+struct SavedPipelinesView: View {
+    @ObservedObject var imageGenViewModel: ImageGenerationViewModel
+    @Binding var selectedSidebarItem: SidebarItem?
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \SavedPipeline.modifiedAt, order: .reverse) private var pipelines: [SavedPipeline]
+
+    @State private var selectedPipeline: SavedPipeline?
+    @State private var showDeleteConfirmation = false
+    @State private var pipelineToDelete: SavedPipeline?
+    @State private var searchText = ""
+
+    var filteredPipelines: [SavedPipeline] {
+        searchText.isEmpty ? pipelines : pipelines.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            $0.pipelineDescription.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        HSplitView {
+            // Left: list
+            VStack(spacing: 0) {
+                HStack {
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                        TextField("Search pipelines...", text: $searchText).textFieldStyle(.plain)
+                    }
+                    .padding(8)
+                    .background(Color.neuSurface)
+                    .cornerRadius(6)
+                }
+                .padding()
+
+                if filteredPipelines.isEmpty {
+                    Spacer()
+                    VStack(spacing: 12) {
+                        Image(systemName: "list.number.reverse")
+                            .font(.system(size: 40))
+                            .foregroundColor(.secondary)
+                        Text("No Saved Pipelines")
+                            .font(.headline)
+                        Text("Save a pipeline from Generate Image\nusing the Save Pipeline toolbar button.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    Spacer()
+                } else {
+                    List(selection: $selectedPipeline) {
+                        ForEach(filteredPipelines) { pipeline in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    if pipeline.isFavorite {
+                                        Image(systemName: "star.fill")
+                                            .font(.caption2)
+                                            .foregroundColor(.orange)
+                                    }
+                                    Text(pipeline.name)
+                                        .font(.headline)
+                                        .lineLimit(1)
+                                }
+                                HStack(spacing: 8) {
+                                    Label("\(pipeline.stepCount) step\(pipeline.stepCount == 1 ? "" : "s")", systemImage: "list.number")
+                                    Text(pipeline.modifiedAt.formatted(date: .abbreviated, time: .omitted))
+                                }
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            }
+                            .tag(pipeline)
+                            .contextMenu {
+                                Button("Load into Generate Image") { loadPipeline(pipeline) }
+                                Button(pipeline.isFavorite ? "Remove from Favorites" : "Add to Favorites") {
+                                    pipeline.isFavorite.toggle()
+                                }
+                                Divider()
+                                Button("Delete", role: .destructive) {
+                                    pipelineToDelete = pipeline
+                                    showDeleteConfirmation = true
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.inset)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .frame(minWidth: 260, idealWidth: 300)
+            .neuBackground()
+
+            // Right: detail
+            if let pipeline = selectedPipeline {
+                pipelineDetailPanel(pipeline)
+                    .frame(minWidth: 380)
+            } else {
+                VStack {
+                    Spacer()
+                    Text("Select a pipeline to preview")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .frame(minWidth: 380)
+                .neuBackground()
+            }
+        }
+        .navigationTitle("Saved Pipelines")
+        .alert("Delete Pipeline?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let p = pipelineToDelete { deletePipeline(p) }
+            }
+        } message: {
+            if let p = pipelineToDelete { Text("Delete \"\(p.name)\"? This cannot be undone.") }
+        }
+    }
+
+    @ViewBuilder
+    private func pipelineDetailPanel(_ pipeline: SavedPipeline) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Title
+            VStack(alignment: .leading, spacing: 6) {
+                Text(pipeline.name)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                if !pipeline.pipelineDescription.isEmpty {
+                    Text(pipeline.pipelineDescription)
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Divider()
+
+            // Stats
+            HStack(spacing: 20) {
+                VStack(alignment: .leading) {
+                    Text("Steps").font(.caption).foregroundColor(.secondary)
+                    Text("\(pipeline.stepCount)").font(.headline)
+                }
+                VStack(alignment: .leading) {
+                    Text("Saved").font(.caption).foregroundColor(.secondary)
+                    Text(pipeline.createdAt.formatted(date: .abbreviated, time: .omitted)).font(.headline)
+                }
+            }
+
+            // Step preview
+            if !pipeline.stepPreview.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Steps").font(.caption).foregroundColor(.secondary)
+                    let stepNames = pipeline.stepPreview.components(separatedBy: " · ")
+                    ForEach(Array(stepNames.enumerated()), id: \.offset) { i, name in
+                        HStack(spacing: 8) {
+                            Text("\(i + 1)")
+                                .font(.caption2)
+                                .foregroundColor(.white)
+                                .frame(width: 18, height: 18)
+                                .background(Color.accentColor)
+                                .clipShape(Circle())
+                            Text(name).font(.callout).lineLimit(1)
+                        }
+                    }
+                }
+                .padding(12)
+                .neuInset(cornerRadius: 10)
+            }
+
+            Spacer()
+
+            // Actions
+            HStack {
+                Button {
+                    pipelineToDelete = pipeline
+                    showDeleteConfirmation = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .foregroundColor(.red)
+
+                Spacer()
+
+                Button {
+                    loadPipeline(pipeline)
+                } label: {
+                    Label("Load into Generate Image", systemImage: "play.circle.fill")
+                }
+                .buttonStyle(NeumorphicButtonStyle(isProminent: true))
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .neuBackground()
+    }
+
+    private func loadPipeline(_ pipeline: SavedPipeline) {
+        imageGenViewModel.loadSteps(from: pipeline.stepsData)
+        selectedSidebarItem = .generateImage
+    }
+
+    private func deletePipeline(_ pipeline: SavedPipeline) {
+        if selectedPipeline?.id == pipeline.id { selectedPipeline = nil }
+        modelContext.delete(pipeline)
+    }
 }
 
 #Preview {

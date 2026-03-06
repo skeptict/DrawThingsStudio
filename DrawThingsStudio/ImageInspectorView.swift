@@ -326,7 +326,7 @@ struct ImageInspectorView: View {
             Button(action: sendToWorkflow) {
                 HStack {
                     Image(systemName: "arrow.right.circle.fill")
-                    Text("Send to Workflow Builder")
+                    Text("Send to StoryFlow")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -334,7 +334,7 @@ struct ImageInspectorView: View {
             .controlSize(.large)
             .disabled(viewModel.selectedImage?.metadata == nil)
             .accessibilityIdentifier("inspector_sendToWorkflowButton")
-            .accessibilityLabel("Send to Workflow Builder")
+            .accessibilityLabel("Send to StoryFlow")
             .accessibilityHint("Loads this image's prompt and config as workflow instructions")
         }
     }

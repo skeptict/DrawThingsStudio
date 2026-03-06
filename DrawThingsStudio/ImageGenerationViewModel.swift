@@ -9,6 +9,22 @@ import Foundation
 import AppKit
 import Combine
 import OSLog
+import SwiftUI
+
+// MARK: - Generation Step
+
+/// A single step in a multi-step generation pipeline.
+struct GenerationStep: Identifiable {
+    var id = UUID()
+    var name: String
+    var prompt: String = ""
+    var negativePrompt: String = ""
+    var config: DrawThingsGenerationConfig = DrawThingsGenerationConfig()
+    var useOutputFromPreviousStep: Bool = false
+    var strength: Double = 1.0   // img2img chain strength; 1.0 = full denoising (txt2img)
+    var resultImages: [GeneratedImage] = []
+    var isRunning: Bool = false
+}
 
 /// ViewModel managing Draw Things image generation state
 @MainActor
@@ -39,6 +55,11 @@ final class ImageGenerationViewModel: ObservableObject {
     // MARK: - img2img Source
     @Published var inputImage: NSImage?
     @Published var inputImageName: String?
+
+    // MARK: - Pipeline Steps
+
+    @Published var steps: [GenerationStep] = [GenerationStep(name: "Step 1")]
+    @Published var selectedStepIndex: Int = 0
 
     // MARK: - Private
 
@@ -112,6 +133,12 @@ final class ImageGenerationViewModel: ObservableObject {
                 generationConfig.negativePrompt = negativePrompt
                 generationConfig.batchCount = 1
                 generationConfig.batchSize = 1
+                // If no source image, force strength=1.0 so Draw Things runs txt2img.
+                // A leftover strength<1.0 (from a prior img2img session) would otherwise
+                // tell Draw Things to denoise pure noise → static output.
+                if inputImage == nil {
+                    generationConfig.strength = 1.0
+                }
 
                 let totalImages = max(1, config.batchCount)
                 var totalSaved = 0
@@ -221,6 +248,215 @@ final class ImageGenerationViewModel: ObservableObject {
         progress = .failed("Cancelled")
     }
 
+    // MARK: - Pipeline Step Management
+
+    /// Saves live state into the current step, then loads the new step's state.
+    func switchStep(to index: Int) {
+        guard index >= 0, index < steps.count else { return }
+        // Save current live state back to the current step
+        syncCurrentStepState()
+        // Load the new step's state into live properties
+        selectedStepIndex = index
+        prompt = steps[index].prompt
+        negativePrompt = steps[index].negativePrompt
+        config = steps[index].config
+        generatedImages = steps[index].resultImages
+        selectedImage = generatedImages.first
+        inputImage = nil
+        inputImageName = nil
+    }
+
+    /// Persists the current live state into `steps[selectedStepIndex]` without switching.
+    func syncCurrentStepState() {
+        guard selectedStepIndex < steps.count else { return }
+        steps[selectedStepIndex].prompt = prompt
+        steps[selectedStepIndex].negativePrompt = negativePrompt
+        steps[selectedStepIndex].config = config
+        steps[selectedStepIndex].resultImages = generatedImages
+    }
+
+    /// Appends a new step inheriting the current model, then switches to it.
+    func addStep() {
+        syncCurrentStepState()
+        var newStep = GenerationStep(name: "Step \(steps.count + 1)")
+        newStep.config.model = config.model
+        newStep.config.width = config.width
+        newStep.config.height = config.height
+        newStep.config.sampler = config.sampler
+        newStep.useOutputFromPreviousStep = true
+        steps.append(newStep)
+        switchStep(to: steps.count - 1)
+    }
+
+    /// Removes the step at `index`. Requires at least 2 steps.
+    func removeStep(at index: Int) {
+        guard steps.count > 1, index >= 0, index < steps.count else { return }
+        syncCurrentStepState()
+        steps.remove(at: index)
+        // Ensure first step never chains from previous
+        steps[steps.startIndex].useOutputFromPreviousStep = false
+        // Re-number steps with default names
+        for i in steps.indices where steps[i].name.hasPrefix("Step ") {
+            steps[i].name = "Step \(i + 1)"
+        }
+        let newIndex = max(0, min(selectedStepIndex, steps.count - 1))
+        // Use direct assignment to avoid double-save
+        selectedStepIndex = newIndex
+        prompt = steps[newIndex].prompt
+        negativePrompt = steps[newIndex].negativePrompt
+        config = steps[newIndex].config
+        generatedImages = steps[newIndex].resultImages
+        selectedImage = generatedImages.first
+        inputImage = nil
+        inputImageName = nil
+    }
+
+    func moveSteps(from: IndexSet, to: Int) {
+        syncCurrentStepState()
+        steps.move(fromOffsets: from, toOffset: to)
+        steps[steps.startIndex].useOutputFromPreviousStep = false
+        // Clamp selectedStepIndex
+        selectedStepIndex = max(0, min(selectedStepIndex, steps.count - 1))
+    }
+
+    /// Runs all steps sequentially, threading previous step output as img2img source.
+    func runPipeline() {
+        guard !isGenerating else { return }
+        syncCurrentStepState()
+        errorMessage = nil
+        isGenerating = true
+        progressFraction = 0
+        progress = .starting
+
+        generationTask = Task {
+            do {
+                let settings = AppSettings.shared
+                if client == nil { client = settings.createDrawThingsClient() }
+                guard let client else { throw DrawThingsError.connectionFailed("No client available") }
+                let connected = await client.checkConnection()
+                guard connected else { throw DrawThingsError.connectionFailed("Draw Things is not reachable") }
+                connectionStatus = .connected
+
+                var previousImage: NSImage? = nil
+
+                for index in steps.indices {
+                    try Task.checkCancellation()
+
+                    // Update UI to show current step running
+                    steps[index].isRunning = true
+                    generationImageLabel = steps.count > 1 ? "Step \(index + 1) of \(steps.count)" : ""
+                    progressFraction = Double(index) / Double(steps.count)
+
+                    // If step 0 has a manual inputImage set (img2img), use it
+                    let sourceImage: NSImage?
+                    if steps[index].useOutputFromPreviousStep && index > 0 {
+                        sourceImage = previousImage
+                    } else if index == 0 {
+                        sourceImage = inputImage
+                    } else {
+                        sourceImage = nil
+                    }
+
+                    var stepConfig = steps[index].config
+                    stepConfig.negativePrompt = steps[index].negativePrompt
+                    stepConfig.batchCount = 1
+                    stepConfig.batchSize = 1
+                    // Always set strength explicitly: img2img value when chaining, 1.0 otherwise.
+                    // Never rely on a leftover value in config — it could trigger accidental
+                    // img2img denoising (pure noise input → static output).
+                    if steps[index].useOutputFromPreviousStep && sourceImage != nil {
+                        stepConfig.strength = steps[index].strength
+                    } else {
+                        stepConfig.strength = 1.0
+                    }
+
+                    let images = try await client.generateImage(
+                        prompt: steps[index].prompt,
+                        sourceImage: sourceImage,
+                        mask: nil,
+                        config: stepConfig,
+                        onProgress: { [weak self] prog in
+                            guard let self else { return }
+                            let base = Double(index) / Double(self.steps.count)
+                            let slice = 1.0 / Double(self.steps.count)
+                            self.progressFraction = base + prog.fraction * slice
+                            self.progress = prog
+                        }
+                    )
+
+                    steps[index].isRunning = false
+
+                    guard let firstImage = images.first else {
+                        errorMessage = "No image returned for Step \(index + 1)"
+                        progress = .failed("No images returned")
+                        isGenerating = false
+                        generationImageLabel = ""
+                        return
+                    }
+
+                    // Ensure valid bitmap rep before saving
+                    let saveImage: NSImage
+                    if firstImage.tiffRepresentation == nil,
+                       let cgImage = firstImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                        let rep = NSBitmapImageRep(cgImage: cgImage)
+                        let rebuilt = NSImage(size: firstImage.size)
+                        rebuilt.addRepresentation(rep)
+                        saveImage = rebuilt
+                    } else {
+                        saveImage = firstImage
+                    }
+
+                    previousImage = saveImage
+
+                    // Save result
+                    if let saved = storageManager.saveImage(
+                        saveImage,
+                        prompt: steps[index].prompt,
+                        negativePrompt: steps[index].negativePrompt,
+                        config: stepConfig,
+                        inferenceTimeMs: nil
+                    ) {
+                        steps[index].resultImages.insert(saved, at: 0)
+                        // If this is the currently-selected step, also update live gallery
+                        if index == selectedStepIndex {
+                            generatedImages.insert(saved, at: 0)
+                            if selectedImage == nil { selectedImage = saved }
+                        }
+                    }
+                }
+
+                generationImageLabel = ""
+                progress = .complete
+                progressFraction = 1.0
+
+            } catch is CancellationError {
+                for i in steps.indices { steps[i].isRunning = false }
+                progress = .failed("Cancelled")
+                errorMessage = "Generation was cancelled"
+            } catch let error as DrawThingsError {
+                for i in steps.indices { steps[i].isRunning = false }
+                progress = .failed(error.localizedDescription)
+                errorMessage = error.localizedDescription
+                connectionStatus = .error(error.localizedDescription)
+            } catch {
+                for i in steps.indices { steps[i].isRunning = false }
+                progress = .failed(error.localizedDescription)
+                errorMessage = error.localizedDescription
+            }
+
+            isGenerating = false
+        }
+    }
+
+    /// Dispatches to `runPipeline()` for multi-step, or `generate()` for single-step.
+    func generateOrRunPipeline() {
+        if steps.count > 1 {
+            runPipeline()
+        } else {
+            generate()
+        }
+    }
+
     // MARK: - Image Management
 
     func deleteImage(_ image: GeneratedImage) {
@@ -241,6 +477,27 @@ final class ImageGenerationViewModel: ObservableObject {
 
     func openOutputFolder() {
         storageManager.openStorageDirectory()
+    }
+
+    // MARK: - Pipeline Persistence
+
+    /// Encodes current pipeline steps as JSON data for saving to a SavedPipeline.
+    func encodedSteps() -> Data? {
+        syncCurrentStepState()
+        let codable = steps.map { CodablePipelineStep(from: $0) }
+        return try? JSONEncoder().encode(codable)
+    }
+
+    /// Loads pipeline steps from previously-encoded data, replacing the current pipeline.
+    func loadSteps(from data: Data) {
+        guard let codable = try? JSONDecoder().decode([CodablePipelineStep].self, from: data),
+              !codable.isEmpty else { return }
+        steps = codable.map { $0.toGenerationStep() }
+        generatedImages = []
+        selectedImage = nil
+        inputImage = nil
+        inputImageName = nil
+        switchStep(to: 0)
     }
 
     // MARK: - img2img Source
@@ -269,6 +526,7 @@ final class ImageGenerationViewModel: ObservableObject {
     func clearInputImage() {
         inputImage = nil
         inputImageName = nil
+        config.strength = 1.0  // back to full denoising (txt2img)
     }
 
     // MARK: - Prompt Enhancement
