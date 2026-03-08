@@ -15,6 +15,7 @@ struct ImageGenerationView: View {
     // not @StateObject, since this view does not own or create it.
     @ObservedObject private var assetManager = DrawThingsAssetManager.shared
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \ModelConfig.name) private var modelConfigs: [ModelConfig]
     @State private var selectedPresetID: String = ""
     @State private var showingConfigImport = false
@@ -784,7 +785,7 @@ struct ImageGenerationView: View {
                         .frame(width: 64, height: 64)
                         .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .shadow(color: Color.neuShadowDark.opacity(0.2), radius: 4, x: 2, y: 2)
+                        .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark ? 0.36 : 0.2), radius: 4, x: 2, y: 2)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(viewModel.inputImageName ?? "Source Image")
@@ -1194,10 +1195,12 @@ struct ImageGenerationView: View {
             .frame(width: 110, height: 110)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: Color.neuShadowDark.opacity(viewModel.selectedImage?.id == generatedImage.id ? 0.4 : 0.2),
+            .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark
+                        ? (viewModel.selectedImage?.id == generatedImage.id ? 0.72 : 0.36)
+                        : (viewModel.selectedImage?.id == generatedImage.id ? 0.4 : 0.2)),
                     radius: viewModel.selectedImage?.id == generatedImage.id ? 8 : 4,
                     x: 3, y: 3)
-            .shadow(color: Color.neuShadowLight.opacity(0.6), radius: 4, x: -2, y: -2)
+            .shadow(color: Color.neuShadowLight.opacity(colorScheme == .dark ? 0.17 : 0.6), radius: 4, x: -2, y: -2)
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(
@@ -1231,7 +1234,7 @@ struct ImageGenerationView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: Color.neuShadowDark.opacity(0.2), radius: 8, x: 4, y: 4)
+                .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark ? 0.36 : 0.2), radius: 8, x: 4, y: 4)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Image info card

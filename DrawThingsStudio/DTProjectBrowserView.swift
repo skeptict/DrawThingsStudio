@@ -495,6 +495,7 @@ private struct DTVideoClipCell: View {
 
     @State private var frameIndex = 0
     @State private var isHovering = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let frame = clip.frames[frameIndex % clip.frames.count]
@@ -569,8 +570,8 @@ private struct DTVideoClipCell: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(isSelected ? Color.neuAccent : Color.clear, lineWidth: 2)
         )
-        .shadow(color: Color.neuShadowDark.opacity(0.2), radius: isSelected ? 6 : 3, x: 2, y: 2)
-        .shadow(color: Color.neuShadowLight.opacity(0.6), radius: isSelected ? 6 : 3, x: -2, y: -2)
+        .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark ? 0.36 : 0.2), radius: isSelected ? 6 : 3, x: 2, y: 2)
+        .shadow(color: Color.neuShadowLight.opacity(colorScheme == .dark ? 0.17 : 0.6), radius: isSelected ? 6 : 3, x: -2, y: -2)
         .onHover { isHovering = $0 }
         .task(id: isHovering) {
             // Animate through frames at 8 fps while hovering
@@ -598,6 +599,7 @@ private struct DTVideoClipCell: View {
 private struct DTThumbnailCell: View {
     let entry: DTGenerationEntry
     let isSelected: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
@@ -656,12 +658,12 @@ private struct DTThumbnailCell: View {
                 .stroke(isSelected ? Color.neuAccent : Color.clear, lineWidth: 2)
         )
         .shadow(
-            color: Color.neuShadowDark.opacity(0.2),
+            color: Color.neuShadowDark.opacity(colorScheme == .dark ? 0.36 : 0.2),
             radius: isSelected ? 6 : 3,
             x: 2, y: 2
         )
         .shadow(
-            color: Color.neuShadowLight.opacity(0.6),
+            color: Color.neuShadowLight.opacity(colorScheme == .dark ? 0.17 : 0.6),
             radius: isSelected ? 6 : 3,
             x: -2, y: -2
         )

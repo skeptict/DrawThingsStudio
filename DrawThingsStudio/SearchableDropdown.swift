@@ -19,6 +19,7 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
     @State private var isExpanded = false
     @State private var isHovered = false
     @FocusState private var isSearchFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     private var filteredItems: [Item] {
         if searchText.isEmpty {
@@ -68,7 +69,7 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(isHovered ? Color.neuSurface.opacity(0.9) : Color.neuSurface)
                         .shadow(
-                            color: isHovered ? Color.neuShadowDark.opacity(0.1) : Color.clear,
+                            color: isHovered ? Color.neuShadowDark.opacity(colorScheme == .dark ? 0.18 : 0.1) : Color.clear,
                             radius: 2, x: 1, y: 1
                         )
                 )
@@ -493,6 +494,7 @@ struct ModelSelectorView: View {
     @State private var searchText = ""
     @State private var isHovered = false
     @FocusState private var isSearchFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     private var filteredModels: [DrawThingsModel] {
         if searchText.isEmpty {
@@ -593,7 +595,7 @@ struct ModelSelectorView: View {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
                                 .fill(isHovered ? Color.neuSurface.opacity(0.9) : Color.neuSurface)
                                 .shadow(
-                                    color: isHovered ? Color.neuShadowDark.opacity(0.1) : Color.clear,
+                                    color: isHovered ? Color.neuShadowDark.opacity(colorScheme == .dark ? 0.18 : 0.1) : Color.clear,
                                     radius: 2, x: 1, y: 1
                                 )
                         )

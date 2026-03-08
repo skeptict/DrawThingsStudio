@@ -13,6 +13,7 @@ struct ImageInspectorView: View {
     @ObservedObject var imageGenViewModel: ImageGenerationViewModel
     @ObservedObject var workflowViewModel: WorkflowBuilderViewModel
     @Binding var selectedSidebarItem: SidebarItem?
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var sendImageToGenerate = false
 
@@ -118,7 +119,7 @@ struct ImageInspectorView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .shadow(color: Color.neuShadowDark.opacity(0.2), radius: 8, x: 4, y: 4)
+                            .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark ? 0.36 : 0.2), radius: 8, x: 4, y: 4)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .padding(16)

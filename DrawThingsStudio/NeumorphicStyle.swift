@@ -6,22 +6,47 @@
 //
 
 import SwiftUI
+import AppKit
 
 // MARK: - Color Palette
 
 extension Color {
-    /// Warm beige background
-    static let neuBackground = Color(red: 0.93, green: 0.90, blue: 0.85)
-    /// Card/surface color (off-white)
-    static let neuSurface = Color(red: 0.98, green: 0.97, blue: 0.96)
-    /// Dark shadow color (beige-brown tinted)
-    static let neuShadowDark = Color(red: 0.75, green: 0.71, blue: 0.65)
-    /// Light shadow/highlight color
-    static let neuShadowLight = Color.white
-    /// Subtle text on beige background (WCAG AA compliant ~5.1:1 contrast)
-    static let neuTextSecondary = Color(red: 0.40, green: 0.37, blue: 0.32)
-    /// Accent for neumorphic UI
-    static let neuAccent = Color(red: 0.55, green: 0.50, blue: 0.44)
+    /// Warm background — adapts to light/dark mode
+    static let neuBackground = Color(nsColor: NSColor(name: "neuBackground") { a in
+        a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 0.14, green: 0.14, blue: 0.16, alpha: 1)
+            : NSColor(red: 0.93, green: 0.90, blue: 0.85, alpha: 1)
+    })
+    /// Card/surface color — adapts to light/dark mode
+    static let neuSurface = Color(nsColor: NSColor(name: "neuSurface") { a in
+        a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 0.18, green: 0.18, blue: 0.20, alpha: 1)
+            : NSColor(red: 0.98, green: 0.97, blue: 0.96, alpha: 1)
+    })
+    /// Dark shadow color — adapts to light/dark mode
+    static let neuShadowDark = Color(nsColor: NSColor(name: "neuShadowDark") { a in
+        a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 0.08, green: 0.08, blue: 0.10, alpha: 1)
+            : NSColor(red: 0.75, green: 0.71, blue: 0.65, alpha: 1)
+    })
+    /// Light shadow/highlight color — adapts to light/dark mode
+    static let neuShadowLight = Color(nsColor: NSColor(name: "neuShadowLight") { a in
+        a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 0.24, green: 0.24, blue: 0.27, alpha: 1)
+            : NSColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1)
+    })
+    /// Subtle text — adapts to light/dark mode (WCAG AA compliant in both modes)
+    static let neuTextSecondary = Color(nsColor: NSColor(name: "neuTextSecondary") { a in
+        a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 0.62, green: 0.60, blue: 0.58, alpha: 1)
+            : NSColor(red: 0.40, green: 0.37, blue: 0.32, alpha: 1)
+    })
+    /// Accent for neumorphic UI — adapts to light/dark mode
+    static let neuAccent = Color(nsColor: NSColor(name: "neuAccent") { a in
+        a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 0.72, green: 0.68, blue: 0.63, alpha: 1)
+            : NSColor(red: 0.55, green: 0.50, blue: 0.44, alpha: 1)
+    })
 }
 
 // MARK: - Neumorphic Card Modifier (Raised/Convex)
@@ -29,6 +54,7 @@ extension Color {
 struct NeumorphicCard: ViewModifier {
     var cornerRadius: CGFloat = 20
     var padding: CGFloat = 0
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
@@ -36,8 +62,8 @@ struct NeumorphicCard: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(Color.neuSurface)
-                    .shadow(color: Color.neuShadowDark.opacity(0.3), radius: 10, x: 6, y: 6)
-                    .shadow(color: Color.neuShadowLight.opacity(0.8), radius: 10, x: -6, y: -6)
+                    .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark ? 0.55 : 0.30), radius: 10, x: 6, y: 6)
+                    .shadow(color: Color.neuShadowLight.opacity(colorScheme == .dark ? 0.22 : 0.80), radius: 10, x: -6, y: -6)
             )
     }
 }
@@ -46,6 +72,7 @@ struct NeumorphicCard: ViewModifier {
 
 struct NeumorphicInset: ViewModifier {
     var cornerRadius: CGFloat = 12
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
@@ -54,10 +81,10 @@ struct NeumorphicInset: ViewModifier {
                     .fill(Color.neuBackground.opacity(0.5))
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .stroke(Color.neuShadowDark.opacity(0.15), lineWidth: 1)
+                            .stroke(Color.neuShadowDark.opacity(colorScheme == .dark ? 0.30 : 0.15), lineWidth: 1)
                     )
-                    .shadow(color: Color.neuShadowDark.opacity(0.15), radius: 3, x: 2, y: 2)
-                    .shadow(color: Color.neuShadowLight.opacity(0.7), radius: 3, x: -2, y: -2)
+                    .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark ? 0.40 : 0.15), radius: 3, x: 2, y: 2)
+                    .shadow(color: Color.neuShadowLight.opacity(colorScheme == .dark ? 0.20 : 0.70), radius: 3, x: -2, y: -2)
             )
     }
 }
@@ -66,6 +93,7 @@ struct NeumorphicInset: ViewModifier {
 
 struct NeumorphicButtonStyle: ButtonStyle {
     var isProminent: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -77,7 +105,7 @@ struct NeumorphicButtonStyle: ButtonStyle {
                     .shadow(
                         color: configuration.isPressed
                             ? Color.clear
-                            : Color.neuShadowDark.opacity(0.25),
+                            : Color.neuShadowDark.opacity(colorScheme == .dark ? 0.50 : 0.25),
                         radius: configuration.isPressed ? 2 : 6,
                         x: configuration.isPressed ? 1 : 4,
                         y: configuration.isPressed ? 1 : 4
@@ -85,7 +113,7 @@ struct NeumorphicButtonStyle: ButtonStyle {
                     .shadow(
                         color: configuration.isPressed
                             ? Color.clear
-                            : Color.neuShadowLight.opacity(0.7),
+                            : Color.neuShadowLight.opacity(colorScheme == .dark ? 0.18 : 0.70),
                         radius: configuration.isPressed ? 2 : 6,
                         x: configuration.isPressed ? -1 : -4,
                         y: configuration.isPressed ? -1 : -4
@@ -174,6 +202,7 @@ struct NeumorphicTextFieldStyle: TextFieldStyle {
 struct NeumorphicSidebarItem: ViewModifier {
     var isSelected: Bool
     @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content
@@ -189,11 +218,11 @@ struct NeumorphicSidebarItem: ViewModifier {
                                 : Color.clear
                     )
                     .shadow(
-                        color: isSelected ? Color.neuShadowDark.opacity(0.2) : Color.clear,
+                        color: isSelected ? Color.neuShadowDark.opacity(colorScheme == .dark ? 0.40 : 0.20) : Color.clear,
                         radius: 4, x: 2, y: 2
                     )
                     .shadow(
-                        color: isSelected ? Color.neuShadowLight.opacity(0.7) : Color.clear,
+                        color: isSelected ? Color.neuShadowLight.opacity(colorScheme == .dark ? 0.25 : 0.70) : Color.clear,
                         radius: 4, x: -2, y: -2
                     )
             )

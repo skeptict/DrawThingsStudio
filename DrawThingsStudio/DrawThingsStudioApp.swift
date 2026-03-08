@@ -88,7 +88,6 @@ struct DrawThingsStudioApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(.light)
         }
         .modelContainer(sharedModelContainer)
         .commands {
@@ -98,7 +97,6 @@ struct DrawThingsStudioApp: App {
         #if os(macOS)
         Settings {
             SettingsView()
-                .preferredColorScheme(.light)
         }
         #endif
     }
