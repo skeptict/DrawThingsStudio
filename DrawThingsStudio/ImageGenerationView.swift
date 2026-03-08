@@ -1171,12 +1171,15 @@ struct ImageGenerationView: View {
             Image(systemName: "photo.on.rectangle.angled")
                 .font(.system(size: 48))
                 .foregroundColor(.neuTextSecondary.opacity(0.5))
+                .symbolEffect(.pulse, options: .repeating)
             Text("No Images Generated")
                 .font(.title3)
                 .foregroundColor(.neuTextSecondary)
             Text("Enter a prompt and click Generate.")
                 .font(.callout)
                 .foregroundColor(.neuTextSecondary.opacity(0.7))
+            Button("Open Output Folder") { viewModel.openOutputFolder() }
+                .buttonStyle(NeumorphicButtonStyle())
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -313,6 +313,7 @@ struct InstructionListView: View {
                     Image(systemName: "doc.text")
                         .font(.system(size: 36))
                         .foregroundColor(.neuTextSecondary.opacity(0.5))
+                        .symbolEffect(.pulse, options: .repeating)
                     Text("No Instructions")
                         .font(.headline)
                         .foregroundColor(.neuTextSecondary)

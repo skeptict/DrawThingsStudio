@@ -289,6 +289,7 @@ struct ConnectionSetupView: View {
             Image(systemName: "server.rack")
                 .font(.system(size: 48))
                 .foregroundColor(.secondary)
+                .symbolEffect(.pulse, options: .repeating)
 
             Text("Connect to Ollama")
                 .font(.title2)
