@@ -214,7 +214,7 @@ struct LoRAConfigRow: View {
                     .accessibilityValue(String(format: "%.1f", weight))
 
                 Text(String(format: "%.1f", weight))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 30, alignment: .trailing)
             }
@@ -281,7 +281,7 @@ struct LoRAConfigurationView: View {
                     showAddLoRA.toggle()
                 } label: {
                     Image(systemName: "plus.circle")
-                        .font(.system(size: 14))
+                        .font(.callout)
                 }
                 .buttonStyle(NeumorphicIconButtonStyle())
                 .accessibilityIdentifier("lora_addButton")
@@ -455,7 +455,7 @@ private struct LoRAConfigRowSimple: View {
                     .accessibilityValue(String(format: "%.1f", weight))
 
                 Text(String(format: "%.1f", weight))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 30, alignment: .trailing)
             }
