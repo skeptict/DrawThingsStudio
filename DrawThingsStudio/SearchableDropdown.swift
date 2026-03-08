@@ -156,8 +156,7 @@ struct SearchableDropdown<Item: Identifiable & Hashable>: View {
                     }
                     .frame(maxHeight: 200)
                 }
-                .background(Color.neuSurface)
-                .cornerRadius(8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                 .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                 .onAppear {
                     isSearchFocused = true
@@ -400,8 +399,7 @@ struct LoRAConfigurationView: View {
                         .frame(maxHeight: 150)
                     }
                 }
-                .background(Color.neuSurface)
-                .cornerRadius(8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                 .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
             }
         }
@@ -681,8 +679,7 @@ struct ModelSelectorView: View {
                             }
                             .frame(maxHeight: 200)
                         }
-                        .background(Color.neuSurface)
-                        .cornerRadius(8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                         .onAppear {
                             isSearchFocused = true

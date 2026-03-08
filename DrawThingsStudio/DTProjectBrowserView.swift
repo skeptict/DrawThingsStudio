@@ -243,8 +243,7 @@ struct DTProjectBrowserView: View {
                             .accessibilityIdentifier("dtProjects_searchField")
                     }
                     .padding(8)
-                    .background(Color.neuSurface)
-                    .cornerRadius(6)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
 
                     // Count badge
                     Group {
