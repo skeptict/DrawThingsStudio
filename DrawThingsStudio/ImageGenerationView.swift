@@ -1095,6 +1095,7 @@ struct ImageGenerationView: View {
                     HStack {
                         Image(systemName: viewModel.steps.count > 1 ? "play.fill" :
                               (viewModel.inputImage != nil ? "photo.on.rectangle.angled" : "wand.and.stars"))
+                            .symbolEffect(.bounce, value: viewModel.isGenerating)
                         Text(viewModel.steps.count > 1 ? "Run Pipeline" :
                              (viewModel.inputImage != nil ? "Generate (img2img)" : "Generate"))
                     }
@@ -1183,8 +1184,10 @@ struct ImageGenerationView: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12)], spacing: 12) {
                 ForEach(viewModel.generatedImages) { generatedImage in
                     thumbnailView(generatedImage)
+                        .transition(.scale.combined(with: .opacity))
                 }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.75), value: viewModel.generatedImages.count)
         }
     }
 

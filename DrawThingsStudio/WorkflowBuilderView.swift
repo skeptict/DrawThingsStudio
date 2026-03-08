@@ -53,6 +53,7 @@ struct WorkflowBuilderView: View {
                     showAIGeneration = true
                 } label: {
                     Label("AI Generate", systemImage: "sparkles")
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
                 }
                 .help("Generate instructions with AI")
                 .accessibilityIdentifier("workflowBuilder_aiGenerateButton")
@@ -610,6 +611,7 @@ struct InstructionEditorView: View {
                     Image(systemName: "square.and.pencil")
                         .font(.system(size: 48))
                         .foregroundColor(.neuTextSecondary.opacity(0.5))
+                        .symbolEffect(.pulse, options: .repeating)
                     Text("Select an Instruction")
                         .font(.title3)
                         .foregroundColor(.neuTextSecondary)
