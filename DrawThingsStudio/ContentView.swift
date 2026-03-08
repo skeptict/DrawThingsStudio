@@ -143,6 +143,7 @@ struct ContentView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: selectedItem)
             .onDrop(of: [.fileURL, .url, .png, .tiff, .image], isTargeted: $isDetailDropTargeted) { providers in
                 routeDrop(providers)
             }

@@ -346,7 +346,7 @@ struct InstructionListView: View {
                 }
                 .listStyle(.inset)
                 .scrollContentBackground(.hidden)
-                .animation(.easeInOut(duration: 0.2), value: viewModel.instructions.map(\.id))
+                .animation(.spring(duration: 0.25, bounce: 0.1), value: viewModel.instructions.map(\.id))
             }
 
             // Footer actions
@@ -605,6 +605,10 @@ struct InstructionEditorView: View {
                         .padding(16)
                         .id(instruction.id)
                 }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
             } else {
                 // No selection
                 VStack(spacing: 16) {
@@ -621,8 +625,13 @@ struct InstructionEditorView: View {
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .leading).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
             }
         }
+        .animation(.spring(duration: 0.25, bounce: 0.1), value: viewModel.selectedInstructionID)
         .neuCard(cornerRadius: 24)
     }
 }

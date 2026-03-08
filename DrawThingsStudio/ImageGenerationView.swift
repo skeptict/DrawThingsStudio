@@ -1143,6 +1143,7 @@ struct ImageGenerationView: View {
 
             if viewModel.generatedImages.isEmpty {
                 emptyGalleryView
+                    .transition(.opacity)
             } else {
                 HStack(spacing: 16) {
                     // Thumbnail grid
@@ -1157,8 +1158,10 @@ struct ImageGenerationView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: viewModel.generatedImages.isEmpty)
         .neuCard(cornerRadius: 24)
     }
 
