@@ -1195,42 +1195,7 @@ struct ImageGenerationView: View {
     }
 
     private func thumbnailView(_ generatedImage: GeneratedImage) -> some View {
-        Image(nsImage: generatedImage.image)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: 110, height: 110)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark
-                        ? (viewModel.selectedImage?.id == generatedImage.id ? 0.72 : 0.36)
-                        : (viewModel.selectedImage?.id == generatedImage.id ? 0.4 : 0.2)),
-                    radius: viewModel.selectedImage?.id == generatedImage.id ? 8 : 4,
-                    x: 3, y: 3)
-            .shadow(color: Color.neuShadowLight.opacity(colorScheme == .dark ? 0.17 : 0.6), radius: 4, x: -2, y: -2)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        viewModel.selectedImage?.id == generatedImage.id ? Color.neuAccent.opacity(0.5) : Color.clear,
-                        lineWidth: 2
-                    )
-            )
-            .onTapGesture {
-                viewModel.selectedImage = generatedImage
-            }
-            .contextMenu {
-                Button("Copy Image") { viewModel.copyToClipboard(generatedImage) }
-                Button("Reveal in Finder") { viewModel.revealInFinder(generatedImage) }
-                Divider()
-                Button("Use Prompt") { viewModel.prompt = generatedImage.prompt }
-                Button("Use as img2img Source") {
-                    viewModel.loadInputImage(from: generatedImage.image, name: "Generated Image")
-                }
-                Divider()
-                Button("Delete", role: .destructive) { viewModel.deleteImage(generatedImage) }
-            }
-            .accessibilityLabel("Generated image")
-            .accessibilityHint("Double-tap to select")
-            .accessibilityAddTraits(viewModel.selectedImage?.id == generatedImage.id ? .isSelected : [])
+        ThumbnailItemView(viewModel: viewModel, generatedImage: generatedImage)
     }
 
     private func imageDetailView(_ generatedImage: GeneratedImage) -> some View {
@@ -1502,5 +1467,58 @@ struct SavePipelineSheet: View {
         modelContext.insert(pipeline)
         try? modelContext.save()
         showSuccess = true
+    }
+}
+
+// MARK: - Thumbnail Item View (with hover state)
+
+private struct ThumbnailItemView: View {
+    @ObservedObject var viewModel: ImageGenerationViewModel
+    let generatedImage: GeneratedImage
+
+    @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isSelected: Bool { viewModel.selectedImage?.id == generatedImage.id }
+
+    var body: some View {
+        Image(nsImage: generatedImage.image)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: 110, height: 110)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(
+                color: Color.neuShadowDark.opacity(colorScheme == .dark
+                    ? (isSelected ? 0.72 : 0.36)
+                    : (isSelected ? 0.4 : 0.2)),
+                radius: isHovered || isSelected ? 10 : 4,
+                x: 3, y: 3
+            )
+            .shadow(color: Color.neuShadowLight.opacity(colorScheme == .dark ? 0.17 : 0.6), radius: 4, x: -2, y: -2)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? Color.neuAccent.opacity(0.5) : Color.clear, lineWidth: 2)
+            )
+            .scaleEffect(isHovered ? 1.03 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered)
+            .onHover { isHovered = $0 }
+            .onTapGesture {
+                viewModel.selectedImage = generatedImage
+            }
+            .contextMenu {
+                Button("Copy Image") { viewModel.copyToClipboard(generatedImage) }
+                Button("Reveal in Finder") { viewModel.revealInFinder(generatedImage) }
+                Divider()
+                Button("Use Prompt") { viewModel.prompt = generatedImage.prompt }
+                Button("Use as img2img Source") {
+                    viewModel.loadInputImage(from: generatedImage.image, name: "Generated Image")
+                }
+                Divider()
+                Button("Delete", role: .destructive) { viewModel.deleteImage(generatedImage) }
+            }
+            .accessibilityLabel("Generated image")
+            .accessibilityHint("Double-tap to select")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
