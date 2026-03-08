@@ -15,19 +15,19 @@ extension Color {
     static let neuBackground = Color(nsColor: NSColor(name: "neuBackground") { a in
         a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             ? NSColor(red: 0.14, green: 0.14, blue: 0.16, alpha: 1)
-            : NSColor(red: 0.93, green: 0.90, blue: 0.85, alpha: 1)
+            : NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1)
     })
     /// Card/surface color — adapts to light/dark mode
     static let neuSurface = Color(nsColor: NSColor(name: "neuSurface") { a in
         a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             ? NSColor(red: 0.18, green: 0.18, blue: 0.20, alpha: 1)
-            : NSColor(red: 0.98, green: 0.97, blue: 0.96, alpha: 1)
+            : NSColor(red: 0.98, green: 0.98, blue: 0.97, alpha: 1)
     })
     /// Dark shadow color — adapts to light/dark mode
     static let neuShadowDark = Color(nsColor: NSColor(name: "neuShadowDark") { a in
         a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             ? NSColor(red: 0.08, green: 0.08, blue: 0.10, alpha: 1)
-            : NSColor(red: 0.75, green: 0.71, blue: 0.65, alpha: 1)
+            : NSColor(red: 0.73, green: 0.71, blue: 0.68, alpha: 1)
     })
     /// Light shadow/highlight color — adapts to light/dark mode
     static let neuShadowLight = Color(nsColor: NSColor(name: "neuShadowLight") { a in
