@@ -1034,9 +1034,12 @@ struct ImageGenerationView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 NeuSectionHeader("Refiner", icon: "sparkles.rectangle.stack")
-                TextField("Refiner model filename…", text: $viewModel.config.refinerModel)
-                    .textFieldStyle(NeumorphicTextFieldStyle())
-                    .accessibilityLabel("Refiner model filename")
+                ModelSelectorView(
+                    availableModels: assetManager.allModels,
+                    selection: $viewModel.config.refinerModel,
+                    isLoading: assetManager.isLoading || assetManager.isCloudLoading,
+                    label: "Refiner Model"
+                )
 
                 if !viewModel.config.refinerModel.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {

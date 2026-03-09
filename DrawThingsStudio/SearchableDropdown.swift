@@ -302,6 +302,10 @@ struct LoRAConfigurationView: View {
                             get: { selectedLoRAs[index].weight },
                             set: { selectedLoRAs[index].weight = $0 }
                         ),
+                        mode: Binding(
+                            get: { selectedLoRAs[index].mode },
+                            set: { selectedLoRAs[index].mode = $0 }
+                        ),
                         onRemove: {
                             selectedLoRAs.remove(at: index)
                         }
@@ -436,10 +440,11 @@ struct LoRAConfigurationView: View {
 private struct LoRAConfigRowSimple: View {
     let name: String
     @Binding var weight: Double
+    @Binding var mode: String
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             // LoRA name
             Text(name)
                 .font(.caption)
@@ -448,17 +453,26 @@ private struct LoRAConfigRowSimple: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             // Weight slider
-            HStack(spacing: 4) {
-                Slider(value: $weight, in: 0...2, step: 0.1)
-                    .frame(width: 80)
-                    .accessibilityLabel("Weight for \(name)")
-                    .accessibilityValue(String(format: "%.1f", weight))
+            Slider(value: $weight, in: 0...2, step: 0.1)
+                .frame(width: 70)
+                .accessibilityLabel("Weight for \(name)")
+                .accessibilityValue(String(format: "%.1f", weight))
 
-                Text(String(format: "%.1f", weight))
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 30, alignment: .trailing)
+            Text(String(format: "%.1f", weight))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(width: 30, alignment: .trailing)
+
+            // Mode picker
+            Picker("", selection: $mode) {
+                Text("All").tag("all")
+                Text("Base").tag("base")
+                Text("Refiner").tag("refiner")
             }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(width: 72)
+            .accessibilityLabel("Mode for \(name)")
 
             // Remove button
             Button {
@@ -485,6 +499,7 @@ struct ModelSelectorView: View {
     let availableModels: [DrawThingsModel]
     @Binding var selection: String
     var isLoading: Bool = false
+    var label: String = "Model"
     var onRefresh: (() -> Void)?
 
     @State private var isExpanded = false
@@ -517,7 +532,7 @@ struct ModelSelectorView: View {
         VStack(alignment: .leading, spacing: 4) {
             // Header
             HStack {
-                Text("Model").font(.caption).foregroundColor(.neuTextSecondary)
+                Text(label).font(.caption).foregroundColor(.neuTextSecondary)
                 if isLoading {
                     ProgressView()
                         .scaleEffect(0.5)
