@@ -204,6 +204,46 @@ final class OllamaClient: LLMProvider, ObservableObject {
         return fullResponse
     }
 
+    // MARK: - Image Description (Vision)
+
+    func describeImage(
+        _ imageData: Data,
+        systemPrompt: String,
+        userMessage: String,
+        model: String
+    ) async throws -> String {
+        let url = try validatedBaseURL().appendingPathComponent("api/chat")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let base64Image = imageData.base64EncodedString()
+
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": userMessage, "images": [base64Image]]
+            ],
+            "stream": false,
+            "options": ["num_predict": 800]
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw LLMError.requestFailed("Vision request failed: \(errorBody)")
+        }
+
+        let result = try JSONDecoder().decode(OllamaChatResponse.self, from: data)
+        return result.message.content
+    }
+
     // MARK: - Chat Completion
 
     func chat(

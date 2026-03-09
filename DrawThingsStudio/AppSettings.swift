@@ -134,6 +134,9 @@ final class AppSettings: ObservableObject {
     @Published var defaultSidebarItem: String {
         didSet { store.set(defaultSidebarItem, forKey: "ui.defaultSidebarItem") }
     }
+    @Published var describeImageSendTarget: String {
+        didSet { store.set(describeImageSendTarget, forKey: "ui.describeImageSendTarget") }
+    }
 
     // MARK: - Init
 
@@ -191,6 +194,7 @@ final class AppSettings: ObservableObject {
         self.compactJSON = store.bool(forKey: "ui.compactJSON")
         self.persistInspectorHistory = store.object(forKey: "ui.persistInspectorHistory") as? Bool ?? true
         self.defaultSidebarItem = store.string(forKey: "ui.defaultSidebarItem") ?? "imageInspector"
+        self.describeImageSendTarget = store.string(forKey: "ui.describeImageSendTarget") ?? "generateImage"
     }
 
     // MARK: - Computed Properties
@@ -330,6 +334,7 @@ final class AppSettings: ObservableObject {
         compactJSON = false
         persistInspectorHistory = true
         defaultSidebarItem = "imageInspector"
+        describeImageSendTarget = "generateImage"
     }
 }
 
@@ -345,6 +350,7 @@ struct SettingsView: View {
     @State private var dtConnectionResult: String?
     @State private var showSharedSecret = false
     @State private var showStyleEditor = false
+    @State private var showAgentEditor = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -500,12 +506,22 @@ struct SettingsView: View {
                         }
                     }
 
-                    Button("Manage Styles...") {
-                        showStyleEditor = true
-                    }
-                    .buttonStyle(NeumorphicButtonStyle())
-                    .sheet(isPresented: $showStyleEditor) {
-                        PromptStyleEditorView()
+                    HStack(spacing: 10) {
+                        Button("Manage Styles...") {
+                            showStyleEditor = true
+                        }
+                        .buttonStyle(NeumorphicButtonStyle())
+                        .sheet(isPresented: $showStyleEditor) {
+                            PromptStyleEditorView()
+                        }
+
+                        Button("Manage Describe Agents...") {
+                            showAgentEditor = true
+                        }
+                        .buttonStyle(NeumorphicButtonStyle())
+                        .sheet(isPresented: $showAgentEditor) {
+                            DescribeAgentEditorView()
+                        }
                     }
                 }
 
@@ -526,6 +542,19 @@ struct SettingsView: View {
                     Toggle("Persist Inspector history", isOn: $settings.persistInspectorHistory)
                         .tint(Color.neuAccent)
                     Text("When enabled, Image Inspector history is saved to disk and restored on launch.")
+                        .font(.caption)
+                        .foregroundColor(.neuTextSecondary)
+
+                    Divider()
+
+                    neuSettingsRow("Describe →") {
+                        Picker("Describe send target", selection: $settings.describeImageSendTarget) {
+                            Text("Generate Image").tag("generateImage")
+                            Text("Workflow Builder").tag("workflowBuilder")
+                        }
+                        .labelsHidden()
+                    }
+                    Text("Where \"Send to\" routes when describing an image with a vision LLM.")
                         .font(.caption)
                         .foregroundColor(.neuTextSecondary)
                 }

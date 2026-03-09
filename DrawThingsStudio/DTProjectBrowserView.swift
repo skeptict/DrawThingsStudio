@@ -683,6 +683,7 @@ private struct DTClipDetailPanel: View {
     @State private var previewFrameIndex = 0
     @State private var selectedFrameIndex = 0
     @State private var fps: Double = 8.0
+    @State private var showDescribeSheet = false
 
     var body: some View {
         ScrollView {
@@ -879,6 +880,29 @@ private struct DTClipDetailPanel: View {
             .buttonStyle(NeumorphicButtonStyle(isProminent: !clip.isVideo))
             .controlSize(.large)
 
+            Button(action: { showDescribeSheet = true }) {
+                HStack {
+                    Image(systemName: "eye")
+                    Text("Describe with AI...")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.large)
+            .disabled(clip.frames.first?.thumbnail == nil)
+            .sheet(isPresented: $showDescribeSheet) {
+                if let thumbnail = clip.frames[min(selectedFrameIndex, clip.frames.count - 1)].thumbnail {
+                    ImageDescriptionView(
+                        image: thumbnail,
+                        onSendToGeneratePrompt: { text in
+                            imageGenViewModel.prompt = text
+                            selectedSidebarItem = .generateImage
+                        },
+                        onSendToWorkflowPrompt: nil
+                    )
+                }
+            }
+
             Button(role: .destructive, action: onDelete) {
                 HStack {
                     Image(systemName: "trash")
@@ -939,6 +963,8 @@ private struct DTDetailPanel: View {
     @Binding var selectedSidebarItem: SidebarItem?
     let onDelete: () -> Void
     var onShowClip: (() -> Void)? = nil
+
+    @State private var showDescribeSheet = false
 
     var body: some View {
         ScrollView {
@@ -1079,6 +1105,29 @@ private struct DTDetailPanel: View {
             }
             .buttonStyle(NeumorphicButtonStyle(isProminent: true))
             .controlSize(.large)
+
+            Button(action: { showDescribeSheet = true }) {
+                HStack {
+                    Image(systemName: "eye")
+                    Text("Describe with AI...")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.large)
+            .disabled(entry.thumbnail == nil)
+            .sheet(isPresented: $showDescribeSheet) {
+                if let thumbnail = entry.thumbnail {
+                    ImageDescriptionView(
+                        image: thumbnail,
+                        onSendToGeneratePrompt: { text in
+                            imageGenViewModel.prompt = text
+                            selectedSidebarItem = .generateImage
+                        },
+                        onSendToWorkflowPrompt: nil
+                    )
+                }
+            }
 
             Button(role: .destructive, action: onDelete) {
                 HStack {

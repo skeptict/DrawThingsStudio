@@ -25,6 +25,8 @@ struct ImageGenerationView: View {
     @State private var showEnhanceStyleEditor = false
     @State private var enhanceError: String?
     @State private var showSavePipeline = false
+    @State private var showDescribeSheet = false
+    @State private var imageToDescribe: NSImage?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1163,6 +1165,15 @@ struct ImageGenerationView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: viewModel.generatedImages.isEmpty)
         .neuCard(cornerRadius: 24)
+        .sheet(isPresented: $showDescribeSheet) {
+            if let image = imageToDescribe {
+                ImageDescriptionView(
+                    image: image,
+                    onSendToGeneratePrompt: { text in viewModel.prompt = text },
+                    onSendToWorkflowPrompt: nil
+                )
+            }
+        }
     }
 
     private var emptyGalleryView: some View {
@@ -1295,6 +1306,12 @@ struct ImageGenerationView: View {
                         Button("Use Prompt") {
                             viewModel.prompt = generatedImage.prompt
                             viewModel.negativePrompt = generatedImage.negativePrompt
+                        }
+                        .font(.caption)
+                        .buttonStyle(NeumorphicButtonStyle())
+                        Button("Describe...") {
+                            imageToDescribe = generatedImage.image
+                            showDescribeSheet = true
                         }
                         .font(.caption)
                         .buttonStyle(NeumorphicButtonStyle())

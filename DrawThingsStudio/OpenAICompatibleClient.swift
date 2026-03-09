@@ -286,6 +286,58 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         return fullResponse
     }
 
+    // MARK: - Image Description (Vision)
+
+    func describeImage(
+        _ imageData: Data,
+        systemPrompt: String,
+        userMessage: String,
+        model: String
+    ) async throws -> String {
+        let url = try validatedBaseURL().appendingPathComponent("chat/completions")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        addAuthHeader(to: &request)
+
+        let base64Image = imageData.base64EncodedString()
+        let dataURL = "data:image/jpeg;base64,\(base64Image)"
+
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                [
+                    "role": "user",
+                    "content": [
+                        ["type": "text", "text": userMessage],
+                        ["type": "image_url", "image_url": ["url": dataURL]]
+                    ]
+                ]
+            ],
+            "stream": false
+        ]
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LLMError.invalidResponse
+        }
+        guard httpResponse.statusCode == 200 else {
+            let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw LLMError.requestFailed("Vision request failed (status \(httpResponse.statusCode)): \(errorBody)")
+        }
+
+        let result = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
+        guard let content = result.choices.first?.message.content else {
+            throw LLMError.invalidResponse
+        }
+        return content
+    }
+
     // MARK: - Chat Completion
 
     func chat(
@@ -369,7 +421,7 @@ private struct OpenAIChoice: Codable {
 
 private struct OpenAIMessage: Codable {
     let role: String
-    let content: String
+    let content: String?
 }
 
 private struct OpenAIUsage: Codable {

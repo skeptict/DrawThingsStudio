@@ -16,6 +16,7 @@ struct ImageInspectorView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var sendImageToGenerate = false
+    @State private var showDescribeSheet = false
 
     var body: some View {
         HSplitView {
@@ -38,6 +39,16 @@ struct ImageInspectorView: View {
             HStack {
                 NeuSectionHeader("History", icon: "clock.arrow.circlepath")
                 Spacer()
+                Button {
+                    openFilePanel()
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .foregroundColor(.neuTextSecondary)
+                }
+                .buttonStyle(NeumorphicIconButtonStyle())
+                .help("Open image file...")
+                .accessibilityIdentifier("inspector_openFileButton")
+
                 if !viewModel.history.isEmpty {
                     Button("Clear All") {
                         viewModel.clearHistory()
@@ -305,6 +316,33 @@ struct ImageInspectorView: View {
                 Button("Copy All") { viewModel.copyAllToClipboard() }
                     .buttonStyle(NeumorphicButtonStyle())
                     .accessibilityIdentifier("inspector_copyAllButton")
+            }
+
+            Button(action: { showDescribeSheet = true }) {
+                HStack {
+                    Image(systemName: "eye")
+                    Text("Describe with AI...")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.large)
+            .disabled(viewModel.selectedImage == nil)
+            .accessibilityIdentifier("inspector_describeButton")
+            .sheet(isPresented: $showDescribeSheet) {
+                if let image = viewModel.selectedImage?.image {
+                    ImageDescriptionView(
+                        image: image,
+                        onSendToGeneratePrompt: { text in
+                            imageGenViewModel.prompt = text
+                            selectedSidebarItem = .generateImage
+                        },
+                        onSendToWorkflowPrompt: { text in
+                            workflowViewModel.addInstruction(.prompt(text))
+                            selectedSidebarItem = .workflow
+                        }
+                    )
+                }
             }
 
             Button(action: sendToGenerate) {

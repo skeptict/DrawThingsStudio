@@ -31,6 +31,9 @@ protocol LLMProvider {
     /// Check if the provider is available/connected
     func checkConnection() async -> Bool
 
+    /// Describe an image using a vision-capable model
+    func describeImage(_ imageData: Data, systemPrompt: String, userMessage: String, model: String) async throws -> String
+
     /// Provider name for display
     var providerName: String { get }
 
