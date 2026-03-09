@@ -1169,7 +1169,12 @@ struct ImageGenerationView: View {
             if let image = imageToDescribe {
                 ImageDescriptionView(
                     image: image,
-                    onSendToGeneratePrompt: { text in viewModel.prompt = text },
+                    onSendToGeneratePrompt: { text, sourceImage in
+                        viewModel.prompt = text
+                        if let img = sourceImage {
+                            viewModel.loadInputImage(from: img, name: "Described Image")
+                        }
+                    },
                     onSendToWorkflowPrompt: nil
                 )
             }

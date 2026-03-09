@@ -894,8 +894,11 @@ private struct DTClipDetailPanel: View {
                 if let thumbnail = clip.frames[min(selectedFrameIndex, clip.frames.count - 1)].thumbnail {
                     ImageDescriptionView(
                         image: thumbnail,
-                        onSendToGeneratePrompt: { text in
+                        onSendToGeneratePrompt: { text, sourceImage in
                             imageGenViewModel.prompt = text
+                            if let img = sourceImage {
+                                imageGenViewModel.loadInputImage(from: img, name: "DT Project Image")
+                            }
                             selectedSidebarItem = .generateImage
                         },
                         onSendToWorkflowPrompt: nil
@@ -1120,8 +1123,11 @@ private struct DTDetailPanel: View {
                 if let thumbnail = entry.thumbnail {
                     ImageDescriptionView(
                         image: thumbnail,
-                        onSendToGeneratePrompt: { text in
+                        onSendToGeneratePrompt: { text, sourceImage in
                             imageGenViewModel.prompt = text
+                            if let img = sourceImage {
+                                imageGenViewModel.loadInputImage(from: img, name: "DT Project Image")
+                            }
                             selectedSidebarItem = .generateImage
                         },
                         onSendToWorkflowPrompt: nil

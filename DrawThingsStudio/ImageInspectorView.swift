@@ -330,11 +330,14 @@ struct ImageInspectorView: View {
             .disabled(viewModel.selectedImage == nil)
             .accessibilityIdentifier("inspector_describeButton")
             .sheet(isPresented: $showDescribeSheet) {
-                if let image = viewModel.selectedImage?.image {
+                if let entry = viewModel.selectedImage {
                     ImageDescriptionView(
-                        image: image,
-                        onSendToGeneratePrompt: { text in
+                        image: entry.image,
+                        onSendToGeneratePrompt: { text, sourceImage in
                             imageGenViewModel.prompt = text
+                            if let img = sourceImage {
+                                imageGenViewModel.loadInputImage(from: img, name: entry.sourceName)
+                            }
                             selectedSidebarItem = .generateImage
                         },
                         onSendToWorkflowPrompt: { text in

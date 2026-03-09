@@ -23,12 +23,13 @@ private extension NSImage {
 /// A sheet that uses a vision LLM agent to describe an image and route the result to a prompt.
 ///
 /// Callers provide closures for each available destination. If a closure is nil, that
-/// destination button is not shown.
+/// destination button is not shown. The generate-image callback receives the prompt text
+/// and an optional NSImage to use as img2img source (when the user enables the toggle).
 struct ImageDescriptionView: View {
     let image: NSImage
-    /// Called with the result when the user chooses "Send to Generate Image". nil = not offered.
-    let onSendToGeneratePrompt: ((String) -> Void)?
-    /// Called with the result when the user chooses "Send to Workflow Builder". nil = not offered.
+    /// Called with (promptText, sourceImage?) when the user sends to Generate Image. nil = not offered.
+    let onSendToGeneratePrompt: ((String, NSImage?) -> Void)?
+    /// Called with promptText when the user sends to Workflow Builder. nil = not offered.
     let onSendToWorkflowPrompt: ((String) -> Void)?
 
     @ObservedObject private var agentsManager = DescribeAgentsManager.shared
@@ -40,11 +41,20 @@ struct ImageDescriptionView: View {
     @State private var result: String = ""
     @State private var errorMessage: String?
     @State private var showAgentEditor = false
+    @State private var sendImageAsSource = false
     // Cache client for the sheet lifetime — vision payloads are large; avoid reconnecting per tap
     @State private var llmClient: (any LLMProvider)?
 
     private var bothDestinationsAvailable: Bool {
         onSendToGeneratePrompt != nil && onSendToWorkflowPrompt != nil
+    }
+
+    /// Whether Generate Image is the active send target
+    private var sendingToGenerate: Bool {
+        if bothDestinationsAvailable {
+            return settings.describeImageSendTarget == "generateImage"
+        }
+        return onSendToGeneratePrompt != nil
     }
 
     var body: some View {
@@ -163,6 +173,14 @@ struct ImageDescriptionView: View {
                             }
                         }
 
+                        // img2img source toggle — only relevant when sending to Generate Image
+                        if onSendToGeneratePrompt != nil && sendingToGenerate {
+                            Toggle("Include image as img2img source", isOn: $sendImageAsSource)
+                                .toggleStyle(.checkbox)
+                                .font(.callout)
+                                .help("Sends the image along with the prompt as a starting image — useful for video models like Wan 2.2 and LTX-2")
+                        }
+
                         // Action buttons
                         VStack(spacing: 10) {
                             if bothDestinationsAvailable {
@@ -178,9 +196,9 @@ struct ImageDescriptionView: View {
                                 .buttonStyle(NeumorphicButtonStyle(isProminent: true))
                                 .controlSize(.large)
                             } else {
-                                // Only one destination — show whichever is available
-                                if let onSend = onSendToGeneratePrompt {
-                                    Button(action: { onSend(result); dismiss() }) {
+                                // Single destination — show whichever is available
+                                if let _ = onSendToGeneratePrompt {
+                                    Button(action: sendToTarget) {
                                         HStack {
                                             Image(systemName: "arrow.right.circle.fill")
                                             Text("Send to Generate Image")
@@ -215,13 +233,12 @@ struct ImageDescriptionView: View {
                 .padding(20)
             }
         }
-        .frame(width: 480, height: 640)
+        .frame(width: 480, height: 660)
         .neuBackground()
         .sheet(isPresented: $showAgentEditor) {
             DescribeAgentEditorView()
         }
         .onAppear {
-            // Select the first available agent
             if agentsManager.agent(for: selectedAgentID) == nil,
                let first = agentsManager.agents.first {
                 selectedAgentID = first.id
@@ -269,8 +286,9 @@ struct ImageDescriptionView: View {
 
     private func sendToTarget() {
         guard !result.isEmpty else { return }
-        if settings.describeImageSendTarget == "generateImage" {
-            onSendToGeneratePrompt?(result)
+        let sourceImage: NSImage? = sendImageAsSource ? image : nil
+        if settings.describeImageSendTarget == "generateImage" || !bothDestinationsAvailable {
+            onSendToGeneratePrompt?(result, sourceImage)
         } else {
             onSendToWorkflowPrompt?(result)
         }
