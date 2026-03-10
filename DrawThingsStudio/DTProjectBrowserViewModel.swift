@@ -430,24 +430,35 @@ final class DTProjectBrowserViewModel: ObservableObject {
     // MARK: - Image Export
 
     func exportImage(_ entry: DTGenerationEntry) {
-        guard let thumbnail = entry.thumbnail else { return }
+        guard entry.thumbnail != nil || entry.previewId > 0 else { return }
         let rawName = String(entry.prompt.prefix(40)).trimmingCharacters(in: .whitespaces)
         let baseName = rawName.isEmpty ? "generation_\(entry.id)" : rawName
+        let projectURL = selectedProject?.url
+        let previewId = entry.previewId
+        let fallback = entry.thumbnail
+
         let panel = NSSavePanel()
         panel.title = "Save Image"
-        panel.message = "Saves the preview thumbnail stored in the project database."
         panel.nameFieldStringValue = "\(baseName).jpg"
         panel.allowedContentTypes = [.jpeg, .png]
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             Task.detached(priority: .userInitiated) {
-                guard let tiffData = thumbnail.tiffRepresentation,
+                // Prefer full-res from thumbnailhistorynode; fall back to cached half-res
+                let image: NSImage?
+                if let projectURL, let db = DTProjectDatabase(fileURL: projectURL) {
+                    image = db.fetchFullSizeThumbnail(previewId: previewId) ?? fallback
+                } else {
+                    image = fallback
+                }
+                guard let img = image,
+                      let tiffData = img.tiffRepresentation,
                       let bitmapRep = NSBitmapImageRep(data: tiffData) else { return }
                 if url.pathExtension.lowercased() == "png",
                    let data = bitmapRep.representation(using: .png, properties: [:]) {
                     try? data.write(to: url)
-                } else if let data = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: NSNumber(value: 0.92)]) {
+                } else if let data = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: NSNumber(value: 0.95)]) {
                     try? data.write(to: url)
                 }
             }
@@ -455,11 +466,13 @@ final class DTProjectBrowserViewModel: ObservableObject {
     }
 
     func bulkExportImages(entryIDs: Set<Int64>) {
-        let toExport = entries.filter { entryIDs.contains($0.id) && $0.thumbnail != nil }
+        let toExport = entries.filter { entryIDs.contains($0.id) && ($0.thumbnail != nil || $0.previewId > 0) }
         guard !toExport.isEmpty else { return }
+        let projectURL = selectedProject?.url
+
         let panel = NSOpenPanel()
         panel.title = "Export \(toExport.count) Image\(toExport.count == 1 ? "" : "s")"
-        panel.message = "Choose a folder to save images. Saves preview thumbnails stored in the project database."
+        panel.message = "Choose a folder to save the images."
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
@@ -467,10 +480,14 @@ final class DTProjectBrowserViewModel: ObservableObject {
         panel.begin { response in
             guard response == .OK, let folder = panel.url else { return }
             Task.detached(priority: .userInitiated) {
+                // Open DB once for the whole batch
+                let db: DTProjectDatabase? = projectURL.flatMap { DTProjectDatabase(fileURL: $0) }
                 for entry in toExport {
-                    guard let tiffData = entry.thumbnail?.tiffRepresentation,
+                    let image = db?.fetchFullSizeThumbnail(previewId: entry.previewId) ?? entry.thumbnail
+                    guard let img = image,
+                          let tiffData = img.tiffRepresentation,
                           let bitmapRep = NSBitmapImageRep(data: tiffData),
-                          let data = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: NSNumber(value: 0.92)]) else { continue }
+                          let data = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: NSNumber(value: 0.95)]) else { continue }
                     let name = "generation_\(entry.id).jpg"
                     try? data.write(to: folder.appendingPathComponent(name))
                 }
