@@ -390,6 +390,19 @@ struct DTProjectBrowserView: View {
                                     }
                                 }
                                 .contextMenu {
+                                    let inSelection = selectedClipIDs.contains(clip.id)
+                                    Button {
+                                        if inSelection {
+                                            selectedClipIDs.remove(clip.id)
+                                        } else {
+                                            selectedClipIDs.insert(clip.id)
+                                            viewModel.selectedClip = clip
+                                            viewModel.selectedEntry = nil
+                                        }
+                                    } label: {
+                                        Label(inSelection ? "Remove from Selection" : "Add to Selection",
+                                              systemImage: inSelection ? "checkmark.circle.fill" : "checkmark.circle")
+                                    }
                                     Button {
                                         viewModel.exportImage(clip.frames[0])
                                     } label: {
@@ -436,11 +449,18 @@ struct DTProjectBrowserView: View {
                                     }
                                 }
                                 .contextMenu {
+                                    let inSelection = selectedEntryIDs.contains(entry.id)
                                     Button {
-                                        viewModel.selectedEntry = entry
-                                        viewModel.selectedClip = nil
+                                        if inSelection {
+                                            selectedEntryIDs.remove(entry.id)
+                                        } else {
+                                            selectedEntryIDs.insert(entry.id)
+                                            viewModel.selectedEntry = entry
+                                            viewModel.selectedClip = nil
+                                        }
                                     } label: {
-                                        Label("Select", systemImage: "checkmark.circle")
+                                        Label(inSelection ? "Remove from Selection" : "Add to Selection",
+                                              systemImage: inSelection ? "checkmark.circle.fill" : "checkmark.circle")
                                     }
                                     Button {
                                         viewModel.exportImage(entry)
@@ -511,6 +531,15 @@ struct DTProjectBrowserView: View {
                     .foregroundColor(.neuTextSecondary)
                 if viewModel.hasMoreEntries {
                     Text("(more available)")
+                        .font(.caption2)
+                        .foregroundColor(.neuTextSecondary)
+                        .italic()
+                }
+                if selectedEntryIDs.isEmpty && selectedClipIDs.isEmpty {
+                    Text("•")
+                        .font(.caption2)
+                        .foregroundColor(.neuTextSecondary)
+                    Text("Right-click or ⌘-click to select multiple")
                         .font(.caption2)
                         .foregroundColor(.neuTextSecondary)
                         .italic()
