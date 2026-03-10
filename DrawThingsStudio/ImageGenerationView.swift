@@ -559,16 +559,23 @@ struct ImageGenerationView: View {
             if !modelConfigs.isEmpty {
                 let quickPresets: [ModelConfig] = {
                     let favorites = modelConfigs.filter { $0.isFavorite }
-                    return Array(favorites.isEmpty ? modelConfigs.prefix(3) : favorites.prefix(3))
+                    return Array(favorites.isEmpty ? modelConfigs.prefix(9) : favorites.prefix(9))
                 }()
-                HStack(spacing: 8) {
+                LazyVGrid(columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ], spacing: 8) {
                     ForEach(quickPresets) { config in
                         Button(config.name) {
                             viewModel.loadPreset(config)
                             selectedPresetID = config.id.uuidString
                         }
                         .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                         .buttonStyle(NeumorphicButtonStyle())
+                        .frame(maxWidth: .infinity)
                     }
                 }
             }
