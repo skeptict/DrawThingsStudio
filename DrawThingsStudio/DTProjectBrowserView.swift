@@ -16,6 +16,9 @@ struct DTProjectBrowserView: View {
     @State private var showDeleteConfirmation = false
     @State private var clipToDelete: DTVideoClip?
     @State private var showClipDeleteConfirmation = false
+    @State private var selectedEntryIDs: Set<Int64> = []
+    @State private var selectedClipIDs: Set<Int64> = []
+    @State private var showBulkDeleteConfirmation = false
 
     var body: some View {
         Group {
@@ -43,6 +46,47 @@ struct DTProjectBrowserView: View {
             }
         } message: { clip in
             Text("This will permanently remove all \(clip.frameCount) frame\(clip.frameCount == 1 ? "" : "s") of this clip from the Draw Things project database. This cannot be undone.\n\nFor best results, close Draw Things before deleting.")
+        }
+        .alert(bulkDeleteTitle, isPresented: $showBulkDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button(bulkDeleteButtonLabel, role: .destructive) {
+                let entryIDs = selectedEntryIDs
+                let clipIDs = selectedClipIDs
+                selectedEntryIDs.removeAll()
+                selectedClipIDs.removeAll()
+                Task {
+                    if viewModel.showAsClips {
+                        await viewModel.bulkDeleteClips(ids: clipIDs)
+                    } else {
+                        await viewModel.bulkDeleteEntries(ids: entryIDs)
+                    }
+                }
+            }
+        } message: {
+            Text("This will permanently remove the selected items from the Draw Things project database. This cannot be undone.\n\nFor best results, close Draw Things before deleting.")
+        }
+        .onChange(of: viewModel.selectedProject) {
+            selectedEntryIDs.removeAll()
+            selectedClipIDs.removeAll()
+        }
+        .onChange(of: viewModel.showAsClips) {
+            selectedEntryIDs.removeAll()
+            selectedClipIDs.removeAll()
+        }
+    }
+
+    private var bulkDeleteTitle: String {
+        let count = viewModel.showAsClips ? selectedClipIDs.count : selectedEntryIDs.count
+        return "Delete \(count) \(viewModel.showAsClips ? "Clip\(count == 1 ? "" : "s")" : "Generation\(count == 1 ? "" : "s")")?"
+    }
+
+    private var bulkDeleteButtonLabel: String {
+        if viewModel.showAsClips {
+            let clips = viewModel.filteredClips.filter { selectedClipIDs.contains($0.id) }
+            let totalFrames = clips.reduce(0) { $0 + $1.frameCount }
+            return "Delete \(totalFrames) Frame\(totalFrames == 1 ? "" : "s")"
+        } else {
+            return "Delete \(selectedEntryIDs.count)"
         }
     }
 
@@ -326,21 +370,40 @@ struct DTProjectBrowserView: View {
                             ForEach(viewModel.filteredClips) { clip in
                                 DTVideoClipCell(
                                     clip: clip,
-                                    isSelected: viewModel.selectedClip?.id == clip.id
+                                    isSelected: viewModel.selectedClip?.id == clip.id,
+                                    isInSelection: selectedClipIDs.contains(clip.id)
                                 )
                                 .onTapGesture {
-                                    viewModel.selectedClip = clip
-                                    viewModel.selectedEntry = nil
+                                    let cmdHeld = NSApplication.shared.currentEvent?.modifierFlags.contains(.command) ?? false
+                                    if cmdHeld {
+                                        if selectedClipIDs.contains(clip.id) {
+                                            selectedClipIDs.remove(clip.id)
+                                        } else {
+                                            selectedClipIDs.insert(clip.id)
+                                            viewModel.selectedClip = clip
+                                            viewModel.selectedEntry = nil
+                                        }
+                                    } else {
+                                        selectedClipIDs = [clip.id]
+                                        viewModel.selectedClip = clip
+                                        viewModel.selectedEntry = nil
+                                    }
                                 }
                                 .contextMenu {
+                                    Button {
+                                        viewModel.exportImage(clip.frames[0])
+                                    } label: {
+                                        Label("Save Image…", systemImage: "square.and.arrow.down")
+                                    }
+                                    .disabled(clip.thumbnail == nil)
                                     if clip.isVideo {
                                         Button {
                                             viewModel.exportClip(clip, fps: 8.0)
                                         } label: {
                                             Label("Export .mov", systemImage: "square.and.arrow.up")
                                         }
-                                        Divider()
                                     }
+                                    Divider()
                                     Button(role: .destructive) {
                                         clipToDelete = clip
                                         showClipDeleteConfirmation = true
@@ -353,11 +416,24 @@ struct DTProjectBrowserView: View {
                             ForEach(viewModel.filteredEntries) { entry in
                                 DTThumbnailCell(
                                     entry: entry,
-                                    isSelected: viewModel.selectedEntry?.id == entry.id
+                                    isSelected: viewModel.selectedEntry?.id == entry.id,
+                                    isInSelection: selectedEntryIDs.contains(entry.id)
                                 )
                                 .onTapGesture {
-                                    viewModel.selectedEntry = entry
-                                    viewModel.selectedClip = nil
+                                    let cmdHeld = NSApplication.shared.currentEvent?.modifierFlags.contains(.command) ?? false
+                                    if cmdHeld {
+                                        if selectedEntryIDs.contains(entry.id) {
+                                            selectedEntryIDs.remove(entry.id)
+                                        } else {
+                                            selectedEntryIDs.insert(entry.id)
+                                            viewModel.selectedEntry = entry
+                                            viewModel.selectedClip = nil
+                                        }
+                                    } else {
+                                        selectedEntryIDs = [entry.id]
+                                        viewModel.selectedEntry = entry
+                                        viewModel.selectedClip = nil
+                                    }
                                 }
                                 .contextMenu {
                                     Button {
@@ -366,6 +442,12 @@ struct DTProjectBrowserView: View {
                                     } label: {
                                         Label("Select", systemImage: "checkmark.circle")
                                     }
+                                    Button {
+                                        viewModel.exportImage(entry)
+                                    } label: {
+                                        Label("Save Image…", systemImage: "square.and.arrow.down")
+                                    }
+                                    .disabled(entry.thumbnail == nil)
                                     Divider()
                                     Button(role: .destructive) {
                                         entryToDelete = entry
@@ -394,8 +476,102 @@ struct DTProjectBrowserView: View {
                     }
                 }
             }
+
+            Divider()
+            statusBar
+            if !selectedEntryIDs.isEmpty || !selectedClipIDs.isEmpty {
+                Divider()
+                bulkActionBar
+            }
         }
         .neuBackground()
+    }
+
+    // MARK: - Status Bar
+
+    private var statusBar: some View {
+        HStack(spacing: 6) {
+            if viewModel.isLoading {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("Loading…")
+                    .font(.caption2)
+                    .foregroundColor(.neuTextSecondary)
+            } else if viewModel.selectedProject != nil {
+                let pCount = viewModel.projects.count
+                let eCount = viewModel.entryCount
+                Text("\(pCount) project\(pCount == 1 ? "" : "s")")
+                    .font(.caption2)
+                    .foregroundColor(.neuTextSecondary)
+                Text("•")
+                    .font(.caption2)
+                    .foregroundColor(.neuTextSecondary)
+                Text("\(eCount) entr\(eCount == 1 ? "y" : "ies")")
+                    .font(.caption2)
+                    .foregroundColor(.neuTextSecondary)
+                if viewModel.hasMoreEntries {
+                    Text("(more available)")
+                        .font(.caption2)
+                        .foregroundColor(.neuTextSecondary)
+                        .italic()
+                }
+            } else {
+                Text("No project selected")
+                    .font(.caption2)
+                    .foregroundColor(.neuTextSecondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Bulk Action Bar
+
+    private var bulkActionBar: some View {
+        let isClipsMode = viewModel.showAsClips
+        let count = isClipsMode ? selectedClipIDs.count : selectedEntryIDs.count
+        return HStack(spacing: 10) {
+            Text("\(count) selected")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.neuTextSecondary)
+            Spacer()
+            Button {
+                if isClipsMode {
+                    let frames = viewModel.filteredClips
+                        .filter { selectedClipIDs.contains($0.id) }
+                        .flatMap { $0.frames }
+                    viewModel.bulkExportImages(entryIDs: Set(frames.map(\.id)))
+                } else {
+                    viewModel.bulkExportImages(entryIDs: selectedEntryIDs)
+                }
+            } label: {
+                Label("Save \(count)…", systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.small)
+
+            Button(role: .destructive) {
+                showBulkDeleteConfirmation = true
+            } label: {
+                Label("Delete \(count)", systemImage: "trash")
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.small)
+
+            Button {
+                selectedEntryIDs.removeAll()
+                selectedClipIDs.removeAll()
+            } label: {
+                Image(systemName: "xmark.circle")
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.small)
+            .help("Deselect All")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color.neuSurface)
     }
 
     // MARK: - Right: Detail Panel
@@ -422,6 +598,7 @@ struct DTProjectBrowserView: View {
                         entryToDelete = entry
                         showDeleteConfirmation = true
                     },
+                    onExport: { viewModel.exportImage(entry) },
                     onShowClip: DTVideoClip.isVideoModel(entry.model) ? {
                         viewModel.showAsClips = true
                     } : nil
@@ -491,6 +668,7 @@ private struct DTProjectRow: View {
 private struct DTVideoClipCell: View {
     let clip: DTVideoClip
     let isSelected: Bool
+    var isInSelection: Bool = false
 
     @State private var frameIndex = 0
     @State private var isHovering = false
@@ -517,6 +695,14 @@ private struct DTVideoClipCell: View {
                 .clipped()
                 .animation(.none, value: frameIndex)
 
+                // Multi-select checkmark
+                if isInSelection {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white, Color.neuAccent)
+                        .padding(5)
+                }
+
                 // Video badge
                 if clip.isVideo {
                     HStack(spacing: 3) {
@@ -531,6 +717,7 @@ private struct DTVideoClipCell: View {
                     .background(.black.opacity(0.6))
                     .clipShape(RoundedRectangle(cornerRadius: 4))
                     .padding(5)
+                    .offset(y: isInSelection ? 24 : 0)
                 }
             }
 
@@ -598,22 +785,32 @@ private struct DTVideoClipCell: View {
 private struct DTThumbnailCell: View {
     let entry: DTGenerationEntry
     let isSelected: Bool
+    var isInSelection: Bool = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
             // Thumbnail
-            ZStack {
-                Color.neuBackground.opacity(0.5)
+            ZStack(alignment: .topTrailing) {
+                ZStack {
+                    Color.neuBackground.opacity(0.5)
 
-                if let thumbnail = entry.thumbnail {
-                    Image(nsImage: thumbnail)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Image(systemName: "photo")
-                        .font(.title)
-                        .foregroundColor(.neuTextSecondary.opacity(0.4))
+                    if let thumbnail = entry.thumbnail {
+                        Image(nsImage: thumbnail)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.title)
+                            .foregroundColor(.neuTextSecondary.opacity(0.4))
+                    }
+                }
+
+                if isInSelection {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white, Color.neuAccent)
+                        .padding(5)
                 }
             }
             .frame(height: 140)
@@ -880,6 +1077,20 @@ private struct DTClipDetailPanel: View {
             .buttonStyle(NeumorphicButtonStyle(isProminent: !clip.isVideo))
             .controlSize(.large)
 
+            Button {
+                let frame = clip.frames[min(selectedFrameIndex, clip.frames.count - 1)]
+                viewModel.exportImage(frame)
+            } label: {
+                HStack {
+                    Image(systemName: "square.and.arrow.down")
+                    Text(clip.isVideo ? "Save Frame \(selectedFrameIndex + 1)…" : "Save Image…")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.large)
+            .disabled(clip.frames[min(selectedFrameIndex, clip.frames.count - 1)].thumbnail == nil)
+
             Button(action: { showDescribeSheet = true }) {
                 HStack {
                     Image(systemName: "eye")
@@ -965,6 +1176,7 @@ private struct DTDetailPanel: View {
     @ObservedObject var imageGenViewModel: ImageGenerationViewModel
     @Binding var selectedSidebarItem: SidebarItem?
     let onDelete: () -> Void
+    var onExport: (() -> Void)? = nil
     var onShowClip: (() -> Void)? = nil
 
     @State private var showDescribeSheet = false
@@ -1108,6 +1320,19 @@ private struct DTDetailPanel: View {
             }
             .buttonStyle(NeumorphicButtonStyle(isProminent: true))
             .controlSize(.large)
+
+            if let onExport {
+                Button(action: onExport) {
+                    HStack {
+                        Image(systemName: "square.and.arrow.down")
+                        Text("Save Image…")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(NeumorphicButtonStyle())
+                .controlSize(.large)
+                .disabled(entry.thumbnail == nil)
+            }
 
             Button(action: { showDescribeSheet = true }) {
                 HStack {

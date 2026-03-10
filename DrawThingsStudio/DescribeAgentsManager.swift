@@ -119,8 +119,8 @@ enum BuiltInDescribeAgent: String, CaseIterable {
                 systemPrompt: "You are an expert at writing prompts for Wan 2.2, Alibaba's video generation model. Wan 2.2 excels at realistic motion and cinematic sequences. Write prompts that describe the scene's visual content, motion dynamics, camera behavior, lighting, and atmosphere. Use clear, natural language. Avoid abstract concepts — focus on what is literally visible and moving in the scene. Output only the prompt, no explanations.",
                 userMessage: "Analyze this image and write a Wan 2.2 video generation prompt. Describe the scene content, any implied or suitable motion, camera movement, lighting, and mood.",
                 preferredVisionModel: "",
-                icon: "video",
-                isBuiltIn: true
+                       icon: "video",
+                       isBuiltIn: true
             )
         case .sd15:
             return DescribeAgent(

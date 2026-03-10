@@ -427,6 +427,101 @@ final class DTProjectBrowserViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Image Export
+
+    func exportImage(_ entry: DTGenerationEntry) {
+        guard let thumbnail = entry.thumbnail else { return }
+        let rawName = String(entry.prompt.prefix(40)).trimmingCharacters(in: .whitespaces)
+        let baseName = rawName.isEmpty ? "generation_\(entry.id)" : rawName
+        let panel = NSSavePanel()
+        panel.title = "Save Image"
+        panel.message = "Saves the preview thumbnail stored in the project database."
+        panel.nameFieldStringValue = "\(baseName).jpg"
+        panel.allowedContentTypes = [.jpeg, .png]
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task.detached(priority: .userInitiated) {
+                guard let tiffData = thumbnail.tiffRepresentation,
+                      let bitmapRep = NSBitmapImageRep(data: tiffData) else { return }
+                if url.pathExtension.lowercased() == "png",
+                   let data = bitmapRep.representation(using: .png, properties: [:]) {
+                    try? data.write(to: url)
+                } else if let data = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: NSNumber(value: 0.92)]) {
+                    try? data.write(to: url)
+                }
+            }
+        }
+    }
+
+    func bulkExportImages(entryIDs: Set<Int64>) {
+        let toExport = entries.filter { entryIDs.contains($0.id) && $0.thumbnail != nil }
+        guard !toExport.isEmpty else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Export \(toExport.count) Image\(toExport.count == 1 ? "" : "s")"
+        panel.message = "Choose a folder to save images. Saves preview thumbnails stored in the project database."
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Export Here"
+        panel.begin { response in
+            guard response == .OK, let folder = panel.url else { return }
+            Task.detached(priority: .userInitiated) {
+                for entry in toExport {
+                    guard let tiffData = entry.thumbnail?.tiffRepresentation,
+                          let bitmapRep = NSBitmapImageRep(data: tiffData),
+                          let data = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: NSNumber(value: 0.92)]) else { continue }
+                    let name = "generation_\(entry.id).jpg"
+                    try? data.write(to: folder.appendingPathComponent(name))
+                }
+                await MainActor.run {
+                    NSWorkspace.shared.activateFileViewerSelecting([folder])
+                }
+            }
+        }
+    }
+
+    func bulkDeleteEntries(ids: Set<Int64>) async {
+        guard let project = selectedProject else { return }
+        let url = project.url
+        let toDelete = entries.filter { ids.contains($0.id) }
+        let rowids = toDelete.map(\.id)
+        let previewIds = toDelete.map(\.previewId)
+        do {
+            try await Task.detached(priority: .userInitiated) {
+                try DTProjectDatabase.deleteEntries(rowids: rowids, previewIds: previewIds, from: url)
+            }.value
+            let deleted = Set(rowids)
+            entries.removeAll { deleted.contains($0.id) }
+            if let sel = selectedEntry, deleted.contains(sel.id) { selectedEntry = nil }
+            entryCount   = max(0, entryCount   - rowids.count)
+            loadedOffset = max(0, loadedOffset - rowids.count)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func bulkDeleteClips(ids: Set<Int64>) async {
+        guard let project = selectedProject else { return }
+        let url = project.url
+        let clipsToDelete = DTVideoClip.group(from: entries).filter { ids.contains($0.id) }
+        let rowids    = clipsToDelete.flatMap { $0.frames.map(\.id) }
+        let previewIds = clipsToDelete.flatMap { $0.frames.map(\.previewId) }
+        do {
+            try await Task.detached(priority: .userInitiated) {
+                try DTProjectDatabase.deleteEntries(rowids: rowids, previewIds: previewIds, from: url)
+            }.value
+            let deleted = Set(rowids)
+            entries.removeAll { deleted.contains($0.id) }
+            if let sel = selectedClip, ids.contains(sel.id) { selectedClip = nil }
+            if let sel = selectedEntry, deleted.contains(sel.id) { selectedEntry = nil }
+            entryCount   = max(0, entryCount   - rowids.count)
+            loadedOffset = max(0, loadedOffset - rowids.count)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     // MARK: - Video Export
 
     func exportClip(_ clip: DTVideoClip, fps: Double) {
