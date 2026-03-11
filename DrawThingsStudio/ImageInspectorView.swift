@@ -12,6 +12,7 @@ struct ImageInspectorView: View {
     @ObservedObject var viewModel: ImageInspectorViewModel
     @ObservedObject var imageGenViewModel: ImageGenerationViewModel
     @ObservedObject var workflowViewModel: WorkflowBuilderViewModel
+    @ObservedObject var storyStudioViewModel: StoryStudioViewModel
     @Binding var selectedSidebarItem: SidebarItem?
     @Environment(\.colorScheme) private var colorScheme
 
@@ -78,6 +79,8 @@ struct ImageInspectorView: View {
                     Text("PNG, JPG from Finder or Discord")
                         .font(.caption2)
                         .foregroundColor(.neuTextSecondary.opacity(0.6))
+                    Button("Open File…") { openFilePanel() }
+                        .buttonStyle(NeumorphicButtonStyle())
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
@@ -214,8 +217,10 @@ struct ImageInspectorView: View {
                         selectedSidebarItem = .generateImage
                     },
                     onSendToWorkflowPrompt: { text in
-                        workflowViewModel.addInstruction(.prompt(text))
-                        selectedSidebarItem = .workflow
+                        if let scene = storyStudioViewModel.selectedScene {
+                            scene.promptOverride = text
+                        }
+                        selectedSidebarItem = .storyStudio
                     }
                 )
             }

@@ -29,7 +29,7 @@ struct ImageDescriptionView: View {
     let image: NSImage
     /// Called with (promptText, sourceImage?) when the user sends to Generate Image. nil = not offered.
     let onSendToGeneratePrompt: ((String, NSImage?) -> Void)?
-    /// Called with promptText when the user sends to Workflow Builder. nil = not offered.
+    /// Called with promptText when the user sends to Story Studio. nil = not offered.
     let onSendToWorkflowPrompt: ((String) -> Void)?
 
     @ObservedObject private var agentsManager = DescribeAgentsManager.shared
@@ -167,7 +167,7 @@ struct ImageDescriptionView: View {
                                     .font(.headline)
                                 Picker("Send To", selection: $settings.describeImageSendTarget) {
                                     Text("Generate Image").tag("generateImage")
-                                    Text("Workflow Builder").tag("workflowBuilder")
+                                    Text("Story Studio").tag("storyStudio")
                                 }
                                 .pickerStyle(.radioGroup)
                             }
@@ -189,7 +189,7 @@ struct ImageDescriptionView: View {
                                         Image(systemName: "arrow.right.circle.fill")
                                         Text(settings.describeImageSendTarget == "generateImage"
                                              ? "Send to Generate Image"
-                                             : "Send to Workflow Builder")
+                                             : "Send to Story Studio")
                                     }
                                     .frame(maxWidth: .infinity)
                                 }
@@ -211,7 +211,7 @@ struct ImageDescriptionView: View {
                                     Button(action: { onSend(result); dismiss() }) {
                                         HStack {
                                             Image(systemName: "arrow.right.circle.fill")
-                                            Text("Send to Workflow Builder")
+                                            Text("Send to Story Studio")
                                         }
                                         .frame(maxWidth: .infinity)
                                     }

@@ -200,7 +200,9 @@ final class AppSettings: ObservableObject {
         self.compactJSON = store.bool(forKey: "ui.compactJSON")
         self.persistInspectorHistory = store.object(forKey: "ui.persistInspectorHistory") as? Bool ?? true
         self.defaultSidebarItem = store.string(forKey: "ui.defaultSidebarItem") ?? "imageInspector"
-        self.describeImageSendTarget = store.string(forKey: "ui.describeImageSendTarget") ?? "generateImage"
+        // Migrate legacy "workflowBuilder" target to "storyStudio"
+        let rawTarget = store.string(forKey: "ui.describeImageSendTarget") ?? "generateImage"
+        self.describeImageSendTarget = rawTarget == "workflowBuilder" ? "storyStudio" : rawTarget
 
         self.llmMaxTokens = store.integer(forKey: "llm.maxTokens") != 0 ? store.integer(forKey: "llm.maxTokens") : 2048
     }
@@ -574,7 +576,7 @@ struct SettingsView: View {
                     neuSettingsRow("Describe →") {
                         Picker("Describe send target", selection: $settings.describeImageSendTarget) {
                             Text("Generate Image").tag("generateImage")
-                            Text("Workflow Builder").tag("workflowBuilder")
+                            Text("Story Studio").tag("storyStudio")
                         }
                         .labelsHidden()
                     }

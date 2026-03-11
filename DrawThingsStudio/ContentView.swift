@@ -83,6 +83,7 @@ struct ContentView: View {
                     viewModel: imageInspectorViewModel,
                     imageGenViewModel: imageGenViewModel,
                     workflowViewModel: workflowViewModel,
+                    storyStudioViewModel: storyStudioViewModel,
                     selectedSidebarItem: $selectedItem
                 )
                 .opacity(selectedItem == .imageInspector || selectedItem == nil ? 1 : 0)
