@@ -168,6 +168,16 @@ struct StoryStudioView: View {
                 }
                 Spacer()
                 Button(action: {
+                    viewModel.showingNewProjectSheet = true
+                }) {
+                    Image(systemName: "plus.circle")
+                        .foregroundColor(.neuTextSecondary)
+                }
+                .buttonStyle(NeumorphicIconButtonStyle())
+                .help("New project")
+                .accessibilityIdentifier("storyStudio_newProjectFromNav")
+
+                Button(action: {
                     viewModel.showingProjectSettings = true
                 }) {
                     Image(systemName: "gearshape")

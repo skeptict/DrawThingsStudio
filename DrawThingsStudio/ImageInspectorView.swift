@@ -19,6 +19,7 @@ struct ImageInspectorView: View {
     @State private var sendImageToGenerate = false
     @State private var showDescribeSheet = false
     @State private var lightboxImage: NSImage?
+    @State private var showSendToStoryStudio = false
 
     var body: some View {
         HSplitView {
@@ -225,6 +226,16 @@ struct ImageInspectorView: View {
                 )
             }
         }
+        .sheet(isPresented: $showSendToStoryStudio) {
+            if let entry = viewModel.selectedImage {
+                SendToStoryStudioView(
+                    prompt: entry.metadata?.prompt ?? "",
+                    negativePrompt: entry.metadata?.negativePrompt ?? "",
+                    thumbnail: entry.image,
+                    onNavigate: { selectedSidebarItem = $0 }
+                )
+            }
+        }
     }
 
     private var noMetadataView: some View {
@@ -386,19 +397,17 @@ struct ImageInspectorView: View {
                 .disabled(viewModel.selectedImage == nil)
                 .accessibilityIdentifier("inspector_sendImageToggle")
 
-            Button(action: sendToWorkflow) {
+            Button(action: { showSendToStoryStudio = true }) {
                 HStack {
-                    Image(systemName: "arrow.right.circle.fill")
-                    Text("Send to StoryFlow")
+                    Image(systemName: "theatermasks.fill")
+                    Text("Add to Story Studio…")
                 }
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(NeumorphicButtonStyle())
             .controlSize(.large)
-            .disabled(viewModel.selectedImage?.metadata == nil)
-            .accessibilityIdentifier("inspector_sendToWorkflowButton")
-            .accessibilityLabel("Send to StoryFlow")
-            .accessibilityHint("Loads this image's prompt and config as workflow instructions")
+            .disabled(viewModel.selectedImage == nil)
+            .accessibilityIdentifier("inspector_sendToStoryStudioButton")
         }
     }
 
@@ -443,49 +452,6 @@ struct ImageInspectorView: View {
 
         imageGenViewModel.syncSweepTexts()
         selectedSidebarItem = .generateImage
-    }
-
-    private func sendToWorkflow() {
-        guard let selected = viewModel.selectedImage,
-              let meta = selected.metadata else { return }
-
-        var config = DrawThingsConfig()
-        config.width = meta.width
-        config.height = meta.height
-        config.steps = meta.steps
-        if let g = meta.guidanceScale { config.guidanceScale = Float(g) }
-        config.seed = meta.seed
-        config.model = meta.model
-        config.samplerName = meta.sampler
-        if let s = meta.strength { config.strength = Float(s) }
-        if let shift = meta.shift { config.shift = Float(shift) }
-        if meta.hasLoRAs {
-            config.loras = meta.loras.map { ["file": $0.file, "weight": Double($0.weight)] }
-        }
-        if let rm = meta.refinerModel, !rm.isEmpty {
-            config.refinerModel = rm
-            config.refinerStart = meta.refinerStart.map { Float($0) }
-        }
-
-        // Append to existing workflow rather than replacing it
-        let isAppending = !workflowViewModel.instructions.isEmpty
-        if workflowViewModel.workflowName == "Untitled Workflow" {
-            workflowViewModel.workflowName = selected.sourceName
-        }
-        if isAppending {
-            workflowViewModel.addInstruction(.note("--- From Image Inspector: \(selected.sourceName) ---"))
-        } else {
-            workflowViewModel.addInstruction(.note("Imported from Image Inspector: \(selected.sourceName)"))
-        }
-        workflowViewModel.addInstruction(.config(config))
-        if let prompt = meta.prompt, !prompt.isEmpty {
-            workflowViewModel.addInstruction(.prompt(prompt))
-        }
-        if let neg = meta.negativePrompt, !neg.isEmpty {
-            workflowViewModel.addInstruction(.negativePrompt(neg))
-        }
-
-        selectedSidebarItem = .workflow
     }
 
     private func openFilePanel() {

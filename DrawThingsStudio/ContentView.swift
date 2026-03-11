@@ -73,7 +73,7 @@ struct ContentView: View {
                     .allowsHitTesting(selectedItem == .workflow)
                     .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
-                ImageGenerationView(viewModel: imageGenViewModel)
+                ImageGenerationView(viewModel: imageGenViewModel, storyStudioViewModel: storyStudioViewModel, selectedSidebarItem: $selectedItem)
                     .opacity(selectedItem == .generateImage ? 1 : 0)
                     .scaleEffect(selectedItem == .generateImage ? 1 : 0.98)
                     .allowsHitTesting(selectedItem == .generateImage)

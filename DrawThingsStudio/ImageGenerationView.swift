@@ -11,6 +11,8 @@ import UniformTypeIdentifiers
 
 struct ImageGenerationView: View {
     @ObservedObject var viewModel: ImageGenerationViewModel
+    @ObservedObject var storyStudioViewModel: StoryStudioViewModel
+    @Binding var selectedSidebarItem: SidebarItem?
     // DrawThingsAssetManager.shared is a pre-existing singleton — use @ObservedObject,
     // not @StateObject, since this view does not own or create it.
     @ObservedObject private var assetManager = DrawThingsAssetManager.shared
@@ -28,6 +30,8 @@ struct ImageGenerationView: View {
     @State private var showDescribeSheet = false
     @State private var imageToDescribe: NSImage?
     @State private var lightboxImage: NSImage?
+    @State private var showSendToStoryStudio = false
+    @State private var imageForStoryStudio: GeneratedImage?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -54,6 +58,16 @@ struct ImageGenerationView: View {
         .padding(.trailing, 20)
         .neuBackground()
         .lightbox(image: $lightboxImage, browseList: viewModel.generatedImages.map(\.image))
+        .sheet(isPresented: $showSendToStoryStudio) {
+            if let gi = imageForStoryStudio {
+                SendToStoryStudioView(
+                    prompt: gi.prompt,
+                    negativePrompt: gi.negativePrompt,
+                    thumbnail: gi.image,
+                    onNavigate: { selectedSidebarItem = $0 }
+                )
+            }
+        }
         // Two .fileImporter modifiers cannot share the same view — SwiftUI only
         // honours the last one.  Attach each to its own Color.clear inside a
         // background Group so they live on distinct view nodes.
@@ -1341,6 +1355,12 @@ struct ImageGenerationView: View {
                         Button("Describe...") {
                             imageToDescribe = generatedImage.image
                             showDescribeSheet = true
+                        }
+                        .font(.caption)
+                        .buttonStyle(NeumorphicButtonStyle())
+                        Button("Add to Story Studio…") {
+                            imageForStoryStudio = generatedImage
+                            showSendToStoryStudio = true
                         }
                         .font(.caption)
                         .buttonStyle(NeumorphicButtonStyle())
