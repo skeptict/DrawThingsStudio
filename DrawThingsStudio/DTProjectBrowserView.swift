@@ -926,6 +926,7 @@ private struct DTClipDetailPanel: View {
     @State private var selectedFrameIndex = 0
     @State private var fps: Double = 8.0
     @State private var showDescribeSheet = false
+    @State private var showSendToStoryStudio = false
 
     var body: some View {
         ScrollView {
@@ -1123,6 +1124,25 @@ private struct DTClipDetailPanel: View {
             .buttonStyle(NeumorphicButtonStyle(isProminent: !clip.isVideo))
             .controlSize(.large)
 
+            Button { showSendToStoryStudio = true } label: {
+                HStack {
+                    Image(systemName: "theatermasks.fill")
+                    Text("Add to Story Studio…")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.large)
+            .sheet(isPresented: $showSendToStoryStudio) {
+                let frame = clip.frames[min(selectedFrameIndex, clip.frames.count - 1)]
+                SendToStoryStudioView(
+                    prompt: clip.prompt,
+                    negativePrompt: clip.negativePrompt,
+                    thumbnail: frame.thumbnail,
+                    onNavigate: { selectedSidebarItem = $0 }
+                )
+            }
+
             Button {
                 let frame = clip.frames[min(selectedFrameIndex, clip.frames.count - 1)]
                 viewModel.exportImage(frame)
@@ -1228,6 +1248,7 @@ private struct DTDetailPanel: View {
     var onShowClip: (() -> Void)? = nil
 
     @State private var showDescribeSheet = false
+    @State private var showSendToStoryStudio = false
 
     var body: some View {
         ScrollView {
@@ -1369,6 +1390,25 @@ private struct DTDetailPanel: View {
             }
             .buttonStyle(NeumorphicButtonStyle(isProminent: true))
             .controlSize(.large)
+
+            Button { showSendToStoryStudio = true } label: {
+                HStack {
+                    Image(systemName: "theatermasks.fill")
+                    Text("Add to Story Studio…")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(NeumorphicButtonStyle())
+            .controlSize(.large)
+            .disabled(entry.prompt.isEmpty && entry.thumbnail == nil)
+            .sheet(isPresented: $showSendToStoryStudio) {
+                SendToStoryStudioView(
+                    prompt: entry.prompt,
+                    negativePrompt: entry.negativePrompt,
+                    thumbnail: entry.thumbnail,
+                    onNavigate: { selectedSidebarItem = $0 }
+                )
+            }
 
             if let onExport {
                 Button(action: onExport) {
