@@ -110,9 +110,12 @@ extension View {
                     onNext:     hasNext ? { image.wrappedValue = browseList[idx + 1] } : nil
                 )
                 .transition(.opacity)
-                .animation(.easeInOut(duration: 0.15), value: image.wrappedValue != nil)
                 .zIndex(999)
             }
         }
+        // Drive the appear/disappear transition from the ZStack level so that
+        // both insertion and removal animate correctly. A modifier on the child
+        // alone only animates internal state changes, not the branch removal.
+        .animation(.easeInOut(duration: 0.15), value: image.wrappedValue != nil)
     }
 }

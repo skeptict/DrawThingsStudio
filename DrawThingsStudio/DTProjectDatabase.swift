@@ -490,7 +490,10 @@ final class DTProjectDatabase: @unchecked Sendable {
         let seedModeByte = foff(FBReader.VT_SEED_MODE).map { fb.readUInt8(at: tablePos + $0) } ?? 0
         let previewId = foff(FBReader.VT_PREVIEW_ID).map { fb.readInt64(at: tablePos + $0) } ?? 0
         let tensorId  = foff(FBReader.VT_TENSOR_ID).map  { fb.readInt64(at: tablePos + $0) } ?? 0
-        let scaleFactorBy120 = foff(FBReader.VT_SCALE_FACTOR_BY_120).map { Int(fb.readInt32(at: tablePos + $0)) } ?? 120
+        // A stored value of 0 is not a valid scale factor (wire default for int fields).
+        // Treat 0 the same as absent: fall back to 120 (= 1.0×, no upscale).
+        let rawScaleBy120 = foff(FBReader.VT_SCALE_FACTOR_BY_120).map { Int(fb.readInt32(at: tablePos + $0)) } ?? 120
+        let scaleFactorBy120 = rawScaleBy120 > 0 ? rawScaleBy120 : 120
         let shift = foff(FBReader.VT_SHIFT).map { fb.readFloat(at: tablePos + $0) } ?? 1.0
 
         let model = foff(FBReader.VT_MODEL).flatMap { fb.readString(tablePos: tablePos, fieldRelOffset: $0) } ?? ""
