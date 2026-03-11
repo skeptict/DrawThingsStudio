@@ -74,7 +74,12 @@ struct DTProjectBrowserView: View {
             selectedEntryIDs.removeAll()
             selectedClipIDs.removeAll()
         }
-        .lightbox(image: $lightboxImage)
+        .lightbox(
+            image: $lightboxImage,
+            browseList: viewModel.showAsClips
+                ? viewModel.filteredClips.compactMap { $0.frames.first?.thumbnail }
+                : viewModel.filteredEntries.compactMap(\.thumbnail)
+        )
     }
 
     private var bulkDeleteTitle: String {

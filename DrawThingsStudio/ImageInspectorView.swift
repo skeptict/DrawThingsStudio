@@ -31,7 +31,7 @@ struct ImageInspectorView: View {
         }
         .padding(20)
         .neuBackground()
-        .lightbox(image: $lightboxImage)
+        .lightbox(image: $lightboxImage, browseList: viewModel.history.map(\.image))
     }
 
     // MARK: - History Panel

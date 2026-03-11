@@ -53,7 +53,7 @@ struct ImageGenerationView: View {
         .padding(.leading, 20)
         .padding(.trailing, 20)
         .neuBackground()
-        .lightbox(image: $lightboxImage)
+        .lightbox(image: $lightboxImage, browseList: viewModel.generatedImages.map(\.image))
         // Two .fileImporter modifiers cannot share the same view — SwiftUI only
         // honours the last one.  Attach each to its own Color.clear inside a
         // background Group so they live on distinct view nodes.
