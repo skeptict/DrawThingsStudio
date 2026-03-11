@@ -456,13 +456,15 @@ final class DTProjectBrowserViewModel: ObservableObject {
                 } else {
                     image = fallback
                 }
-                guard let img = image,
-                      let tiffData = img.tiffRepresentation,
-                      let bitmapRep = NSBitmapImageRep(data: tiffData) else { return }
+                guard let img = image else { return }
+                // Prefer the bitmap rep directly (avoids tiffRepresentation re-rendering)
+                let bitmapRep = img.representations.first as? NSBitmapImageRep
+                              ?? NSBitmapImageRep(data: img.tiffRepresentation ?? Data())
+                guard let rep = bitmapRep else { return }
                 if url.pathExtension.lowercased() == "jpg" || url.pathExtension.lowercased() == "jpeg",
-                   let data = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: NSNumber(value: 0.95)]) {
+                   let data = rep.representation(using: .jpeg, properties: [.compressionFactor: NSNumber(value: 0.95)]) {
                     try? data.write(to: url)
-                } else if let data = bitmapRep.representation(using: .png, properties: [:]) {
+                } else if let data = rep.representation(using: .png, properties: [:]) {
                     try? data.write(to: url)
                 }
             }
@@ -492,9 +494,10 @@ final class DTProjectBrowserViewModel: ObservableObject {
                     let image   = fullRes
                               ?? db?.fetchFullSizeThumbnail(previewId: entry.previewId)
                               ?? entry.thumbnail
-                    guard let img = image,
-                          let tiffData = img.tiffRepresentation,
-                          let bitmapRep = NSBitmapImageRep(data: tiffData) else { continue }
+                    guard let img = image else { continue }
+                    let bitmapRep = img.representations.first as? NSBitmapImageRep
+                                 ?? NSBitmapImageRep(data: img.tiffRepresentation ?? Data())
+                    guard let bitmapRep else { continue }
                     let name: String
                     let data: Data?
                     if fullRes != nil, let pngData = bitmapRep.representation(using: .png, properties: [:]) {
