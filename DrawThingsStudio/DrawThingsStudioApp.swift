@@ -26,17 +26,24 @@ extension FocusedValues {
 @main
 struct DrawThingsStudioApp: App {
     var sharedModelContainer: ModelContainer = {
-        // Increment when the SwiftData schema changes incompatibly.
-        // On macOS 14 (SwiftData 1.0), automatic lightweight migration can
-        // leave stale SQLite constraints (e.g. UNIQUE indexes from a removed
-        // @Attribute(.unique)) that cause EXC_BAD_INSTRUCTION on insert.
-        // Wiping the store on version bump is safe for a beta app and prevents
-        // the crash for any user who had an older build installed.
+        // Schema versioning strategy:
         //
-        // v3: switched to an explicit store URL so the migration path is
-        // predictable and we don't accidentally delete the wrong file.
-        // v4: added SceneVariant.isApproved; approval is now per-variant.
+        // currentSchemaVersion — bumped on every schema change (additive or destructive).
+        //   Used to detect first-launch with a new version.
+        //
+        // lastDestructiveVersion — bumped ONLY when the change requires wiping the store
+        //   (e.g. removing a column, changing a type, adding @Attribute(.unique)).
+        //   Additive changes (new fields with defaults) do NOT need a wipe; SwiftData
+        //   handles them automatically via CoreData lightweight migration.
+        //   On macOS 14 (SwiftData 1.0), the wipe guards against stale SQLite UNIQUE
+        //   index constraints left by removed @Attribute(.unique) attributes.
+        //
+        // History:
+        //   v1–v2: various early schema changes
+        //   v3: switched to explicit store URL
+        //   v4: added SceneVariant.isApproved (additive — no wipe needed)
         let currentSchemaVersion = 4
+        let lastDestructiveVersion = 3  // last version that required a store wipe
         let schemaVersionKey = "dts.schemaVersion"
 
         let schema = Schema([
@@ -60,10 +67,11 @@ struct DrawThingsStudioApp: App {
         let modelConfiguration = ModelConfiguration(
             "DrawThingsStudio", schema: schema, isStoredInMemoryOnly: false)
 
-        if UserDefaults.standard.integer(forKey: schemaVersionKey) < currentSchemaVersion {
-            // Delete the persistent store + WAL companions at the named URL
-            // and also probe the legacy unnamed location ("default.store") that
-            // earlier builds may have used, so SwiftData opens a clean database.
+        let storedVersion = UserDefaults.standard.integer(forKey: schemaVersionKey)
+        if storedVersion < lastDestructiveVersion {
+            // Wipe only for destructive schema changes — removes stale constraints
+            // and incompatible table structures. Additive changes (new columns with
+            // defaults) are left to SwiftData's automatic lightweight migration.
             let storeURL = modelConfiguration.url
             let appSupport = storeURL.deletingLastPathComponent()
             let fm = FileManager.default
@@ -76,6 +84,8 @@ struct DrawThingsStudioApp: App {
                     try? fm.removeItem(at: URL(fileURLWithPath: base.path + suffix))
                 }
             }
+        }
+        if storedVersion < currentSchemaVersion {
             UserDefaults.standard.set(currentSchemaVersion, forKey: schemaVersionKey)
         }
 
