@@ -345,9 +345,11 @@ struct SettingsView: View {
     @ObservedObject var styleManager = PromptStyleManager.shared
     @State private var testingConnection = false
     @State private var connectionResult: String?
+    @State private var connectionTask: Task<Void, Never>?
     @State private var showAPIKey = false
     @State private var testingDTConnection = false
     @State private var dtConnectionResult: String?
+    @State private var dtConnectionTask: Task<Void, Never>?
     @State private var showSharedSecret = false
     @State private var showStyleEditor = false
     @State private var showAgentEditor = false
@@ -375,6 +377,8 @@ struct SettingsView: View {
 
                         if testingConnection {
                             ProgressView().scaleEffect(0.7)
+                            Button("Cancel") { cancelConnection() }
+                                .buttonStyle(NeumorphicButtonStyle())
                         }
                         if let result = connectionResult {
                             Text(result)
@@ -478,6 +482,8 @@ struct SettingsView: View {
 
                         if testingDTConnection {
                             ProgressView().scaleEffect(0.7)
+                            Button("Cancel") { cancelDTConnection() }
+                                .buttonStyle(NeumorphicButtonStyle())
                         }
                         if let result = dtConnectionResult {
                             Text(result)
@@ -620,29 +626,47 @@ struct SettingsView: View {
     }
 
     private func testConnection() {
+        connectionTask?.cancel()
         testingConnection = true
         connectionResult = nil
 
-        Task { @MainActor in
+        connectionTask = Task { @MainActor in
             let client = settings.createLLMClient()
             let success = await client.checkConnection()
+            guard !Task.isCancelled else { return }
             let providerName = settings.providerType.displayName
             testingConnection = false
             connectionResult = success ? "Success! Connected to \(providerName)" : "Failed to connect"
         }
     }
 
+    private func cancelConnection() {
+        connectionTask?.cancel()
+        connectionTask = nil
+        testingConnection = false
+        connectionResult = nil
+    }
+
     private func testDTConnection() {
         settings.addDrawThingsHostToHistory()
+        dtConnectionTask?.cancel()
         testingDTConnection = true
         dtConnectionResult = nil
 
-        Task { @MainActor in
+        dtConnectionTask = Task { @MainActor in
             let client = settings.createDrawThingsClient()
             let success = await client.checkConnection()
+            guard !Task.isCancelled else { return }
             testingDTConnection = false
             dtConnectionResult = success ? "Success! Connected to Draw Things" : "Failed to connect"
         }
+    }
+
+    private func cancelDTConnection() {
+        dtConnectionTask?.cancel()
+        dtConnectionTask = nil
+        testingDTConnection = false
+        dtConnectionResult = nil
     }
 }
 
