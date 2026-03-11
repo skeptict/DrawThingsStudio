@@ -500,15 +500,18 @@ final class StoryStudioViewModel: ObservableObject {
         return nil
     }
 
-    func approveScene() {
+    func approveVariant(_ variant: SceneVariant) {
         guard let scene = selectedScene else { return }
+        for v in scene.variants { v.isApproved = false }
+        variant.isApproved = true
         scene.isApproved = true
         selectedProject?.modifiedAt = Date()
     }
 
-    func unapproveScene() {
+    func unapproveVariant(_ variant: SceneVariant) {
         guard let scene = selectedScene else { return }
-        scene.isApproved = false
+        variant.isApproved = false
+        scene.isApproved = scene.variants.contains(where: { $0.isApproved })
         selectedProject?.modifiedAt = Date()
     }
 

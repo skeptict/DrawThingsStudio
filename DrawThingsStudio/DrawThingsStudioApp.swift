@@ -35,7 +35,8 @@ struct DrawThingsStudioApp: App {
         //
         // v3: switched to an explicit store URL so the migration path is
         // predictable and we don't accidentally delete the wrong file.
-        let currentSchemaVersion = 3
+        // v4: added SceneVariant.isApproved; approval is now per-variant.
+        let currentSchemaVersion = 4
         let schemaVersionKey = "dts.schemaVersion"
 
         let schema = Schema([

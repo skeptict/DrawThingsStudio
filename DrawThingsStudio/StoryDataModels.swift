@@ -363,6 +363,11 @@ class StoryScene {
         variants.first(where: { $0.isSelected })
     }
 
+    /// The approved variant, if any
+    var approvedVariant: SceneVariant? {
+        variants.first(where: { $0.isApproved })
+    }
+
     /// Sorted variants by generation date
     var sortedVariants: [SceneVariant] {
         variants.sorted { $0.generatedAt < $1.generatedAt }
@@ -413,6 +418,7 @@ class SceneVariant {
     var seed: Int
     var generatedAt: Date
     var isSelected: Bool
+    var isApproved: Bool
     var rating: Int?
     var notes: String?
 
@@ -426,6 +432,7 @@ class SceneVariant {
         imageData: Data? = nil,
         imagePath: String? = nil,
         isSelected: Bool = false,
+        isApproved: Bool = false,
         rating: Int? = nil,
         notes: String? = nil
     ) {
@@ -437,6 +444,7 @@ class SceneVariant {
         self.imagePath = imagePath
         self.generatedAt = Date()
         self.isSelected = isSelected
+        self.isApproved = isApproved
         self.rating = rating
         self.notes = notes
     }

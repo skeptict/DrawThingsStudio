@@ -528,13 +528,36 @@ struct StoryStudioView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .neuCard(cornerRadius: 12)
 
-                if scene.isApproved {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Approved")
-                            .font(.caption)
-                            .foregroundColor(.green)
+                // Show the prompt the selected variant was generated with (#4)
+                if let variant = scene.selectedVariant, !variant.prompt.isEmpty {
+                    Text(variant.prompt)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.neuTextSecondary)
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(6)
+                        .neuInset(cornerRadius: 6)
+                }
+
+                // Per-variant approve button (#6)
+                if let variant = scene.selectedVariant {
+                    HStack(spacing: 6) {
+                        if variant.isApproved {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Approved")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                            Spacer()
+                            Button("Unapprove") { viewModel.unapproveVariant(variant) }
+                                .buttonStyle(NeumorphicButtonStyle())
+                        } else {
+                            Spacer()
+                            Button(action: { viewModel.approveVariant(variant) }) {
+                                Label("Approve", systemImage: "checkmark.circle")
+                            }
+                            .buttonStyle(NeumorphicButtonStyle())
+                        }
                     }
                 }
             } else {
@@ -571,22 +594,42 @@ struct StoryStudioView: View {
     }
 
     private func variantThumbnail(variant: SceneVariant) -> some View {
-        Group {
-            // Load from file path (preferred) or legacy imageData blob.
-            if let nsImage = viewModel.imageForVariant(variant) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(variant.isSelected ? Color.neuAccent : Color.clear, lineWidth: 2)
-                    )
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.neuBackground)
-                    .frame(width: 60, height: 60)
+        ZStack(alignment: .topTrailing) {
+            Group {
+                // Load from file path (preferred) or legacy imageData blob.
+                if let nsImage = viewModel.imageForVariant(variant) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 60, height: 60)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        // Tint selected thumbnail (#5)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(variant.isSelected ? Color.neuAccent.opacity(0.18) : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(variant.isSelected ? Color.neuAccent : Color.neuBackground.opacity(0.3), lineWidth: variant.isSelected ? 3 : 1)
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.neuBackground)
+                        .frame(width: 60, height: 60)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(variant.isSelected ? Color.neuAccent : Color.clear, lineWidth: 3)
+                        )
+                }
+            }
+
+            // Approved checkmark badge (#6)
+            if variant.isApproved {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.green)
+                    .background(Circle().fill(Color.neuBackground).padding(1))
+                    .offset(x: 4, y: -4)
             }
         }
         .onTapGesture {
@@ -594,6 +637,12 @@ struct StoryStudioView: View {
         }
         .contextMenu {
             Button("Select") { viewModel.selectVariant(variant) }
+            Divider()
+            if variant.isApproved {
+                Button("Unapprove") { viewModel.unapproveVariant(variant) }
+            } else {
+                Button("Approve") { viewModel.approveVariant(variant) }
+            }
             Divider()
             Button("Delete", role: .destructive) { viewModel.deleteVariant(variant) }
         }
@@ -639,24 +688,6 @@ struct StoryStudioView: View {
                     }
                     .buttonStyle(NeumorphicIconButtonStyle())
                     .help("Open Story Studio images folder")
-
-                    if viewModel.selectedScene?.generatedImageData != nil {
-                        if viewModel.selectedScene?.isApproved == true {
-                            Button(action: { viewModel.unapproveScene() }) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                            }
-                            .buttonStyle(NeumorphicIconButtonStyle())
-                            .help("Unapprove scene")
-                        } else {
-                            Button(action: { viewModel.approveScene() }) {
-                                Image(systemName: "checkmark.circle")
-                            }
-                            .buttonStyle(NeumorphicIconButtonStyle())
-                            .help("Approve scene")
-                            .accessibilityIdentifier("storyStudio_approve")
-                        }
-                    }
                 }
             }
 
