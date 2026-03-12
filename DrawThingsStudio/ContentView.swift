@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import OSLog
 
 struct ContentView: View {
     @State private var selectedItem: SidebarItem? = SidebarItem(rawValue: AppSettings.shared.defaultSidebarItem) ?? .imageInspector
@@ -1625,14 +1626,15 @@ private struct BackupCoordinator: View {
     @Query private var pipelines: [SavedPipeline]
     @Query private var storyProjects: [StoryProject]
     @Environment(\.modelContext) private var modelContext
+    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "backup")
 
     var body: some View {
         EmptyView()
             .task { await runBackupAndRestore() }
-            .onChange(of: presets.count) { _, _ in Task { await runBackup() } }
-            .onChange(of: workflows.count) { _, _ in Task { await runBackup() } }
-            .onChange(of: pipelines.count) { _, _ in Task { await runBackup() } }
-            .onChange(of: storyProjects.count) { _, _ in Task { await runBackup() } }
+            .onChange(of: presets.count) { _, _ in runBackup() }
+            .onChange(of: workflows.count) { _, _ in runBackup() }
+            .onChange(of: pipelines.count) { _, _ in runBackup() }
+            .onChange(of: storyProjects.count) { _, _ in runBackup() }
     }
 
     @MainActor
@@ -1649,16 +1651,20 @@ private struct BackupCoordinator: View {
                 )
                 let restoredStory = manager.restoreStoryProjects(into: modelContext, existingProjects: storyProjects)
                 if counts.presets + counts.workflows + counts.pipelines + restoredStory > 0 {
-                    try? modelContext.save()
+                    do {
+                        try modelContext.save()
+                    } catch {
+                        logger.error("Failed to save restored records: \(error.localizedDescription)")
+                    }
                 }
             }
             UserDefaults.standard.removeObject(forKey: "dts.needsBackupRestore")
         }
-        await runBackup()
+        runBackup()
     }
 
     @MainActor
-    private func runBackup() async {
+    private func runBackup() {
         let manager = SwiftDataBackupManager.shared
         manager.backup(presets: presets, workflows: workflows, pipelines: pipelines)
         manager.backupStoryProjects(storyProjects)

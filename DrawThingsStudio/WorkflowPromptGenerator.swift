@@ -43,7 +43,7 @@ import OSLog
     ) async throws -> [String] {
         await setGenerating(true, progress: "Generating \(sceneCount) scenes...")
 
-        defer { Task { await setGenerating(false) } }
+        defer { setGenerating(false) }
 
         let prompt = """
         \(systemPrompt)
@@ -82,7 +82,7 @@ import OSLog
     ) async throws -> [String] {
         await setGenerating(true, progress: "Generating \(variationCount) variations...")
 
-        defer { Task { await setGenerating(false) } }
+        defer { setGenerating(false) }
 
         let prompt = """
         \(systemPrompt)
@@ -143,7 +143,7 @@ import OSLog
     ) async throws -> String {
         await setGenerating(true, progress: "Creating character description...")
 
-        defer { Task { await setGenerating(false) } }
+        defer { setGenerating(false) }
 
         let prompt = """
         \(systemPrompt)
@@ -182,7 +182,7 @@ import OSLog
     ) async throws -> String {
         await setGenerating(true, progress: "Enhancing prompt...")
 
-        defer { Task { await setGenerating(false) } }
+        defer { setGenerating(false) }
 
         let prompt = """
         \(systemPrompt)
@@ -272,7 +272,7 @@ import OSLog
     ) async throws -> String {
         await setGenerating(true, progress: "Refining prompt...")
 
-        defer { Task { await setGenerating(false) } }
+        defer { setGenerating(false) }
 
         let prompt = """
         \(systemPrompt)
@@ -309,7 +309,7 @@ import OSLog
     ) async throws -> String {
         await setGenerating(true, progress: "Generating negative prompt...")
 
-        defer { Task { await setGenerating(false) } }
+        defer { setGenerating(false) }
 
         let prompt = """
         Based on this image generation prompt, create a concise negative prompt to avoid unwanted elements:
@@ -343,7 +343,7 @@ import OSLog
     ) async throws -> [[String: Any]] {
         await setGenerating(true, progress: "Generating story workflow...")
 
-        defer { Task { await setGenerating(false) } }
+        defer { setGenerating(false) }
 
         // Generate scene prompts
         await updateProgress("Generating scene prompts...")
@@ -380,7 +380,7 @@ import OSLog
     ) async throws -> [[String: Any]] {
         await setGenerating(true, progress: "Generating character workflow...")
 
-        defer { Task { await setGenerating(false) } }
+        defer { setGenerating(false) }
 
         // Generate character reference prompt
         await updateProgress("Creating character reference...")
@@ -427,7 +427,7 @@ import OSLog
     ) async throws -> [[String: Any]] {
         await setGenerating(true, progress: "Generating variation workflow...")
 
-        defer { Task { await setGenerating(false) } }
+        defer { setGenerating(false) }
 
         // Enhance the base concept
         await updateProgress("Enhancing base prompt...")

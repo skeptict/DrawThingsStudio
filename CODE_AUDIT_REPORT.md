@@ -1,361 +1,332 @@
 # DrawThingsStudio Code Audit Report
 
-**Last Run:** 2026-03-09T17:16:25Z
-**App Version:** 0.4.25
-**Scope:** Targeted — DescribeAgentsManager.swift, DescribeAgentEditorView.swift, ImageDescriptionView.swift, LLMProvider.swift (describeImage), OllamaClient.swift (describeImage), OpenAICompatibleClient.swift (describeImage), AppSettings.swift (describeImageSendTarget), ImageInspectorView.swift (Describe button), ImageGenerationView.swift (Describe button), DTProjectBrowserView.swift (Describe buttons)
+**Last Run:** 2026-03-12T00:00:00Z
+**App Version:** 0.6.1
+**Scope:** Targeted audit — ImageLightboxView, SwiftDataBackupManager, ImageGenerationView, ContentView (BackupCoordinator), plus broad scan of all 58 Swift files for crash risks, memory leaks, SwiftData misuse, concurrency issues, silent failures, and UI gaps
 **Auditor:** Claude code-quality-auditor agent
 
 ---
 
 ## Summary
-- Critical Security Issues: 0
-- High Priority: 2
-- Medium Priority: 4
-- Low Priority / Style: 3
+- 🔴 Critical Security Issues: 0
+- 🟠 High Priority: 4
+- 🟡 Medium Priority: 5
+- 🟢 Low Priority / Style: 3
 
 ---
 
 ## Findings
 
-### [HIGH-1] Sheet attaches to `galleryPanel` computed var, image captured lazily — `ImageGenerationView.swift` (~line 1167)
+### [HIGH-1] NSEvent monitor in struct — may leak if view is removed during animation — `ImageLightboxView.swift:21`
 
-**Category:** Best Practice / SwiftUI
+**Category:** Memory / Best Practice
 **Severity:** High
 
 **Explanation:**
-`showDescribeSheet` is declared on `ImageGenerationView` (line 28), and the `.sheet(isPresented: $showDescribeSheet)` modifier is attached to the `galleryPanel` computed property. Inside the sheet closure, it reads `viewModel.selectedImage?.image` at the time the sheet actually opens — not at the moment the "Describe..." button was tapped. The button lives inside `imageDetailView(_ generatedImage:)`, which receives a specific `generatedImage` value, but the sheet ignores that parameter and re-reads from `viewModel.selectedImage`.
+`LightboxOverlay` is a `struct` (SwiftUI `View`). `@State private var eventMonitor: Any?` stores the monitor handle. SwiftUI can deallocate the struct without calling `onDisappear` if a parent view removes the branch before the disappear lifecycle fires (e.g., the binding is set to `nil` while a dismiss animation is mid-flight, or the app is backgrounded during dismissal). When that happens `NSEvent.removeMonitor(_:)` is never called and the monitor remains active indefinitely, receiving every key-down event in the app.
 
-If `viewModel.selectedImage` is nil or changes between the button tap and the sheet's SwiftUI layout pass (e.g., user clicks a different thumbnail during an animation frame), the `if let image` guard fails and the sheet presents as a blank panel with no error. This is a silent failure mode.
+Under normal usage the `.transition(.opacity)` + `.animation` at the `ZStack` level ensures `onDisappear` fires before the view is released, so the risk is low in practice. But the pattern is fragile: it relies on SwiftUI's animation lifecycle rather than a guaranteed ownership model.
 
-The `DTDetailPanel` and `DTClipDetailPanel` private structs both own their own `showDescribeSheet` state and correctly capture their `entry`/`clip` values at struct-init time, so those are fine. The Inspector's sheet is also fine because `viewModel.selectedImage` is only changed synchronously by user action in the history list. The `galleryPanel` case is the problematic one.
-
-**Current Code:**
+**Current Code (`ImageLightboxView.swift:66-81`):**
 ```swift
-// galleryPanel:
-.sheet(isPresented: $showDescribeSheet) {
-    if let image = viewModel.selectedImage?.image {  // read at sheet-open time
-        ImageDescriptionView(
-            image: image,
-            onSendToGeneratePrompt: { text in viewModel.prompt = text },
-            onSendToWorkflowPrompt: nil
-        )
-    }
-    // if selectedImage changed, this branch is empty — sheet shows blank
+.onAppear {
+    eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in ... }
 }
-
-// Deep inside imageDetailView(_ generatedImage: GeneratedImage):
-Button("Describe...") { showDescribeSheet = true }
-// generatedImage.image is available here but not captured
+.onDisappear {
+    if let monitor = eventMonitor {
+        NSEvent.removeMonitor(monitor)
+        eventMonitor = nil
+    }
+}
 ```
 
 **Improved Code:**
 ```swift
-// Add alongside showDescribeSheet:
-@State private var imageToDescribe: NSImage? = nil
-
-// Inside imageDetailView(_ generatedImage: GeneratedImage):
-Button("Describe...") {
-    imageToDescribe = generatedImage.image  // capture now
-    showDescribeSheet = true
-}
-
-// Sheet (at galleryPanel root or body):
-.sheet(isPresented: $showDescribeSheet) {
-    if let image = imageToDescribe {
-        ImageDescriptionView(
-            image: image,
-            onSendToGeneratePrompt: { text in viewModel.prompt = text },
-            onSendToWorkflowPrompt: nil
-        )
+// Tie the monitor lifetime to a class whose deinit always runs
+private final class KeyEventMonitor {
+    var monitor: Any?
+    deinit {
+        if let m = monitor { NSEvent.removeMonitor(m) }
     }
 }
+@StateObject private var keyEventMonitor = KeyEventMonitor()
+
+.onAppear {
+    keyEventMonitor.monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        // ...same switch...
+    }
+}
+// No onDisappear needed — deinit handles cleanup
 ```
 
 ---
 
-### [HIGH-2] Ollama `describeImage` sends no `options` — unbounded token output for vision requests — `OllamaClient.swift:223-232`
+### [HIGH-2] `sheet(isPresented:)` with separate nullable state — blank sheet possible if state is cleared before render — `ImageGenerationView.swift:1204`
 
-**Category:** API Correctness / Reliability
+**Category:** Best Practice / Bug
 **Severity:** High
 
 **Explanation:**
-The `describeImage` body omits the `options` dict that all other `OllamaClient` requests include (temperature, top_p, num_predict). Without `num_predict`, Ollama uses its server-level default, which is typically unlimited or very large. For vision models describing complex images, this can produce extremely verbose output and cause the 120-second `timeoutIntervalForRequest` to be hit, surfacing as a generic connection error to the user.
+`showDescribeSheet` (Bool) and `imageToDescribe` (NSImage?) are set together at line 1356-1357. The sheet body re-reads `imageToDescribe` lazily on the next render pass. If SwiftUI batches the state writes and `imageToDescribe` is nil at sheet presentation time (e.g., cleared by a concurrent `generatedImages` array mutation, or in a future refactor), the guard `if let image = imageToDescribe` fails silently and the sheet appears blank.
 
-The `generateText` path sets `num_predict: options.maxTokens` (typically 500). Vision description outputs are usually shorter than full text generation, so 800 tokens is a reasonable cap that prevents runaway responses while not truncating useful descriptions.
-
-**Current Code:**
-```swift
-let body: [String: Any] = [
-    "model": model,
-    "messages": [
-        ["role": "system", "content": systemPrompt],
-        ["role": "user", "content": userMessage, "images": [base64Image]]
-    ],
-    "stream": false
-    // no options — server default max tokens applies (often unbounded)
-]
-```
-
-**Improved Code:**
-```swift
-let body: [String: Any] = [
-    "model": model,
-    "messages": [
-        ["role": "system", "content": systemPrompt],
-        ["role": "user", "content": userMessage, "images": [base64Image]]
-    ],
-    "stream": false,
-    "options": [
-        "num_predict": 800
-    ]
-]
-```
-
----
-
-### [MEDIUM-1] `DescribeAgentsManager.saveAgents()` filter never persists icon changes to built-ins — `DescribeAgentsManager.swift:172-182`
-
-**Category:** Logic Error
-**Severity:** Medium
-
-**Explanation:**
-The `saveAgents()` filter compares five fields to detect whether a modified built-in differs from its default and should be saved: `systemPrompt`, `name`, `userMessage`, `preferredVisionModel`, `targetModel`. The `icon` field is absent from the comparison. If a user changes only the icon of a built-in agent (e.g., from "eye" to "camera") and saves, the filter considers it unchanged and excludes it from the JSON file. On next launch, `loadAgentsSync` finds no persisted override and restores the default icon, silently discarding the user's change.
-
-The same comparison is used in `isBuiltInModified(id:)` — fixing both in concert will make the "Reset to Default" button visibility and the save filter consistent.
+This is the same anti-pattern fixed for `imageForStoryStudio` on line 60, which correctly uses `sheet(item:)`.
 
 **Current Code:**
 ```swift
-// saveAgents:
-return agent.systemPrompt != builtIn.systemPrompt
-    || agent.name != builtIn.name
-    || agent.userMessage != builtIn.userMessage
-    || agent.preferredVisionModel != builtIn.preferredVisionModel
-    || agent.targetModel != builtIn.targetModel
-    // agent.icon missing
+// Line 1356:
+imageToDescribe = generatedImage.image
+showDescribeSheet = true
 
-// isBuiltInModified:
-return current.systemPrompt != d.systemPrompt
-    || current.name != d.name
-    || current.userMessage != d.userMessage
-    || current.preferredVisionModel != d.preferredVisionModel
-    // current.icon missing
-```
-
-**Improved Code:**
-```swift
-// saveAgents — add icon:
-return agent.systemPrompt != builtIn.systemPrompt
-    || agent.name != builtIn.name
-    || agent.userMessage != builtIn.userMessage
-    || agent.preferredVisionModel != builtIn.preferredVisionModel
-    || agent.targetModel != builtIn.targetModel
-    || agent.icon != builtIn.icon
-
-// isBuiltInModified — add icon:
-return current.systemPrompt != d.systemPrompt
-    || current.name != d.name
-    || current.userMessage != d.userMessage
-    || current.preferredVisionModel != d.preferredVisionModel
-    || current.targetModel != d.targetModel
-    || current.icon != d.icon
-```
-
----
-
-### [MEDIUM-2] `DescribeAgentEditorView.agentRow` "modified" badge shows for unmodified built-ins after reset — `DescribeAgentEditorView.swift:119-131`
-
-**Category:** Logic Error / UI
-**Severity:** Medium
-
-**Explanation:**
-The badge logic checks `agent.isBuiltIn` first. After a user edits a built-in, `updateCurrentAgent` sets `agent.isBuiltIn = false`. After the user clicks "Reset to Default", `resetBuiltInAgent` restores the original content but leaves `isBuiltIn` as `false` (it assigns the default agent directly from `BuiltInDescribeAgent.agent`, whose `isBuiltIn` is `true` — so actually the reset does restore `isBuiltIn = true`). Let me state this precisely:
-
-`BuiltInDescribeAgent.agent` returns agents with `isBuiltIn: true`. So `resetBuiltInAgent` writes back an agent with `isBuiltIn = true`, and the badge would correctly show "built-in" again after a reset. The badge logic is therefore correct in the reset path.
-
-However, the edge case is: a custom agent whose `id` happens to collide with a built-in raw value string (e.g., a user somehow creates one named "general"). `BuiltInDescribeAgent(rawValue: agent.id) != nil` would return `true`, so it shows "modified" even though it's a fully custom agent. In practice this can only happen if a user manually edits the JSON file with a colliding ID — low probability but the logic is fragile.
-
-The real improvement is: the "modified" label should call `agentsManager.isBuiltInModified(id:)` instead of relying solely on `agent.isBuiltIn`.
-
-**Current Code:**
-```swift
-if agent.isBuiltIn {
-    Text("built-in")
-} else if BuiltInDescribeAgent(rawValue: agent.id) != nil {
-    Text("modified")  // shows for any agent whose id matches a built-in raw value
-} else {
-    Text("custom")
-}
-```
-
-**Improved Code:**
-```swift
-if agent.isBuiltIn {
-    Text("built-in")
-} else if BuiltInDescribeAgent(rawValue: agent.id) != nil {
-    // Has a built-in ID but isBuiltIn==false; check if content actually differs
-    Text(agentsManager.isBuiltInModified(id: agent.id) ? "modified" : "built-in")
-} else {
-    Text("custom")
-}
-```
-
----
-
-### [MEDIUM-3] `OpenAICompatibleClient.OpenAIMessage.content` is non-optional — decoding throws on null content — `OpenAICompatibleClient.swift:422-425`
-
-**Category:** JSON Decoding / Robustness
-**Severity:** Medium
-
-**Explanation:**
-`OpenAIMessage` declares `content: String` as non-optional. The OpenAI chat completions spec allows `content` to be `null` when the assistant turn is a tool-call response. Some local servers (LM Studio, Jan) return HTTP 200 with `content: null` for refusals or multi-modal routing failures. When this happens, `JSONDecoder` throws at decode time, which is caught and surfaces as a generic `LLMError.invalidResponse`. That's not a crash, but the user message is unhelpful — they see "Invalid response from LLM" with no indication of why.
-
-Since `describeImage` already has `guard let content = result.choices.first?.message.content else { throw LLMError.invalidResponse }`, making `content` optional costs nothing at the call sites and makes the decoding more spec-compliant.
-
-**Current Code:**
-```swift
-private struct OpenAIMessage: Codable {
-    let role: String
-    let content: String   // throws decode error if JSON value is null
-}
-```
-
-**Improved Code:**
-```swift
-private struct OpenAIMessage: Codable {
-    let role: String
-    let content: String?  // null-safe; callers already guard against nil
-}
-```
-
----
-
-### [MEDIUM-4] `ImageDescriptionView.describe()` creates a new URLSession per tap — `ImageDescriptionView.swift:243`
-
-**Category:** Performance
-**Severity:** Medium
-
-**Explanation:**
-`AppSettings.shared.createLLMClient()` allocates a brand-new `OllamaClient` or `OpenAICompatibleClient`, each of which creates a new `URLSession` with its own TCP connection pool. This is the same pattern used by `WorkflowBuilderViewModel.enhancePrompt()` and is intentional there (one-shot text calls). For vision requests — which involve encoding a full JPEG image (typically 200-800 KB base64) — reusing a session is more beneficial because TLS + TCP connection establishment adds visible latency on first call.
-
-Vision calls can take 5-30 seconds on consumer hardware. If the user clicks "Describe Image" twice quickly (e.g., to retry after a timeout), the first task's URLSession is already gone, and the second starts a fresh connection. Since `isDescribing` prevents double-tap, the practical impact is limited to the connection setup overhead on each individual call.
-
-A low-friction fix is to cache the client for the lifetime of the sheet:
-
-**Current Code:**
-```swift
-private func describe() {
-    // ...
-    let client = AppSettings.shared.createLLMClient()  // new URLSession each call
-    // ...
-}
-```
-
-**Improved Code:**
-```swift
-// As @State in ImageDescriptionView — persists for the sheet's lifetime:
-@State private var llmClient: (any LLMProvider)?
-
-private func describe() {
-    guard let agent = agentsManager.agent(for: selectedAgentID) else { return }
-    guard let imageData = image.jpegData(compressionQuality: 0.85) else {
-        errorMessage = "Failed to encode image."
-        return
+// Line 1204:
+.sheet(isPresented: $showDescribeSheet) {
+    if let image = imageToDescribe {  // re-reads imageToDescribe at present time
+        ImageDescriptionView(image: image, ...)
     }
-
-    // Reuse client if settings haven't changed; recreate only on first use
-    let client = llmClient ?? AppSettings.shared.createLLMClient()
-    llmClient = client
-    // ... rest unchanged
-}
-```
-
----
-
-### [LOW-1] `DescribeAgentsManager.saveAgents()` silently discards write errors — `DescribeAgentsManager.swift:189-191`
-
-**Category:** Error Handling
-**Severity:** Low
-
-**Explanation:**
-Both `try? encoder.encode(toSave)` and `try? data.write(to: agentsFilePath)` silently discard failures. The analogous `PromptStyleManager.saveStyles()` uses `do/catch` with `logger.error(...)`. Apply the same pattern here.
-
-**Current Code:**
-```swift
-if let data = try? encoder.encode(toSave) {
-    try? data.write(to: agentsFilePath)
+    // Blank if imageToDescribe is nil at this point
 }
 ```
 
 **Improved Code:**
 ```swift
-// Add to DescribeAgentsManager:
-private let logger = Logger(subsystem: "com.drawthingsstudio", category: "describe-agents")
+// Define a lightweight Identifiable wrapper (or just use sheet(item:) with Optional<NSImage> via a protocol)
+struct IdentifiableImage: Identifiable {
+    let id = UUID()
+    let image: NSImage
+}
 
-// In saveAgents():
+@State private var imageToDescribe: IdentifiableImage?
+
+// Button tap:
+imageToDescribe = IdentifiableImage(image: generatedImage.image)
+
+// Sheet:
+.sheet(item: $imageToDescribe) { item in
+    ImageDescriptionView(image: item.image, ...)
+}
+```
+
+---
+
+### [HIGH-3] Backup only triggers on collection `.count` changes — edits to existing records are never backed up — `ContentView.swift:1632`
+
+**Category:** Best Practice / Data Integrity
+**Severity:** High
+
+**Explanation:**
+`BackupCoordinator` observes only the *count* of each `@Query` array. Any mutation to an existing record — renaming a workflow, updating a story scene's prompt, changing a character's description — does not change the count and therefore does not trigger a backup. After a schema wipe the user would lose all edits made since the last add/delete operation.
+
+Since the backup exists specifically to guard against schema wipe data loss, this is a significant gap in its protection.
+
+**Current Code:**
+```swift
+.onChange(of: presets.count) { _, _ in Task { await runBackup() } }
+.onChange(of: workflows.count) { _, _ in Task { await runBackup() } }
+.onChange(of: pipelines.count) { _, _ in Task { await runBackup() } }
+.onChange(of: storyProjects.count) { _, _ in Task { await runBackup() } }
+```
+
+**Improved Code:**
+```swift
+// Observe a property that changes on every write, e.g. the latest modifiedAt timestamp.
+// Add this computed property to BackupCoordinator:
+private var latestWorkflowModification: Date {
+    workflows.compactMap(\.modifiedAt).max() ?? .distantPast
+}
+private var latestProjectModification: Date {
+    storyProjects.map(\.modifiedAt).max() ?? .distantPast
+}
+
+// Replace count-only onChange with:
+.onChange(of: workflows.count) { _, _ in Task { await runBackup() } }
+.onChange(of: latestWorkflowModification) { _, _ in Task { await runBackup() } }
+.onChange(of: storyProjects.count) { _, _ in Task { await runBackup() } }
+.onChange(of: latestProjectModification) { _, _ in Task { await runBackup() } }
+// etc.
+```
+
+---
+
+### [HIGH-4] `WorkflowPromptGenerator` mutates `@Published` properties off `@MainActor` — potential data race — `WorkflowPromptGenerator.swift:13`
+
+**Category:** Concurrency
+**Severity:** High
+
+**Explanation:**
+`WorkflowPromptGenerator` is a plain `class` (no `@MainActor` annotation). Its `@Published` properties (`isGenerating`, `currentProgress`, `lastError`) must be mutated on the main actor for SwiftUI observation to be safe. The class routes mutations through `@MainActor` helper methods (`setGenerating`, `updateProgress`), but:
+
+1. Swift 6 strict concurrency will warn: accessing `@Published` on a non-isolated class from an async context is a potential data race.
+2. `defer { Task { await setGenerating(false) } }` spawns an unstructured `Task` inside `defer`. The new Task inherits the current task's cancellation status. If the parent task is cancelled, the defer-spawned Task may also be immediately cancelled before `setGenerating(false)` executes, leaving `isGenerating = true` stuck permanently.
+3. The class is not `final`, allowing subclasses to inherit a broken concurrency model.
+
+Adding `@MainActor final` to the class declaration resolves all three issues and allows `defer` to call `setGenerating(false)` directly.
+
+**Current Code:**
+```swift
+class WorkflowPromptGenerator: ObservableObject {
+    @Published var isGenerating: Bool = false
+    ...
+    defer { Task { await setGenerating(false) } }  // can be skipped if Task is cancelled
+```
+
+**Improved Code:**
+```swift
+@MainActor
+final class WorkflowPromptGenerator: ObservableObject {
+    @Published var isGenerating: Bool = false
+    ...
+    defer { setGenerating(false) }  // direct call, always runs
+```
+
+---
+
+### [MEDIUM-1] Backup encode/write errors are silently swallowed — no log on disk write failure — `SwiftDataBackupManager.swift:102`
+
+**Category:** Silent Failure
+**Severity:** Medium
+
+**Explanation:**
+The backup write path uses nested `try?` without any error logging. The success log message at line 121 fires regardless of whether any writes succeeded. A disk-full condition, revoked sandbox entitlement, or unexpected path failure would leave the backup files stale with no indication in logs.
+
+**Current Code:**
+```swift
+if let data = try? encoder.encode(backupWorkflows) {
+    try? data.write(to: workflowsURL)   // failure is silent
+}
+logger.info("Backup written: ...")      // fires even if write failed
+```
+
+**Improved Code:**
+```swift
 do {
-    let data = try encoder.encode(toSave)
-    try data.write(to: agentsFilePath)
+    let data = try encoder.encode(backupWorkflows)
+    try data.write(to: workflowsURL)
+    logger.info("Workflows backup written: \(backupWorkflows.count) items")
 } catch {
-    logger.error("Failed to save describe agents: \(error.localizedDescription)")
+    logger.error("Failed to write workflows backup: \(error.localizedDescription)")
 }
 ```
 
 ---
 
-### [LOW-2] `describeImageSendTarget` compared and stored as raw strings — `ImageDescriptionView.swift:157-159`, `AppSettings.swift:137-138`
+### [MEDIUM-2] Backup serializes all image blobs as base64 JSON — backup file will be very large for Story Studio users — `SwiftDataBackupManager.swift:253,345,384,474,538`
 
-**Category:** Readability / Maintainability
-**Severity:** Low
+**Category:** Performance / Data Integrity
+**Severity:** Medium
 
 **Explanation:**
-The strings `"generateImage"` and `"workflowBuilder"` appear as Picker tags in `ImageDescriptionView`, as Picker tags in `SettingsView`, as a comparison in `sendToTarget()`, and as a reset default in `AppSettings.resetToDefaults()`. A typo anywhere silently breaks routing. An enum with `rawValue` would eliminate this and match the project's `LLMProviderType`/`DrawThingsTransport` pattern.
+The Story Studio backup embeds raw image `Data` (base64-encoded in JSON) for:
+- `StoryProjectBackup.coverImageData`
+- `StoryCharacterBackup.primaryReferenceImageData`
+- `CharacterAppearanceBackup.referenceImageData`
+- `StorySettingBackup.referenceImageData`
+- `StorySceneBackup.generatedImageData`
+- `SceneVariantBackup.imageData`
+
+A moderate project (20 scenes, 5 characters, 3 settings) with 0.5–1 MB reference images could produce a 20–50 MB JSON file. This is encoded and decoded synchronously on the `@MainActor`, blocking the main thread during restore. It also means the cycle-6 fix (setting `SceneVariant.imageData = nil` at generation time) is partially undone on restore if the old blob was present in SwiftData when the backup was written.
+
+Since the backup's purpose is metadata recovery after a schema wipe, image blobs should be excluded. Character/setting reference images are imported from disk and can be re-imported. Generated scene images are stored at `imagePath` and will be found again on next load.
+
+---
+
+### [MEDIUM-3] Same `sheet(isPresented:) { if let ... }` anti-pattern in DTProjectBrowserView — `DTProjectBrowserView.swift:1170,1436`
+
+**Category:** Best Practice
+**Severity:** Medium
+
+**Explanation:**
+The DTDetailPanel and DTClipDetailPanel describe sheets both read `entry.thumbnail` / `clip.frames[...]` lazily inside `sheet(isPresented:)`. For the clip variant, `selectedFrameIndex` is read at sheet-present time, not at button-tap time. If the user taps a different frame thumbnail in the strip while the sheet is animating in (edge case), the sheet could open on a different frame than intended. Same fix applies: capture the target image at button-tap time and use `sheet(item:)`.
+
+---
+
+### [MEDIUM-4] Four concurrent backup Tasks may race on schema-wipe restore — `ContentView.swift:1632`
+
+**Category:** Performance / Correctness
+**Severity:** Medium
+
+**Explanation:**
+If all four `@Query` arrays change count simultaneously during restore, all four `onChange` closures fire in the same render cycle, each spawning `Task { await runBackup() }`. Four concurrent tasks each calling `SwiftDataBackupManager.backup(...)` will race to write the same JSON files. The last write wins, which is probably correct, but it wastes work and could cause interleaved writes on a slow disk. A coalescing mechanism (debounce or a serial queue on the backup manager) would prevent this.
+
+---
+
+### [MEDIUM-5] `try? modelContext.save()` in restore path — failed restore is silent — `ContentView.swift:1652`
+
+**Category:** Silent Failure
+**Severity:** Medium
+
+**Explanation:**
+After restoring backed-up records on schema-wipe, `try? modelContext.save()` is called silently. If the save fails, the restored objects will be lost when the context is discarded. Given this is the one moment the user's data is being recovered, this should use a `do/try/catch` with a logger call or an alert.
 
 **Current Code:**
 ```swift
-// In multiple locations:
-.tag("generateImage")
-.tag("workflowBuilder")
-if settings.describeImageSendTarget == "generateImage" { ... }
-describeImageSendTarget = "generateImage"  // reset default
+if counts.presets + counts.workflows + counts.pipelines + restoredStory > 0 {
+    try? modelContext.save()
+}
 ```
 
 **Improved Code:**
 ```swift
-// In AppSettings.swift or LLMProvider.swift:
-enum DescribeSendTarget: String {
-    case generateImage = "generateImage"
-    case workflowBuilder = "workflowBuilder"
+if counts.presets + counts.workflows + counts.pipelines + restoredStory > 0 {
+    do {
+        try modelContext.save()
+    } catch {
+        logger.error("Failed to save restored records: \(error.localizedDescription)")
+        // Consider showing an alert to the user
+    }
 }
-// @Published var describeImageSendTarget: String remains String for UserDefaults compatibility
-// Comparisons use DescribeSendTarget(rawValue: settings.describeImageSendTarget) ?? .generateImage
 ```
 
 ---
 
-### [LOW-3] `DescribeAgentEditorView` `@ObservedObject var agentsManager` — confirmed intentional pattern — `DescribeAgentEditorView.swift:11`
+### [LOW-1] `clip.frames[0]` direct subscript in tap gestures — prefer `.first` — `DTProjectBrowserView.swift:384,417`
 
-**Category:** Best Practice / SwiftUI (note only)
+**Category:** Crash Risk (theoretical)
 **Severity:** Low
 
 **Explanation:**
-This uses `@ObservedObject var agentsManager = DescribeAgentsManager.shared`, following the established project pattern for singleton-backed managers (not `@StateObject`). This is correct. Noted for completeness; no change needed.
+`DTVideoClip.group(from:)` always produces clips with at least one frame, so `frames[0]` cannot crash in practice. However the subscript is unsafe by code inspection alone, and `.first` communicates intent more clearly.
+
+**Current Code:**
+```swift
+if let img = clip.frames[0].thumbnail { lightboxImage = img }
+viewModel.exportImage(clip.frames[0])
+```
+
+**Improved Code:**
+```swift
+if let img = clip.frames.first?.thumbnail { lightboxImage = img }
+if let frame = clip.frames.first { viewModel.exportImage(frame) }
+```
+
+---
+
+### [LOW-2] `WorkflowPromptGenerator` is not `final` — `WorkflowPromptGenerator.swift:13`
+
+**Category:** Best Practice
+**Severity:** Low (subsumed by HIGH-4 — fix both together)
+
+Every other ViewModel in the project is `final`. Adding `final` prevents subclassing a class with a broken concurrency model and enables vtable devirtualisation.
+
+---
+
+### [LOW-3] `BackupCoordinator.runBackup()` is `async` but does no async work — `ContentView.swift:1661`
+
+**Category:** Readability
+**Severity:** Low
+
+**Explanation:**
+`runBackup()` is marked `async` but calls `SwiftDataBackupManager.backup(...)` which is synchronous. The `async` annotation is unnecessary and slightly misleading. It should be `@MainActor func runBackup()` (no `async`) since all the work is synchronous SwiftData access on the main actor.
 
 ---
 
 ## Applied Fixes
-None — findings reported only. Awaiting authorization.
+None applied this cycle — findings presented for review.
 
 ## Notes
 
-**Security:**
-No security issues found in this changeset. The vision API calls send image data only to locally configured LLM providers (Ollama, LM Studio, Jan) — all expected to be on localhost or local network, consistent with the existing HTTP connectivity model. No credentials are logged. Image data is not persisted beyond the session.
+**ImageLightboxView NSEvent monitor (HIGH-1):** Works correctly under normal conditions. The risk is animation-race edge cases. Converting `LightboxOverlay` to own a `@StateObject KeyEventMonitor` is the cleanest fix.
 
-**API format correctness:**
-- Ollama vision format (base64 in `images` array at message level, string `content`) is correct for llava/moondream/bakllava.
-- OpenAI-compatible vision format (content array with `{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}`) is correct for LM Studio and Jan's multimodal endpoints.
+**Backup system (HIGH-3, MEDIUM-1, -2, -4, -5):** The backup system is well-structured overall. The main gaps are: (a) only reacts to count changes, missing content edits; (b) silently drops write errors; (c) embeds large image blobs; (d) silent `try?` on the restore save. These are independent fixes that can be addressed incrementally.
 
-**Architecture:**
-The agent system mirrors `PromptStyleManager` in structure and is well-designed. The sheet routing via optional closures in `ImageDescriptionView` is clean and avoids tight coupling. The nested sheet (`ImageDescriptionView` → `DescribeAgentEditorView`) works correctly on macOS 14+.
+**`frames[0]` (LOW-1):** Safe in practice due to invariant in `DTVideoClip.group(from:)`. Two-line fix.
 
-**DTProjectBrowserView — clips panel:**
-`clip.frames[min(selectedFrameIndex, clip.frames.count - 1)].thumbnail` inside the sheet closure is safe because the button is `.disabled(clip.frames.first?.thumbnail == nil)` (ensuring frames is non-empty) and `clip` is a value-type struct captured at `DTClipDetailPanel` struct-init time.
+**No security issues found** in the audited files or in the broad scan of all 58 Swift files.

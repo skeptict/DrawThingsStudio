@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+private struct IdentifiableNSImage: Identifiable {
+    let id = UUID()
+    let image: NSImage
+}
+
 struct DTProjectBrowserView: View {
     @ObservedObject var viewModel: DTProjectBrowserViewModel
     @ObservedObject var imageGenViewModel: ImageGenerationViewModel
@@ -381,7 +386,7 @@ struct DTProjectBrowserView: View {
                                     isInSelection: selectedClipIDs.contains(clip.id)
                                 )
                                 .onTapGesture(count: 2) {
-                                    if let img = clip.frames[0].thumbnail { lightboxImage = img }
+                                    if let img = clip.frames.first?.thumbnail { lightboxImage = img }
                                 }
                                 .onTapGesture {
                                     let cmdHeld = NSApplication.shared.currentEvent?.modifierFlags.contains(.command) ?? false
@@ -414,7 +419,7 @@ struct DTProjectBrowserView: View {
                                               systemImage: inSelection ? "checkmark.circle.fill" : "checkmark.circle")
                                     }
                                     Button {
-                                        viewModel.exportImage(clip.frames[0])
+                                        if let frame = clip.frames.first { viewModel.exportImage(frame) }
                                     } label: {
                                         Label("Save Image…", systemImage: "square.and.arrow.down")
                                     }
@@ -925,7 +930,7 @@ private struct DTClipDetailPanel: View {
     @State private var previewFrameIndex = 0
     @State private var selectedFrameIndex = 0
     @State private var fps: Double = 8.0
-    @State private var showDescribeSheet = false
+    @State private var imageToDescribe: IdentifiableNSImage?
     @State private var showSendToStoryStudio = false
 
     var body: some View {
@@ -1157,7 +1162,12 @@ private struct DTClipDetailPanel: View {
             .controlSize(.large)
             .disabled(clip.frames[min(selectedFrameIndex, clip.frames.count - 1)].thumbnail == nil)
 
-            Button(action: { showDescribeSheet = true }) {
+            Button(action: {
+                let idx = min(selectedFrameIndex, clip.frames.count - 1)
+                if let thumbnail = clip.frames[idx].thumbnail {
+                    imageToDescribe = IdentifiableNSImage(image: thumbnail)
+                }
+            }) {
                 HStack {
                     Image(systemName: "eye")
                     Text("Describe with AI...")
@@ -1167,20 +1177,18 @@ private struct DTClipDetailPanel: View {
             .buttonStyle(NeumorphicButtonStyle())
             .controlSize(.large)
             .disabled(clip.frames.first?.thumbnail == nil)
-            .sheet(isPresented: $showDescribeSheet) {
-                if let thumbnail = clip.frames[min(selectedFrameIndex, clip.frames.count - 1)].thumbnail {
-                    ImageDescriptionView(
-                        image: thumbnail,
-                        onSendToGeneratePrompt: { text, sourceImage in
-                            imageGenViewModel.prompt = text
-                            if let img = sourceImage {
-                                imageGenViewModel.loadInputImage(from: img, name: "DT Project Image")
-                            }
-                            selectedSidebarItem = .generateImage
-                        },
-                        onSendToWorkflowPrompt: nil
-                    )
-                }
+            .sheet(item: $imageToDescribe) { item in
+                ImageDescriptionView(
+                    image: item.image,
+                    onSendToGeneratePrompt: { text, sourceImage in
+                        imageGenViewModel.prompt = text
+                        if let img = sourceImage {
+                            imageGenViewModel.loadInputImage(from: img, name: "DT Project Image")
+                        }
+                        selectedSidebarItem = .generateImage
+                    },
+                    onSendToWorkflowPrompt: nil
+                )
             }
 
             Button(role: .destructive, action: onDelete) {
@@ -1247,7 +1255,7 @@ private struct DTDetailPanel: View {
     var onExport: (() -> Void)? = nil
     var onShowClip: (() -> Void)? = nil
 
-    @State private var showDescribeSheet = false
+    @State private var imageToDescribe: IdentifiableNSImage?
     @State private var showSendToStoryStudio = false
 
     var body: some View {
@@ -1423,7 +1431,11 @@ private struct DTDetailPanel: View {
                 .disabled(entry.thumbnail == nil)
             }
 
-            Button(action: { showDescribeSheet = true }) {
+            Button(action: {
+                if let thumbnail = entry.thumbnail {
+                    imageToDescribe = IdentifiableNSImage(image: thumbnail)
+                }
+            }) {
                 HStack {
                     Image(systemName: "eye")
                     Text("Describe with AI...")
@@ -1433,20 +1445,18 @@ private struct DTDetailPanel: View {
             .buttonStyle(NeumorphicButtonStyle())
             .controlSize(.large)
             .disabled(entry.thumbnail == nil)
-            .sheet(isPresented: $showDescribeSheet) {
-                if let thumbnail = entry.thumbnail {
-                    ImageDescriptionView(
-                        image: thumbnail,
-                        onSendToGeneratePrompt: { text, sourceImage in
-                            imageGenViewModel.prompt = text
-                            if let img = sourceImage {
-                                imageGenViewModel.loadInputImage(from: img, name: "DT Project Image")
-                            }
-                            selectedSidebarItem = .generateImage
-                        },
-                        onSendToWorkflowPrompt: nil
-                    )
-                }
+            .sheet(item: $imageToDescribe) { item in
+                ImageDescriptionView(
+                    image: item.image,
+                    onSendToGeneratePrompt: { text, sourceImage in
+                        imageGenViewModel.prompt = text
+                        if let img = sourceImage {
+                            imageGenViewModel.loadInputImage(from: img, name: "DT Project Image")
+                        }
+                        selectedSidebarItem = .generateImage
+                    },
+                    onSendToWorkflowPrompt: nil
+                )
             }
 
             Button(role: .destructive, action: onDelete) {

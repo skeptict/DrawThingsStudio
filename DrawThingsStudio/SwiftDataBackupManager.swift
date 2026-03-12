@@ -99,22 +99,31 @@ final class SwiftDataBackupManager {
 
         if !presets.isEmpty {
             let backupPresets = presets.map { StudioConfigPreset(from: $0) }
-            if let data = try? encoder.encode(backupPresets) {
-                try? data.write(to: presetsURL)
+            do {
+                let data = try encoder.encode(backupPresets)
+                try data.write(to: presetsURL)
+            } catch {
+                logger.error("Failed to write presets backup: \(error.localizedDescription)")
             }
         }
 
         if !workflows.isEmpty {
             let backupWorkflows = workflows.map { WorkflowBackup(from: $0) }
-            if let data = try? encoder.encode(backupWorkflows) {
-                try? data.write(to: workflowsURL)
+            do {
+                let data = try encoder.encode(backupWorkflows)
+                try data.write(to: workflowsURL)
+            } catch {
+                logger.error("Failed to write workflows backup: \(error.localizedDescription)")
             }
         }
 
         if !pipelines.isEmpty {
             let backupPipelines = pipelines.map { PipelineBackup(from: $0) }
-            if let data = try? encoder.encode(backupPipelines) {
-                try? data.write(to: pipelinesURL)
+            do {
+                let data = try encoder.encode(backupPipelines)
+                try data.write(to: pipelinesURL)
+            } catch {
+                logger.error("Failed to write pipelines backup: \(error.localizedDescription)")
             }
         }
 
@@ -210,9 +219,12 @@ final class SwiftDataBackupManager {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         let backups = projects.map { StoryProjectBackup(from: $0) }
-        if let data = try? encoder.encode(backups) {
-            try? data.write(to: storyProjectsURL)
+        do {
+            let data = try encoder.encode(backups)
+            try data.write(to: storyProjectsURL)
             logger.info("Story backup written: \(backups.count) projects")
+        } catch {
+            logger.error("Failed to write story projects backup: \(error.localizedDescription)")
         }
     }
 

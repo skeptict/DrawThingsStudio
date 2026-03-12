@@ -10,6 +10,17 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Key Event Monitor
+
+/// Ties NSEvent monitor lifetime to ARC — deinit always removes the monitor,
+/// even if the enclosing SwiftUI struct is released during a dismiss animation.
+private final class KeyEventMonitor: ObservableObject {
+    var monitor: Any?
+    deinit {
+        if let m = monitor { NSEvent.removeMonitor(m) }
+    }
+}
+
 // MARK: - Lightbox Overlay
 
 struct LightboxOverlay: View {
@@ -18,7 +29,7 @@ struct LightboxOverlay: View {
     /// Ordered list of images to navigate through. Identity comparison (===) locates current.
     var browseList: [NSImage] = []
 
-    @State private var eventMonitor: Any?
+    @StateObject private var keyEventMonitor = KeyEventMonitor()
 
     private var currentIndex: Int {
         guard let img = image else { return -1 }
@@ -77,7 +88,7 @@ struct LightboxOverlay: View {
             // always reflects the current position, not the position at install time.
             let imageBinding = $image
             let list = browseList
-            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            keyEventMonitor.monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 switch event.keyCode {
                 case 53:   // Escape
                     imageBinding.wrappedValue = nil
@@ -99,12 +110,6 @@ struct LightboxOverlay: View {
                 default:
                     return event
                 }
-            }
-        }
-        .onDisappear {
-            if let monitor = eventMonitor {
-                NSEvent.removeMonitor(monitor)
-                eventMonitor = nil
             }
         }
     }
