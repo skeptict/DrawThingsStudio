@@ -158,6 +158,19 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         return models
     }
 
+    // MARK: - Model Resolution
+
+    /// Returns the first available model ID from the server when `defaultModel` is still
+    /// the unset sentinel "default". Caches the result in `defaultModel` for subsequent calls.
+    private func resolvedModel(_ requested: String) async throws -> String {
+        guard requested == "default" else { return requested }
+        let models = try await listModels()
+        guard let first = models.first else {
+            throw LLMError.requestFailed("No models available on \(providerType.displayName). Load a model first.")
+        }
+        return first.name
+    }
+
     // MARK: - Generate Text
 
     func generateText(prompt: String) async throws -> String {
@@ -169,6 +182,7 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         model: String,
         options: LLMGenerationOptions = .default
     ) async throws -> String {
+        let resolvedModelName = try await resolvedModel(model)
         let url = try validatedBaseURL().appendingPathComponent("chat/completions")
 
         var request = URLRequest(url: url)
@@ -177,7 +191,7 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         addAuthHeader(to: &request)
 
         let body: [String: Any] = [
-            "model": model,
+            "model": resolvedModelName,
             "messages": [
                 ["role": "user", "content": prompt]
             ],
@@ -189,7 +203,7 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        logger.debug("Generating text with model: \(model)")
+        logger.debug("Generating text with model: \(resolvedModelName)")
 
         let (data, response) = try await session.data(for: request)
 
@@ -294,6 +308,7 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         userMessage: String,
         model: String
     ) async throws -> String {
+        let resolvedModelName = try await resolvedModel(model)
         let url = try validatedBaseURL().appendingPathComponent("chat/completions")
 
         var request = URLRequest(url: url)
@@ -305,7 +320,7 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         let dataURL = "data:image/jpeg;base64,\(base64Image)"
 
         let body: [String: Any] = [
-            "model": model,
+            "model": resolvedModelName,
             "messages": [
                 ["role": "system", "content": systemPrompt],
                 [
