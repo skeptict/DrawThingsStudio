@@ -2,8 +2,9 @@
 //  SwiftDataBackupManager.swift
 //  DrawThingsStudio
 //
-//  Backs up user-created SwiftData records (ModelConfig, SavedWorkflow, SavedPipeline)
-//  to JSON files in Application Support so they survive schema wipes.
+//  Backs up user-created SwiftData records to JSON files in Application Support
+//  so they survive schema wipes. Covers: ModelConfig, SavedWorkflow, SavedPipeline,
+//  and the full Story Studio project hierarchy.
 //
 
 import Foundation
@@ -125,7 +126,8 @@ final class SwiftDataBackupManager {
     var hasBackup: Bool {
         FileManager.default.fileExists(atPath: presetsURL.path) ||
         FileManager.default.fileExists(atPath: workflowsURL.path) ||
-        FileManager.default.fileExists(atPath: pipelinesURL.path)
+        FileManager.default.fileExists(atPath: pipelinesURL.path) ||
+        FileManager.default.fileExists(atPath: storyProjectsURL.path)
     }
 
     /// Restore all backed-up records into the given context.
@@ -163,6 +165,8 @@ final class SwiftDataBackupManager {
                 )
                 w.isFavorite = backup.isFavorite
                 w.category = backup.category
+                w.createdAt = backup.createdAt
+                w.modifiedAt = backup.modifiedAt
                 context.insert(w)
                 restoredWorkflows += 1
             }
@@ -179,6 +183,8 @@ final class SwiftDataBackupManager {
                     stepPreview: backup.stepPreview
                 )
                 p.isFavorite = backup.isFavorite
+                p.createdAt = backup.createdAt
+                p.modifiedAt = backup.modifiedAt
                 context.insert(p)
                 restoredPipelines += 1
             }
@@ -186,5 +192,372 @@ final class SwiftDataBackupManager {
 
         logger.info("Restore complete: \(restoredPresets) presets, \(restoredWorkflows) workflows, \(restoredPipelines) pipelines")
         return (restoredPresets, restoredWorkflows, restoredPipelines)
+    }
+
+    // MARK: - Story Studio backup/restore
+
+    private var storyProjectsURL: URL { backupDirectory.appendingPathComponent("story_projects.json") }
+
+    func backupStoryProjects(_ projects: [StoryProject]) {
+        guard !projects.isEmpty else { return }
+        do {
+            try FileManager.default.createDirectory(at: backupDirectory, withIntermediateDirectories: true)
+        } catch {
+            logger.error("Failed to create backup directory: \(error.localizedDescription)")
+            return
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let backups = projects.map { StoryProjectBackup(from: $0) }
+        if let data = try? encoder.encode(backups) {
+            try? data.write(to: storyProjectsURL)
+            logger.info("Story backup written: \(backups.count) projects")
+        }
+    }
+
+    func restoreStoryProjects(into context: ModelContext, existingProjects: [StoryProject]) -> Int {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = try? Data(contentsOf: storyProjectsURL),
+              let backups = try? decoder.decode([StoryProjectBackup].self, from: data) else { return 0 }
+        let existingIDs = Set(existingProjects.map(\.id))
+        var count = 0
+        for backup in backups where !existingIDs.contains(backup.id) {
+            backup.insert(into: context)
+            count += 1
+        }
+        logger.info("Story restore complete: \(count) projects")
+        return count
+    }
+}
+
+// MARK: - Story Studio Codable backup structs
+
+struct StoryProjectBackup: Codable {
+    let id: UUID
+    let name: String
+    let projectDescription: String
+    let genre: String?
+    let artStyle: String?
+    let outputWidth: Int
+    let outputHeight: Int
+    let baseModelName: String
+    let baseSampler: String
+    let baseSteps: Int
+    let baseGuidanceScale: Float
+    let baseShift: Float
+    let baseNegativePrompt: String?
+    let baseRefinerModel: String?
+    let baseRefinerStart: Float?
+    let coverImageData: Data?
+    let createdAt: Date
+    let modifiedAt: Date
+    let characters: [StoryCharacterBackup]
+    let settings: [StorySettingBackup]
+    let chapters: [StoryChapterBackup]
+
+    init(from p: StoryProject) {
+        id = p.id
+        name = p.name
+        projectDescription = p.projectDescription
+        genre = p.genre
+        artStyle = p.artStyle
+        outputWidth = p.outputWidth
+        outputHeight = p.outputHeight
+        baseModelName = p.baseModelName
+        baseSampler = p.baseSampler
+        baseSteps = p.baseSteps
+        baseGuidanceScale = p.baseGuidanceScale
+        baseShift = p.baseShift
+        baseNegativePrompt = p.baseNegativePrompt
+        baseRefinerModel = p.baseRefinerModel
+        baseRefinerStart = p.baseRefinerStart
+        coverImageData = p.coverImageData
+        createdAt = p.createdAt
+        modifiedAt = p.modifiedAt
+        characters = p.characters.map { StoryCharacterBackup(from: $0) }
+        settings = p.settings.map { StorySettingBackup(from: $0) }
+        chapters = p.chapters.sorted { $0.sortOrder < $1.sortOrder }.map { StoryChapterBackup(from: $0) }
+    }
+
+    func insert(into context: ModelContext) {
+        let project = StoryProject(
+            name: name, description: projectDescription, genre: genre, artStyle: artStyle,
+            outputWidth: outputWidth, outputHeight: outputHeight,
+            baseModelName: baseModelName, baseSampler: baseSampler,
+            baseSteps: baseSteps, baseGuidanceScale: baseGuidanceScale, baseShift: baseShift,
+            baseNegativePrompt: baseNegativePrompt,
+            baseRefinerModel: baseRefinerModel, baseRefinerStart: baseRefinerStart
+        )
+        project.id = id
+        project.coverImageData = coverImageData
+        project.createdAt = createdAt
+        project.modifiedAt = modifiedAt
+        context.insert(project)
+        for c in characters {
+            let char = c.toModel()
+            char.project = project
+            context.insert(char)
+            for a in c.appearances {
+                let app = a.toModel()
+                app.character = char
+                context.insert(app)
+            }
+        }
+        for s in settings {
+            let setting = s.toModel()
+            setting.project = project
+            context.insert(setting)
+        }
+        for ch in chapters {
+            let chapter = ch.toModel()
+            chapter.project = project
+            context.insert(chapter)
+            for sc in ch.scenes {
+                let scene = sc.toModel()
+                scene.chapter = chapter
+                context.insert(scene)
+                for p in sc.characterPresences {
+                    let presence = p.toModel()
+                    presence.scene = scene
+                    context.insert(presence)
+                }
+                for v in sc.variants {
+                    let variant = v.toModel()
+                    variant.scene = scene
+                    context.insert(variant)
+                }
+            }
+        }
+    }
+}
+
+struct StoryCharacterBackup: Codable {
+    let id: UUID
+    let name: String
+    let promptFragment: String
+    let negativePromptFragment: String?
+    let physicalDescription: String?
+    let clothingDefault: String?
+    let age: String?
+    let species: String?
+    let primaryReferenceImageData: Data?
+    let loraFilename: String?
+    let loraWeight: Double?
+    let moodboardWeight: Double?
+    let preferredSeed: Int?
+    let sortOrder: Int
+    let createdAt: Date
+    let appearances: [CharacterAppearanceBackup]
+
+    init(from c: StoryCharacter) {
+        id = c.id; name = c.name; promptFragment = c.promptFragment
+        negativePromptFragment = c.negativePromptFragment
+        physicalDescription = c.physicalDescription; clothingDefault = c.clothingDefault
+        age = c.age; species = c.species
+        primaryReferenceImageData = c.primaryReferenceImageData
+        loraFilename = c.loraFilename; loraWeight = c.loraWeight
+        moodboardWeight = c.moodboardWeight; preferredSeed = c.preferredSeed
+        sortOrder = c.sortOrder; createdAt = c.createdAt
+        appearances = c.appearances.sorted { $0.sortOrder < $1.sortOrder }.map { CharacterAppearanceBackup(from: $0) }
+    }
+
+    func toModel() -> StoryCharacter {
+        let c = StoryCharacter(name: name, promptFragment: promptFragment,
+            negativePromptFragment: negativePromptFragment,
+            physicalDescription: physicalDescription, clothingDefault: clothingDefault,
+            age: age, species: species, loraFilename: loraFilename, loraWeight: loraWeight,
+            moodboardWeight: moodboardWeight, preferredSeed: preferredSeed, sortOrder: sortOrder)
+        c.id = id; c.primaryReferenceImageData = primaryReferenceImageData; c.createdAt = createdAt
+        return c
+    }
+}
+
+struct CharacterAppearanceBackup: Codable {
+    let id: UUID
+    let name: String
+    let promptOverride: String?
+    let clothingOverride: String?
+    let expressionOverride: String?
+    let physicalChanges: String?
+    let referenceImageData: Data?
+    let loraFilenameOverride: String?
+    let loraWeightOverride: Double?
+    let isDefault: Bool
+    let sortOrder: Int
+
+    init(from a: CharacterAppearance) {
+        id = a.id; name = a.name; promptOverride = a.promptOverride
+        clothingOverride = a.clothingOverride; expressionOverride = a.expressionOverride
+        physicalChanges = a.physicalChanges; referenceImageData = a.referenceImageData
+        loraFilenameOverride = a.loraFilenameOverride; loraWeightOverride = a.loraWeightOverride
+        isDefault = a.isDefault; sortOrder = a.sortOrder
+    }
+
+    func toModel() -> CharacterAppearance {
+        let a = CharacterAppearance(name: name, promptOverride: promptOverride,
+            clothingOverride: clothingOverride, expressionOverride: expressionOverride,
+            physicalChanges: physicalChanges, loraFilenameOverride: loraFilenameOverride,
+            loraWeightOverride: loraWeightOverride, isDefault: isDefault, sortOrder: sortOrder)
+        a.id = id; a.referenceImageData = referenceImageData
+        return a
+    }
+}
+
+struct StorySettingBackup: Codable {
+    let id: UUID
+    let name: String
+    let promptFragment: String
+    let negativePromptFragment: String?
+    let referenceImageData: Data?
+    let timeOfDay: String?
+    let weather: String?
+    let lighting: String?
+    let sortOrder: Int
+
+    init(from s: StorySetting) {
+        id = s.id; name = s.name; promptFragment = s.promptFragment
+        negativePromptFragment = s.negativePromptFragment
+        referenceImageData = s.referenceImageData
+        timeOfDay = s.timeOfDay; weather = s.weather; lighting = s.lighting; sortOrder = s.sortOrder
+    }
+
+    func toModel() -> StorySetting {
+        let s = StorySetting(name: name, promptFragment: promptFragment,
+            negativePromptFragment: negativePromptFragment,
+            timeOfDay: timeOfDay, weather: weather, lighting: lighting, sortOrder: sortOrder)
+        s.id = id; s.referenceImageData = referenceImageData
+        return s
+    }
+}
+
+struct StoryChapterBackup: Codable {
+    let id: UUID
+    let title: String
+    let chapterDescription: String?
+    let sortOrder: Int
+    let scenes: [StorySceneBackup]
+
+    init(from ch: StoryChapter) {
+        id = ch.id; title = ch.title; chapterDescription = ch.chapterDescription; sortOrder = ch.sortOrder
+        scenes = ch.scenes.sorted { $0.sortOrder < $1.sortOrder }.map { StorySceneBackup(from: $0) }
+    }
+
+    func toModel() -> StoryChapter {
+        let ch = StoryChapter(title: title, description: chapterDescription, sortOrder: sortOrder)
+        ch.id = id
+        return ch
+    }
+}
+
+struct StorySceneBackup: Codable {
+    let id: UUID
+    let title: String
+    let sceneDescription: String
+    let actionDescription: String?
+    let dialogueText: String?
+    let narratorText: String?
+    let cameraAngle: String?
+    let composition: String?
+    let mood: String?
+    let promptOverride: String?
+    let promptSuffix: String?
+    let negativePromptOverride: String?
+    let widthOverride: Int?
+    let heightOverride: Int?
+    let stepsOverride: Int?
+    let guidanceOverride: Float?
+    let seedOverride: Int?
+    let strengthOverride: Float?
+    let sourceImagePath: String?
+    let generatedImageData: Data?
+    let isApproved: Bool
+    let panelSizeHint: String?
+    let sortOrder: Int
+    let settingId: UUID?
+    let characterPresences: [SceneCharacterPresenceBackup]
+    let variants: [SceneVariantBackup]
+
+    init(from sc: StoryScene) {
+        id = sc.id; title = sc.title; sceneDescription = sc.sceneDescription
+        actionDescription = sc.actionDescription; dialogueText = sc.dialogueText
+        narratorText = sc.narratorText; cameraAngle = sc.cameraAngle
+        composition = sc.composition; mood = sc.mood
+        promptOverride = sc.promptOverride; promptSuffix = sc.promptSuffix
+        negativePromptOverride = sc.negativePromptOverride
+        widthOverride = sc.widthOverride; heightOverride = sc.heightOverride
+        stepsOverride = sc.stepsOverride; guidanceOverride = sc.guidanceOverride
+        seedOverride = sc.seedOverride; strengthOverride = sc.strengthOverride
+        sourceImagePath = sc.sourceImagePath; generatedImageData = sc.generatedImageData
+        isApproved = sc.isApproved; panelSizeHint = sc.panelSizeHint; sortOrder = sc.sortOrder
+        settingId = sc.settingId
+        characterPresences = sc.characterPresences.map { SceneCharacterPresenceBackup(from: $0) }
+        variants = sc.variants.sorted { $0.generatedAt < $1.generatedAt }.map { SceneVariantBackup(from: $0) }
+    }
+
+    func toModel() -> StoryScene {
+        let sc = StoryScene(title: title, sceneDescription: sceneDescription,
+            actionDescription: actionDescription, dialogueText: dialogueText,
+            narratorText: narratorText, cameraAngle: cameraAngle,
+            composition: composition, mood: mood, settingId: settingId, sortOrder: sortOrder)
+        sc.id = id; sc.promptOverride = promptOverride; sc.promptSuffix = promptSuffix
+        sc.negativePromptOverride = negativePromptOverride
+        sc.widthOverride = widthOverride; sc.heightOverride = heightOverride
+        sc.stepsOverride = stepsOverride; sc.guidanceOverride = guidanceOverride
+        sc.seedOverride = seedOverride; sc.strengthOverride = strengthOverride
+        sc.sourceImagePath = sourceImagePath; sc.generatedImageData = generatedImageData
+        sc.isApproved = isApproved; sc.panelSizeHint = panelSizeHint
+        return sc
+    }
+}
+
+struct SceneCharacterPresenceBackup: Codable {
+    let id: UUID
+    let characterId: UUID
+    let appearanceId: UUID?
+    let expressionOverride: String?
+    let poseDescription: String?
+    let positionHint: String?
+
+    init(from p: SceneCharacterPresence) {
+        id = p.id; characterId = p.characterId; appearanceId = p.appearanceId
+        expressionOverride = p.expressionOverride; poseDescription = p.poseDescription; positionHint = p.positionHint
+    }
+
+    func toModel() -> SceneCharacterPresence {
+        let p = SceneCharacterPresence(characterId: characterId, appearanceId: appearanceId,
+            expressionOverride: expressionOverride, poseDescription: poseDescription, positionHint: positionHint)
+        p.id = id
+        return p
+    }
+}
+
+struct SceneVariantBackup: Codable {
+    let id: UUID
+    let imageData: Data?
+    let imagePath: String?
+    let prompt: String
+    let negativePrompt: String
+    let seed: Int
+    let generatedAt: Date
+    let isSelected: Bool
+    let isApproved: Bool
+    let rating: Int?
+    let notes: String?
+
+    init(from v: SceneVariant) {
+        id = v.id; imageData = v.imageData; imagePath = v.imagePath
+        prompt = v.prompt; negativePrompt = v.negativePrompt; seed = v.seed
+        generatedAt = v.generatedAt; isSelected = v.isSelected; isApproved = v.isApproved
+        rating = v.rating; notes = v.notes
+    }
+
+    func toModel() -> SceneVariant {
+        let v = SceneVariant(prompt: prompt, negativePrompt: negativePrompt, seed: seed,
+            imageData: imageData, imagePath: imagePath,
+            isSelected: isSelected, isApproved: isApproved, rating: rating, notes: notes)
+        v.id = id; v.generatedAt = generatedAt
+        return v
     }
 }

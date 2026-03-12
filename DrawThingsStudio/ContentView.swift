@@ -1623,16 +1623,16 @@ private struct BackupCoordinator: View {
     @Query private var presets: [ModelConfig]
     @Query private var workflows: [SavedWorkflow]
     @Query private var pipelines: [SavedPipeline]
+    @Query private var storyProjects: [StoryProject]
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         EmptyView()
-            .task {
-                await runBackupAndRestore()
-            }
+            .task { await runBackupAndRestore() }
             .onChange(of: presets.count) { _, _ in Task { await runBackup() } }
             .onChange(of: workflows.count) { _, _ in Task { await runBackup() } }
             .onChange(of: pipelines.count) { _, _ in Task { await runBackup() } }
+            .onChange(of: storyProjects.count) { _, _ in Task { await runBackup() } }
     }
 
     @MainActor
@@ -1647,7 +1647,8 @@ private struct BackupCoordinator: View {
                     existingWorkflows: workflows,
                     existingPipelines: pipelines
                 )
-                if counts.presets + counts.workflows + counts.pipelines > 0 {
+                let restoredStory = manager.restoreStoryProjects(into: modelContext, existingProjects: storyProjects)
+                if counts.presets + counts.workflows + counts.pipelines + restoredStory > 0 {
                     try? modelContext.save()
                 }
             }
@@ -1658,11 +1659,9 @@ private struct BackupCoordinator: View {
 
     @MainActor
     private func runBackup() async {
-        SwiftDataBackupManager.shared.backup(
-            presets: presets,
-            workflows: workflows,
-            pipelines: pipelines
-        )
+        let manager = SwiftDataBackupManager.shared
+        manager.backup(presets: presets, workflows: workflows, pipelines: pipelines)
+        manager.backupStoryProjects(storyProjects)
     }
 }
 

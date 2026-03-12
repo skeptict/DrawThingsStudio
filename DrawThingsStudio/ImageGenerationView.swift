@@ -30,7 +30,6 @@ struct ImageGenerationView: View {
     @State private var showDescribeSheet = false
     @State private var imageToDescribe: NSImage?
     @State private var lightboxImage: NSImage?
-    @State private var showSendToStoryStudio = false
     @State private var imageForStoryStudio: GeneratedImage?
 
     var body: some View {
@@ -58,15 +57,13 @@ struct ImageGenerationView: View {
         .padding(.trailing, 20)
         .neuBackground()
         .lightbox(image: $lightboxImage, browseList: viewModel.generatedImages.map(\.image))
-        .sheet(isPresented: $showSendToStoryStudio) {
-            if let gi = imageForStoryStudio {
-                SendToStoryStudioView(
-                    prompt: gi.prompt,
-                    negativePrompt: gi.negativePrompt,
-                    thumbnail: gi.image,
-                    onNavigate: { selectedSidebarItem = $0 }
-                )
-            }
+        .sheet(item: $imageForStoryStudio) { gi in
+            SendToStoryStudioView(
+                prompt: gi.prompt,
+                negativePrompt: gi.negativePrompt,
+                thumbnail: gi.image,
+                onNavigate: { selectedSidebarItem = $0 }
+            )
         }
         // Two .fileImporter modifiers cannot share the same view — SwiftUI only
         // honours the last one.  Attach each to its own Color.clear inside a
@@ -995,6 +992,9 @@ struct ImageGenerationView: View {
                 )
             }
 
+            // Aspect ratio presets
+            aspectRatioPresetsView
+
             // Dimensions
             HStack(spacing: 12) {
                 neuConfigField("Width", value: $viewModel.config.width)
@@ -1339,7 +1339,7 @@ struct ImageGenerationView: View {
                         .font(.caption2)
                         .foregroundColor(.neuTextSecondary)
 
-                    HStack(spacing: 8) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                         Button("Copy") { viewModel.copyToClipboard(generatedImage) }
                             .font(.caption)
                             .buttonStyle(NeumorphicButtonStyle())
@@ -1352,15 +1352,14 @@ struct ImageGenerationView: View {
                         }
                         .font(.caption)
                         .buttonStyle(NeumorphicButtonStyle())
-                        Button("Describe...") {
+                        Button("Describe…") {
                             imageToDescribe = generatedImage.image
                             showDescribeSheet = true
                         }
                         .font(.caption)
                         .buttonStyle(NeumorphicButtonStyle())
-                        Button("Add to Story Studio…") {
+                        Button("Story Studio…") {
                             imageForStoryStudio = generatedImage
-                            showSendToStoryStudio = true
                         }
                         .font(.caption)
                         .buttonStyle(NeumorphicButtonStyle())
@@ -1540,6 +1539,73 @@ struct ImageGenerationView: View {
                     .fill(Color.neuBackground.opacity(0.6))
             )
     }
+
+    // MARK: - Aspect Ratio Presets
+
+    private static let ratioPresets: [(label: String, w: Int, h: Int)] = [
+        ("1:2", 576, 1152), ("2:3", 768, 1152), ("3:4", 768, 1024),
+        ("4:5", 832, 1024), ("1:1", 1024, 1024), ("5:4", 1024, 832),
+        ("4:3", 1024, 768), ("3:2", 1152, 768), ("2:1", 1152, 576),
+        ("16:9", 1024, 576), ("9:16", 576, 1024)
+    ]
+
+    private static let sizeTargets: [(label: String, area: Int)] = [
+        ("Small", 512 * 512),
+        ("Normal", 1024 * 1024),
+        ("Large", 1536 * 1536)
+    ]
+
+    private func applySize(area: Int) {
+        let w = viewModel.config.width
+        let h = viewModel.config.height
+        guard w > 0, h > 0 else { return }
+        let ratio = Double(w) / Double(h)
+        let a = Double(area)
+        let newW = Int((sqrt(a * ratio) / 64).rounded() * 64)
+        let newH = Int((sqrt(a / ratio) / 64).rounded() * 64)
+        viewModel.config.width = max(64, newW)
+        viewModel.config.height = max(64, newH)
+    }
+
+    private var aspectRatioPresetsView: some View {
+        let currentRatio = Double(viewModel.config.width) / Double(viewModel.config.height)
+        let currentArea = viewModel.config.width * viewModel.config.height
+        return HStack(alignment: .top, spacing: 12) {
+            // Size column
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Size").font(.caption).foregroundColor(.neuTextSecondary)
+                VStack(spacing: 4) {
+                    ForEach(Self.sizeTargets, id: \.label) { size in
+                        let isActive = abs(Double(currentArea) / Double(size.area) - 1.0) < 0.2
+                        Button(size.label) { applySize(area: size.area) }
+                            .font(.caption)
+                            .buttonStyle(NeumorphicButtonStyle(isProminent: isActive))
+                            .frame(minWidth: 54)
+                    }
+                }
+            }
+
+            // Ratio tiles column
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Aspect Ratio").font(.caption).foregroundColor(.neuTextSecondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(Self.ratioPresets, id: \.label) { preset in
+                            let presetRatio = Double(preset.w) / Double(preset.h)
+                            let isActive = abs(currentRatio - presetRatio) < 0.02
+                            AspectRatioTile(label: preset.label, ratio: presetRatio, isActive: isActive)
+                                .onTapGesture {
+                                    viewModel.config.width = preset.w
+                                    viewModel.config.height = preset.h
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Save Pipeline Sheet
@@ -1700,5 +1766,50 @@ private struct ThumbnailItemView: View {
             .accessibilityLabel("Generated image")
             .accessibilityHint("Double-tap to select")
             .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+private struct AspectRatioTile: View {
+    let label: String
+    let ratio: Double  // width / height
+    let isActive: Bool
+
+    private let maxW: CGFloat = 28
+    private let maxH: CGFloat = 38
+
+    private var rectSize: CGSize {
+        if ratio >= Double(maxW / maxH) {
+            return CGSize(width: maxW, height: maxW / ratio)
+        } else {
+            return CGSize(width: maxH * ratio, height: maxH)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                Color.clear.frame(width: maxW, height: maxH)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(isActive ? Color.neuAccent.opacity(0.18) : Color.neuSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 2)
+                            .stroke(
+                                isActive ? Color.neuAccent : Color.neuShadowDark.opacity(0.5),
+                                lineWidth: isActive ? 1.5 : 1
+                            )
+                    )
+                    .frame(width: rectSize.width, height: rectSize.height)
+            }
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundColor(isActive ? .neuAccent : .neuTextSecondary)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isActive ? Color.neuAccent.opacity(0.08) : Color.clear)
+        )
+        .contentShape(Rectangle())
     }
 }

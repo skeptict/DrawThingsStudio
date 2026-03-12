@@ -18,6 +18,7 @@ struct LightboxOverlay: View {
     var onPrevious: (() -> Void)? = nil
     var onNext: (() -> Void)? = nil
 
+    @FocusState private var isFocused: Bool
     private var hasNav: Bool { onPrevious != nil || onNext != nil }
 
     var body: some View {
@@ -62,11 +63,12 @@ struct LightboxOverlay: View {
                 Spacer()
             }
         }
-        .onKeyPress(.escape) { onDismiss(); return .handled }
+        .focusable()
+        .focused($isFocused)
+        .onAppear { DispatchQueue.main.async { isFocused = true } }
+        .onKeyPress(.escape)     { onDismiss(); return .handled }
         .onKeyPress(.leftArrow)  { navigate(onPrevious) }
-        .onKeyPress(.upArrow)    { navigate(onPrevious) }
         .onKeyPress(.rightArrow) { navigate(onNext) }
-        .onKeyPress(.downArrow)  { navigate(onNext) }
     }
 
     @ViewBuilder

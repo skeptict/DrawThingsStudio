@@ -43,15 +43,10 @@ struct ImageInspectorView: View {
             HStack {
                 NeuSectionHeader("History", icon: "clock.arrow.circlepath")
                 Spacer()
-                Button {
-                    openFilePanel()
-                } label: {
-                    Image(systemName: "folder.badge.plus")
-                        .foregroundColor(.neuTextSecondary)
-                }
-                .buttonStyle(NeumorphicIconButtonStyle())
-                .help("Open image file...")
-                .accessibilityIdentifier("inspector_openFileButton")
+                Button("Open File…") { openFilePanel() }
+                    .font(.caption)
+                    .buttonStyle(NeumorphicButtonStyle())
+                    .accessibilityIdentifier("inspector_openFileButton")
 
                 if !viewModel.history.isEmpty {
                     Button("Clear All") {
@@ -80,8 +75,6 @@ struct ImageInspectorView: View {
                     Text("PNG, JPG from Finder or Discord")
                         .font(.caption2)
                         .foregroundColor(.neuTextSecondary.opacity(0.6))
-                    Button("Open File…") { openFilePanel() }
-                        .buttonStyle(NeumorphicButtonStyle())
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
