@@ -41,6 +41,9 @@ final class AppSettings: ObservableObject {
     @Published var ollamaAutoConnect: Bool {
         didSet { store.set(ollamaAutoConnect, forKey: "ollama.autoConnect") }
     }
+    @Published var ollamaHostHistory: [String] {
+        didSet { store.set(ollamaHostHistory, forKey: "ollama.hostHistory") }
+    }
 
     // LM Studio Settings
     @Published var lmStudioHost: String {
@@ -49,6 +52,9 @@ final class AppSettings: ObservableObject {
     @Published var lmStudioPort: Int {
         didSet { store.set(lmStudioPort, forKey: "lmstudio.port") }
     }
+    @Published var lmStudioHostHistory: [String] {
+        didSet { store.set(lmStudioHostHistory, forKey: "lmstudio.hostHistory") }
+    }
 
     // Jan Settings
     @Published var janHost: String {
@@ -56,6 +62,9 @@ final class AppSettings: ObservableObject {
     }
     @Published var janPort: Int {
         didSet { store.set(janPort, forKey: "jan.port") }
+    }
+    @Published var janHostHistory: [String] {
+        didSet { store.set(janHostHistory, forKey: "jan.hostHistory") }
     }
     @Published var janAPIKey: String {
         didSet {
@@ -168,14 +177,17 @@ final class AppSettings: ObservableObject {
         self.ollamaPort = store.integer(forKey: "ollama.port") != 0 ? store.integer(forKey: "ollama.port") : 11434
         self.ollamaDefaultModel = store.string(forKey: "ollama.defaultModel") ?? "llama3.2"
         self.ollamaAutoConnect = store.object(forKey: "ollama.autoConnect") as? Bool ?? true
+        self.ollamaHostHistory = store.object(forKey: "ollama.hostHistory") as? [String] ?? []
 
         // LM Studio
         self.lmStudioHost = store.string(forKey: "lmstudio.host") ?? "localhost"
         self.lmStudioPort = store.integer(forKey: "lmstudio.port") != 0 ? store.integer(forKey: "lmstudio.port") : 1234
+        self.lmStudioHostHistory = store.object(forKey: "lmstudio.hostHistory") as? [String] ?? []
 
         // Jan
         self.janHost = store.string(forKey: "jan.host") ?? "localhost"
         self.janPort = store.integer(forKey: "jan.port") != 0 ? store.integer(forKey: "jan.port") : 1337
+        self.janHostHistory = store.object(forKey: "jan.hostHistory") as? [String] ?? []
         // Skip keychain reads during UI tests to prevent authorization dialogs from blocking test startup
         let isUITesting = ProcessInfo.processInfo.environment["UI_TESTING"] == "1"
         self.janAPIKey = isUITesting ? "" : (keychain.string(for: SecretAccount.janAPIKey) ?? "")
@@ -279,6 +291,26 @@ final class AppSettings: ObservableObject {
     // MARK: - Methods
 
     // MARK: - Host History
+
+    private func addToHistory(_ host: String, list: inout [String], key: String) {
+        let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        list.removeAll { $0 == trimmed }
+        list.insert(trimmed, at: 0)
+        if list.count > 20 { list.removeLast() }
+    }
+
+    func addOllamaHostToHistory() { addToHistory(ollamaHost, list: &ollamaHostHistory, key: "ollama.hostHistory") }
+    func removeOllamaHostFromHistory(_ host: String) { ollamaHostHistory.removeAll { $0 == host } }
+    func clearOllamaHostHistory() { ollamaHostHistory = [] }
+
+    func addLMStudioHostToHistory() { addToHistory(lmStudioHost, list: &lmStudioHostHistory, key: "lmstudio.hostHistory") }
+    func removeLMStudioHostFromHistory(_ host: String) { lmStudioHostHistory.removeAll { $0 == host } }
+    func clearLMStudioHostHistory() { lmStudioHostHistory = [] }
+
+    func addJanHostToHistory() { addToHistory(janHost, list: &janHostHistory, key: "jan.hostHistory") }
+    func removeJanHostFromHistory(_ host: String) { janHostHistory.removeAll { $0 == host } }
+    func clearJanHostHistory() { janHostHistory = [] }
 
     /// Saves the current drawThingsHost to history (deduplicates, most-recent first, capped at 20).
     func addDrawThingsHostToHistory() {
@@ -418,7 +450,16 @@ struct SettingsView: View {
                 // Provider-specific settings
                 if settings.providerType == .ollama {
                     neuSettingsSection("Ollama Settings", icon: "server.rack") {
-                        neuSettingsRow("Host") { TextField("", text: $settings.ollamaHost).textFieldStyle(NeumorphicTextFieldStyle()) }
+                        neuSettingsRow("Host") {
+                            HostHistoryField(
+                                host: $settings.ollamaHost,
+                                history: settings.ollamaHostHistory,
+                                onCommit: { settings.addOllamaHostToHistory() },
+                                onSelect: { settings.ollamaHost = $0; settings.addOllamaHostToHistory() },
+                                onDelete: { settings.removeOllamaHostFromHistory($0) },
+                                onClearAll: { settings.clearOllamaHostHistory() }
+                            )
+                        }
                         neuSettingsRow("Port") { TextField("", value: $settings.ollamaPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
                         neuSettingsRow("Model") { TextField("", text: $settings.ollamaDefaultModel).textFieldStyle(NeumorphicTextFieldStyle()) }
                         Toggle("Auto-connect on launch", isOn: $settings.ollamaAutoConnect)
@@ -428,7 +469,16 @@ struct SettingsView: View {
 
                 if settings.providerType == .lmStudio {
                     neuSettingsSection("LM Studio Settings", icon: "desktopcomputer") {
-                        neuSettingsRow("Host") { TextField("", text: $settings.lmStudioHost).textFieldStyle(NeumorphicTextFieldStyle()) }
+                        neuSettingsRow("Host") {
+                            HostHistoryField(
+                                host: $settings.lmStudioHost,
+                                history: settings.lmStudioHostHistory,
+                                onCommit: { settings.addLMStudioHostToHistory() },
+                                onSelect: { settings.lmStudioHost = $0; settings.addLMStudioHostToHistory() },
+                                onDelete: { settings.removeLMStudioHostFromHistory($0) },
+                                onClearAll: { settings.clearLMStudioHostHistory() }
+                            )
+                        }
                         neuSettingsRow("Port") { TextField("", value: $settings.lmStudioPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
                         Text("OpenAI-compatible API on port 1234 by default.")
                             .font(.caption).foregroundColor(.neuTextSecondary)
@@ -437,7 +487,16 @@ struct SettingsView: View {
 
                 if settings.providerType == .jan {
                     neuSettingsSection("Jan Settings", icon: "bubble.left.and.bubble.right") {
-                        neuSettingsRow("Host") { TextField("", text: $settings.janHost).textFieldStyle(NeumorphicTextFieldStyle()) }
+                        neuSettingsRow("Host") {
+                            HostHistoryField(
+                                host: $settings.janHost,
+                                history: settings.janHostHistory,
+                                onCommit: { settings.addJanHostToHistory() },
+                                onSelect: { settings.janHost = $0; settings.addJanHostToHistory() },
+                                onDelete: { settings.removeJanHostFromHistory($0) },
+                                onClearAll: { settings.clearJanHostHistory() }
+                            )
+                        }
                         neuSettingsRow("Port") { TextField("", value: $settings.janPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
                         neuSettingsRow("API Key") {
                             HStack {
@@ -457,7 +516,7 @@ struct SettingsView: View {
                 // Draw Things Connection
                 neuSettingsSection("Draw Things Connection", icon: "paintbrush.pointed") {
                     neuSettingsRow("Host") {
-                        DrawThingsHostField(
+                        HostHistoryField(
                             host: $settings.drawThingsHost,
                             history: settings.drawThingsHostHistory,
                             onCommit: { settings.addDrawThingsHostToHistory() },
@@ -741,7 +800,7 @@ struct SettingsView: View {
 
 // MARK: - Draw Things Host History Field
 
-private struct DrawThingsHostField: View {
+private struct HostHistoryField: View {
     @Binding var host: String
     let history: [String]
     let onCommit: () -> Void

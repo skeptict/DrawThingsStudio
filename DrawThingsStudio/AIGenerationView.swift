@@ -291,11 +291,11 @@ struct ConnectionSetupView: View {
                 .foregroundColor(.secondary)
                 .symbolEffect(.pulse, options: .repeating)
 
-            Text("Connect to Ollama")
+            Text("Connect to \(AppSettings.shared.providerType.displayName)")
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("Enter your Ollama server details to enable AI-powered prompt generation")
+            Text("Enter your \(AppSettings.shared.providerType.displayName) server details to enable AI-powered prompt generation")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -344,7 +344,7 @@ struct ConnectionSetupView: View {
 
             Spacer()
 
-            Text("Make sure Ollama is running: ollama serve")
+            Text("Make sure \(AppSettings.shared.providerType.displayName) is running")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
