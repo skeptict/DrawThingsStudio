@@ -98,6 +98,8 @@ class AIGenerationViewModel: ObservableObject {
 
     func checkConnection() async {
         connectionStatus = .connecting
+        availableModels = []
+        selectedModel = "default"
         currentProvider = settings.providerType
 
         // Create client based on provider type
