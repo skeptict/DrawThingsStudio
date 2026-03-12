@@ -343,6 +343,9 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         }
         guard httpResponse.statusCode == 200 else {
             let errorBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+            if errorBody.contains("mmproj") || errorBody.contains("image input is not supported") {
+                throw LLMError.requestFailed("The model loaded in \(providerType.displayName) doesn't support vision. Load a multimodal model (with mmproj) to use image description.")
+            }
             throw LLMError.requestFailed("Vision request failed (status \(httpResponse.statusCode)): \(errorBody)")
         }
 
