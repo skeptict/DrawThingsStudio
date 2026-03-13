@@ -154,6 +154,17 @@ final class AppSettings: ObservableObject {
         didSet { store.set(llmMaxTokens, forKey: "llm.maxTokens") }
     }
 
+    // MARK: - Storage Settings
+
+    @Published var generatedImagesBookmark: Data? {
+        didSet { store.set(generatedImagesBookmark, forKey: "storage.generatedImagesBookmark") }
+    }
+    @Published var storyStudioImagesBookmark: Data? {
+        didSet { store.set(storyStudioImagesBookmark, forKey: "storage.storyStudioImagesBookmark") }
+    }
+    private var _generatedImagesURL: URL?
+    private var _storyStudioImagesURL: URL?
+
     // MARK: - Init
 
     init(
@@ -218,9 +229,42 @@ final class AppSettings: ObservableObject {
         self.describeImageSendTarget = rawTarget == "workflowBuilder" ? "storyStudio" : rawTarget
 
         self.llmMaxTokens = store.integer(forKey: "llm.maxTokens") != 0 ? store.integer(forKey: "llm.maxTokens") : 2048
+
+        // Storage bookmarks — resolve on init so the security scope is active immediately
+        let genBookmark = store.object(forKey: "storage.generatedImagesBookmark") as? Data
+        self.generatedImagesBookmark = genBookmark
+        self._generatedImagesURL = AppSettings.resolveBookmark(genBookmark)
+
+        let ssBookmark = store.object(forKey: "storage.storyStudioImagesBookmark") as? Data
+        self.storyStudioImagesBookmark = ssBookmark
+        self._storyStudioImagesURL = AppSettings.resolveBookmark(ssBookmark)
     }
 
     // MARK: - Computed Properties
+
+    private static var defaultGeneratedImagesURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return appSupport.appendingPathComponent("DrawThingsStudio/GeneratedImages", isDirectory: true)
+    }
+
+    private static var defaultStoryStudioImagesURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return appSupport.appendingPathComponent("DrawThingsStudio/StoryStudioImages", isDirectory: true)
+    }
+
+    var effectiveGeneratedImagesURL: URL { _generatedImagesURL ?? AppSettings.defaultGeneratedImagesURL }
+    var effectiveStoryStudioImagesURL: URL { _storyStudioImagesURL ?? AppSettings.defaultStoryStudioImagesURL }
+
+    var generatedImagesDisplayPath: String { storageFolderDisplayPath(for: _generatedImagesURL) }
+    var storyStudioImagesDisplayPath: String { storageFolderDisplayPath(for: _storyStudioImagesURL) }
+
+    private func storageFolderDisplayPath(for url: URL?) -> String {
+        guard let url else { return "Default (app container)" }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return url.path.hasPrefix(home) ? "~" + url.path.dropFirst(home.count) : url.path
+    }
 
     var defaultConfig: DrawThingsConfig {
         DrawThingsConfig(
@@ -329,6 +373,71 @@ final class AppSettings: ObservableObject {
 
     func clearDrawThingsHostHistory() {
         drawThingsHostHistory = []
+    }
+
+    // MARK: - Storage Folder Pickers
+
+    func pickGeneratedImagesFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Choose a folder for generated images"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let bookmark = try? url.bookmarkData(
+            options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil
+        ) else { return }
+        _generatedImagesURL?.stopAccessingSecurityScopedResource()
+        generatedImagesBookmark = bookmark
+        _generatedImagesURL = url
+        url.startAccessingSecurityScopedResource()
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        ImageStorageManager.shared.loadSavedImages()
+    }
+
+    func clearGeneratedImagesFolder() {
+        _generatedImagesURL?.stopAccessingSecurityScopedResource()
+        _generatedImagesURL = nil
+        generatedImagesBookmark = nil
+        ImageStorageManager.shared.loadSavedImages()
+    }
+
+    func pickStoryStudioImagesFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Choose a folder for Story Studio images"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let bookmark = try? url.bookmarkData(
+            options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil
+        ) else { return }
+        _storyStudioImagesURL?.stopAccessingSecurityScopedResource()
+        storyStudioImagesBookmark = bookmark
+        _storyStudioImagesURL = url
+        url.startAccessingSecurityScopedResource()
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    }
+
+    func clearStoryStudioImagesFolder() {
+        _storyStudioImagesURL?.stopAccessingSecurityScopedResource()
+        _storyStudioImagesURL = nil
+        storyStudioImagesBookmark = nil
+    }
+
+    private static func resolveBookmark(_ data: Data?) -> URL? {
+        guard let data else { return nil }
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: data,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else { return nil }
+        url.startAccessingSecurityScopedResource()
+        return url
     }
 
     private static func migrateLegacySecretsIfNeeded(store: SettingsStore, keychain: KeychainService) {
@@ -643,6 +752,25 @@ struct SettingsView: View {
                         .foregroundColor(.neuTextSecondary)
                 }
 
+                // Storage
+                neuSettingsSection("Storage", icon: "folder") {
+                    storageFolderRow(
+                        label: "Generated Images",
+                        displayPath: settings.generatedImagesDisplayPath,
+                        hasCustomFolder: settings.generatedImagesBookmark != nil,
+                        onChoose: { settings.pickGeneratedImagesFolder() },
+                        onReset: { settings.clearGeneratedImagesFolder() }
+                    )
+                    Divider()
+                    storageFolderRow(
+                        label: "Story Studio",
+                        displayPath: settings.storyStudioImagesDisplayPath,
+                        hasCustomFolder: settings.storyStudioImagesBookmark != nil,
+                        onChoose: { settings.pickStoryStudioImagesFolder() },
+                        onReset: { settings.clearStoryStudioImagesFolder() }
+                    )
+                }
+
                 // Debug
                 neuSettingsSection("Debug", icon: "ladybug") {
                     HStack(spacing: 12) {
@@ -723,6 +851,30 @@ struct SettingsView: View {
     }
 
     // MARK: - Neumorphic Settings Helpers
+
+    @ViewBuilder
+    private func storageFolderRow(label: String, displayPath: String, hasCustomFolder: Bool, onChoose: @escaping () -> Void, onReset: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.neuTextSecondary)
+            HStack(spacing: 8) {
+                Text(displayPath)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button("Choose...") { onChoose() }
+                    .buttonStyle(NeumorphicButtonStyle())
+                if hasCustomFolder {
+                    Button("Reset") { onReset() }
+                        .buttonStyle(NeumorphicButtonStyle())
+                        .foregroundColor(.red)
+                }
+            }
+        }
+    }
 
     private func neuSettingsSection<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {

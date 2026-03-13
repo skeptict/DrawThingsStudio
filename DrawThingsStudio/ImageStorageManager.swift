@@ -22,29 +22,22 @@ final class ImageStorageManager: ObservableObject {
     // Reused across calls — ISO8601DateFormatter is expensive to allocate.
     private static let filenameFormatter = ISO8601DateFormatter()
 
-    let storageDirectory: URL
-
     @Published var savedImages: [GeneratedImage] = []
 
     // MARK: - Initialization
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        self.storageDirectory = appSupport.appendingPathComponent("DrawThingsStudio/GeneratedImages", isDirectory: true)
         ensureDirectoryExists()
     }
 
     // MARK: - Directories
 
+    var storageDirectory: URL { AppSettings.shared.effectiveGeneratedImagesURL }
+
     /// Separate directory for Story Studio generated images — kept out of the
     /// Generate Image gallery so exploratory generations and narrative scene
     /// variants don't mix.
-    var storyStudioDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return appSupport.appendingPathComponent("DrawThingsStudio/StoryStudioImages", isDirectory: true)
-    }
+    var storyStudioDirectory: URL { AppSettings.shared.effectiveStoryStudioImagesURL }
 
     // MARK: - Public Methods
 
