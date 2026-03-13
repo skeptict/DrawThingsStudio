@@ -94,7 +94,26 @@ struct DrawThingsStudioApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // Recovery: store may be corrupt or incompatible (e.g. pre-release OS SwiftData changes).
+            // Wipe and retry once — BackupCoordinator will restore data on next launch.
+            let storeURL = modelConfiguration.url
+            let appSupport = storeURL.deletingLastPathComponent()
+            let fm = FileManager.default
+            let candidates: [URL] = [
+                storeURL,
+                appSupport.appendingPathComponent("default.store"),
+            ]
+            for base in candidates {
+                for suffix in ["", "-shm", "-wal"] {
+                    try? fm.removeItem(at: URL(fileURLWithPath: base.path + suffix))
+                }
+            }
+            UserDefaults.standard.set(true, forKey: "dts.needsBackupRestore")
+            do {
+                return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            } catch {
+                fatalError("Could not create ModelContainer even after recovery wipe: \(error)")
+            }
         }
     }()
 

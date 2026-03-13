@@ -500,10 +500,13 @@ struct SettingsView: View {
                         neuSettingsRow("Port") { TextField("", value: $settings.janPort, format: .number).textFieldStyle(NeumorphicTextFieldStyle()).frame(width: 100) }
                         neuSettingsRow("API Key") {
                             HStack {
-                                if showAPIKey {
-                                    TextField("", text: $settings.janAPIKey).textFieldStyle(NeumorphicTextFieldStyle())
-                                } else {
-                                    SecureField("", text: $settings.janAPIKey).textFieldStyle(NeumorphicTextFieldStyle())
+                                ZStack {
+                                    TextField("", text: $settings.janAPIKey)
+                                        .textFieldStyle(NeumorphicTextFieldStyle())
+                                        .opacity(showAPIKey ? 1 : 0)
+                                    SecureField("", text: $settings.janAPIKey)
+                                        .textFieldStyle(NeumorphicTextFieldStyle())
+                                        .opacity(showAPIKey ? 0 : 1)
                                 }
                                 Button(action: { showAPIKey.toggle() }) {
                                     Image(systemName: showAPIKey ? "eye.slash" : "eye").foregroundColor(.neuTextSecondary)
@@ -546,10 +549,13 @@ struct SettingsView: View {
 
                     neuSettingsRow("Secret") {
                         HStack {
-                            if showSharedSecret {
-                                TextField("", text: $settings.drawThingsSharedSecret).textFieldStyle(NeumorphicTextFieldStyle())
-                            } else {
-                                SecureField("", text: $settings.drawThingsSharedSecret).textFieldStyle(NeumorphicTextFieldStyle())
+                            ZStack {
+                                TextField("", text: $settings.drawThingsSharedSecret)
+                                    .textFieldStyle(NeumorphicTextFieldStyle())
+                                    .opacity(showSharedSecret ? 1 : 0)
+                                SecureField("", text: $settings.drawThingsSharedSecret)
+                                    .textFieldStyle(NeumorphicTextFieldStyle())
+                                    .opacity(showSharedSecret ? 0 : 1)
                             }
                             Button(action: { showSharedSecret.toggle() }) {
                                 Image(systemName: showSharedSecret ? "eye.slash" : "eye").foregroundColor(.neuTextSecondary)

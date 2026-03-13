@@ -66,8 +66,8 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         self.apiKey = apiKey
 
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 120
-        config.timeoutIntervalForResource = 300
+        config.timeoutIntervalForRequest = 300
+        config.timeoutIntervalForResource = 600
         self.session = URLSession(configuration: config)
     }
 
