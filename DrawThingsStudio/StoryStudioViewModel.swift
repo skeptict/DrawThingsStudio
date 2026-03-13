@@ -48,10 +48,17 @@ final class StoryStudioViewModel: ObservableObject {
     @Published var assembledPromptPreview: String = ""
     @Published var editablePrompt: String = ""
 
+    // MARK: - Chapter Batch Generation State
+
+    @Published var isGeneratingChapter = false
+    /// (currentSceneNumber, totalScenes) — 1-based for display
+    @Published var chapterBatchProgress: (current: Int, total: Int) = (0, 0)
+
     // MARK: - Private
 
     private var client: (any DrawThingsProvider)?
     private var generationTask: Task<Void, Never>?
+    private var chapterGenerationTask: Task<Void, Never>?
     private var modelContext: ModelContext?
 
     // MARK: - Setup
@@ -138,6 +145,13 @@ final class StoryStudioViewModel: ObservableObject {
         context.delete(chapter)
     }
 
+    func moveChapters(in project: StoryProject, fromOffsets: IndexSet, toOffset: Int) {
+        var sorted = project.sortedChapters
+        sorted.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        for (i, chapter) in sorted.enumerated() { chapter.sortOrder = i }
+        project.modifiedAt = Date()
+    }
+
     // MARK: - Scene Management
 
     func addScene(title: String, to chapter: StoryChapter? = nil) {
@@ -167,6 +181,13 @@ final class StoryStudioViewModel: ObservableObject {
         // context.delete triggers cascade rules on StoryScene, removing all
         // characterPresences and variants from the store.
         context.delete(scene)
+    }
+
+    func moveScenes(in chapter: StoryChapter, fromOffsets: IndexSet, toOffset: Int) {
+        var sorted = chapter.sortedScenes
+        sorted.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        for (i, scene) in sorted.enumerated() { scene.sortOrder = i }
+        selectedProject?.modifiedAt = Date()
     }
 
     func selectScene(_ scene: StoryScene) {
@@ -310,13 +331,11 @@ final class StoryStudioViewModel: ObservableObject {
             errorMessage = "No scene selected"
             return
         }
-
         guard !project.baseModelName.isEmpty else {
             errorMessage = "Please set a model in project settings"
             return
         }
-
-        guard !isGenerating else { return }
+        guard !isGenerating && !isGeneratingChapter else { return }
 
         errorMessage = nil
         isGenerating = true
@@ -325,96 +344,11 @@ final class StoryStudioViewModel: ObservableObject {
 
         generationTask = Task {
             do {
-                let settings = AppSettings.shared
-                if client == nil {
-                    client = settings.createDrawThingsClient()
-                }
-
-                guard let client = client else {
-                    throw DrawThingsError.connectionFailed("No client available")
-                }
-
-                let connected = await client.checkConnection()
-                guard connected else {
-                    throw DrawThingsError.connectionFailed("Draw Things is not reachable")
-                }
-                connectionStatus = .connected
-
-                // Assemble prompt
-                let assembled = PromptAssembler.assemble(
-                    scene: scene,
-                    project: project,
-                    characters: project.characters,
-                    settings: project.settings
-                )
-
-                // Use editable prompt if user modified it
-                let finalPrompt = editablePrompt.isEmpty ? assembled.positivePrompt : editablePrompt
-
-                var config = assembled.toGenerationConfig(project: project, scene: scene)
-                config.negativePrompt = assembled.negativePrompt
-
-                // Apply LoRAs
-                config.loras = assembled.loras.map {
-                    DrawThingsGenerationConfig.LoRAConfig(file: $0.file, weight: $0.weight)
-                }
-
-                // Always generate exactly one image per call — same as ImageGenerationViewModel.
-                // Without this Draw Things may return multiple images if its own batch
-                // count is > 1, which would create unwanted duplicate variants.
-                config.batchCount = 1
-                config.batchSize = 1
-
-                let images = try await client.generateImage(
-                    prompt: finalPrompt,
-                    config: config,
-                    onProgress: { [weak self] progress in
-                        self?.progress = progress
-                        self?.progressFraction = progress.fraction
-                    }
-                )
-
-                // Save variants and persist to GeneratedImages on disk.
-                // Images are stored as files via ImageStorageManager (not as Data
-                // blobs in SwiftData) to prevent SQLite store bloat. The variant
-                // only stores the file path; imageData is intentionally nil.
-                // The resolved seed is stored (config.seed == -1 means random; the
-                // actual seed used is unknowable without Draw Things returning it,
-                // so we store 0 as a placeholder rather than the -1 sentinel which
-                // would make variants appear non-reproducible in the UI).
-                for image in images {
-                    let savedURL = await ImageStorageManager.shared.saveImageForStoryStudio(
-                        image,
-                        prompt: finalPrompt,
-                        negativePrompt: assembled.negativePrompt,
-                        config: config
-                    )
-                    let resolvedSeed = config.seed >= 0 ? config.seed : 0
-                    let variant = SceneVariant(
-                        prompt: finalPrompt,
-                        negativePrompt: assembled.negativePrompt,
-                        seed: resolvedSeed,
-                        imageData: nil,
-                        imagePath: savedURL?.path,
-                        isSelected: scene.variants.isEmpty
-                    )
-                    // Insert into context before establishing any relationships.
-                    // SwiftData 1.0 (macOS 14) crashes with EXC_BAD_INSTRUCTION if you
-                    // set inverse relationships between objects not yet managed by a
-                    // ModelContext.
-                    modelContext?.insert(variant)
-                    variant.scene = scene
-                    scene.variants.append(variant)
-
-                    // generatedImageData is not populated for new variants;
-                    // views load the image via imageForVariant() using variant.imagePath.
-                }
-
-                project.modifiedAt = Date()
+                // Use editable prompt override for single-scene generation only.
+                let promptOverride = editablePrompt.isEmpty ? nil : editablePrompt
+                try await generateSceneCore(scene, project: project, promptOverride: promptOverride)
                 progress = .complete
                 progressFraction = 1.0
-                logger.info("Generated scene: \(scene.title)")
-
             } catch is CancellationError {
                 progress = .failed("Cancelled")
                 errorMessage = "Generation was cancelled"
@@ -426,8 +360,54 @@ final class StoryStudioViewModel: ObservableObject {
                 progress = .failed(error.localizedDescription)
                 errorMessage = error.localizedDescription
             }
-
             isGenerating = false
+        }
+    }
+
+    func generateChapter(_ chapter: StoryChapter) {
+        guard let project = selectedProject else { return }
+        guard !project.baseModelName.isEmpty else {
+            errorMessage = "Please set a model in project settings"
+            return
+        }
+        guard !isGenerating && !isGeneratingChapter else { return }
+
+        let scenes = chapter.sortedScenes
+        guard !scenes.isEmpty else { return }
+
+        errorMessage = nil
+        isGeneratingChapter = true
+        chapterBatchProgress = (1, scenes.count)
+
+        chapterGenerationTask = Task {
+            for (index, scene) in scenes.enumerated() {
+                guard !Task.isCancelled else { break }
+                chapterBatchProgress = (index + 1, scenes.count)
+                // Navigate to each scene so the user can follow progress.
+                selectScene(scene)
+                isGenerating = true
+                progressFraction = 0
+                progress = .starting
+                do {
+                    // Batch always uses assembled prompt — no single-scene override.
+                    try await generateSceneCore(scene, project: project, promptOverride: nil)
+                    progress = .complete
+                    progressFraction = 1.0
+                } catch is CancellationError {
+                    break
+                } catch let error as DrawThingsError {
+                    // Log error for this scene and continue to the next.
+                    errorMessage = "'\(scene.title)': \(error.localizedDescription)"
+                    logger.warning("Chapter generation error for scene '\(scene.title)': \(error.localizedDescription)")
+                } catch {
+                    errorMessage = "'\(scene.title)': \(error.localizedDescription)"
+                    logger.warning("Chapter generation error for scene '\(scene.title)': \(error.localizedDescription)")
+                }
+                isGenerating = false
+            }
+            isGeneratingChapter = false
+            chapterBatchProgress = (0, 0)
+            logger.info("Chapter generation complete: \(chapter.title)")
         }
     }
 
@@ -436,6 +416,101 @@ final class StoryStudioViewModel: ObservableObject {
         generationTask = nil
         isGenerating = false
         progress = .failed("Cancelled")
+    }
+
+    func cancelChapterGeneration() {
+        chapterGenerationTask?.cancel()
+        chapterGenerationTask = nil
+        isGeneratingChapter = false
+        chapterBatchProgress = (0, 0)
+        isGenerating = false
+        progress = .failed("Cancelled")
+    }
+
+    // MARK: - Generation Core
+
+    /// Generates one image for `scene` and saves it as a new variant.
+    /// Shared by `generateScene()` (single) and `generateChapter()` (batch).
+    private func generateSceneCore(
+        _ scene: StoryScene,
+        project: StoryProject,
+        promptOverride: String?
+    ) async throws {
+        let settings = AppSettings.shared
+        if client == nil {
+            client = settings.createDrawThingsClient()
+        }
+        guard let client = client else {
+            throw DrawThingsError.connectionFailed("No client available")
+        }
+
+        let connected = await client.checkConnection()
+        guard connected else {
+            throw DrawThingsError.connectionFailed("Draw Things is not reachable")
+        }
+        connectionStatus = .connected
+
+        let assembled = PromptAssembler.assemble(
+            scene: scene,
+            project: project,
+            characters: project.characters,
+            settings: project.settings
+        )
+
+        let finalPrompt = promptOverride ?? assembled.positivePrompt
+
+        var config = assembled.toGenerationConfig(project: project, scene: scene)
+        config.negativePrompt = assembled.negativePrompt
+        config.loras = assembled.loras.map {
+            DrawThingsGenerationConfig.LoRAConfig(file: $0.file, weight: $0.weight)
+        }
+        // Always generate exactly one image per call — same as ImageGenerationViewModel.
+        // Without this Draw Things may return multiple images if its own batch
+        // count is > 1, which would create unwanted duplicate variants.
+        config.batchCount = 1
+        config.batchSize = 1
+
+        let images = try await client.generateImage(
+            prompt: finalPrompt,
+            config: config,
+            onProgress: { [weak self] progress in
+                self?.progress = progress
+                self?.progressFraction = progress.fraction
+            }
+        )
+
+        // Save variants and persist to disk via ImageStorageManager (not as Data
+        // blobs in SwiftData) to prevent SQLite store bloat. The variant only
+        // stores the file path; imageData is intentionally nil.
+        // The resolved seed is stored (config.seed == -1 means random; the actual
+        // seed used is unknowable without Draw Things returning it, so we store 0
+        // as a placeholder rather than -1 which would appear non-reproducible).
+        for image in images {
+            let savedURL = await ImageStorageManager.shared.saveImageForStoryStudio(
+                image,
+                prompt: finalPrompt,
+                negativePrompt: assembled.negativePrompt,
+                config: config
+            )
+            let resolvedSeed = config.seed >= 0 ? config.seed : 0
+            let variant = SceneVariant(
+                prompt: finalPrompt,
+                negativePrompt: assembled.negativePrompt,
+                seed: resolvedSeed,
+                imageData: nil,
+                imagePath: savedURL?.path,
+                isSelected: scene.variants.isEmpty
+            )
+            // Insert into context before establishing any relationships.
+            // SwiftData 1.0 (macOS 14) crashes with EXC_BAD_INSTRUCTION if you
+            // set inverse relationships between objects not yet managed by a ModelContext.
+            modelContext?.insert(variant)
+            variant.scene = scene
+            scene.variants.append(variant)
+        }
+
+        project.modifiedAt = Date()
+        logger.info("Generated scene: \(scene.title)")
     }
 
     func checkConnection() async {

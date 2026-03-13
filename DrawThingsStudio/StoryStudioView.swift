@@ -260,7 +260,39 @@ struct StoryStudioView: View {
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundColor(viewModel.selectedChapter?.id == chapter.id ? .neuAccent : .primary)
+
+                        // Batch progress badge (shown only while this chapter is generating)
+                        let isThisChapterGenerating = viewModel.isGeneratingChapter
+                            && viewModel.selectedChapter?.id == chapter.id
+                        if isThisChapterGenerating {
+                            Text("\(viewModel.chapterBatchProgress.current)/\(viewModel.chapterBatchProgress.total)")
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundColor(.neuAccent)
+                        }
+
                         Spacer()
+
+                        // Generate Chapter button
+                        if isThisChapterGenerating {
+                            Button(action: { viewModel.cancelChapterGeneration() }) {
+                                Image(systemName: "stop.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            }
+                            .buttonStyle(NeumorphicIconButtonStyle())
+                        } else {
+                            Button(action: {
+                                viewModel.selectedChapter = chapter
+                                viewModel.generateChapter(chapter)
+                            }) {
+                                Image(systemName: "play.fill")
+                                    .font(.caption2)
+                            }
+                            .buttonStyle(NeumorphicIconButtonStyle())
+                            .disabled(viewModel.isGenerating || viewModel.isGeneratingChapter || chapter.scenes.isEmpty)
+                            .help("Generate all scenes in \"\(chapter.title)\"")
+                        }
+
                         Button(action: {
                             viewModel.selectedChapter = chapter
                             viewModel.addScene(title: "New Scene", to: chapter)
@@ -277,10 +309,31 @@ struct StoryStudioView: View {
                     .onTapGesture {
                         viewModel.selectedChapter = chapter
                     }
+                    .contextMenu {
+                        let chapters = project.sortedChapters
+                        let idx = chapters.firstIndex(where: { $0.id == chapter.id }) ?? -1
+                        if idx > 0 {
+                            Button("Move Up") {
+                                viewModel.moveChapters(in: project, fromOffsets: IndexSet(integer: idx), toOffset: idx - 1)
+                            }
+                        }
+                        if idx >= 0 && idx < chapters.count - 1 {
+                            Button("Move Down") {
+                                viewModel.moveChapters(in: project, fromOffsets: IndexSet(integer: idx), toOffset: idx + 2)
+                            }
+                        }
+                        if idx >= 0 { Divider() }
+                        Button("Delete Chapter", role: .destructive) {
+                            viewModel.deleteChapter(chapter)
+                        }
+                    }
 
                     // Scenes in chapter
                     ForEach(chapter.sortedScenes) { scene in
-                        sceneRow(scene: scene)
+                        sceneRow(scene: scene,
+                                 chapter: chapter,
+                                 isCurrentlyGenerating: viewModel.isGenerating
+                                    && viewModel.selectedScene?.id == scene.id)
                     }
                 }
             }
@@ -294,11 +347,17 @@ struct StoryStudioView: View {
         }
     }
 
-    private func sceneRow(scene: StoryScene) -> some View {
+    private func sceneRow(scene: StoryScene, chapter: StoryChapter, isCurrentlyGenerating: Bool = false) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: scene.isApproved ? "checkmark.circle.fill" : "circle")
-                .font(.caption)
-                .foregroundColor(scene.isApproved ? .green : .neuTextSecondary)
+            if isCurrentlyGenerating {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 12, height: 12)
+            } else {
+                Image(systemName: scene.isApproved ? "checkmark.circle.fill" : "circle")
+                    .font(.caption)
+                    .foregroundColor(scene.isApproved ? .green : .neuTextSecondary)
+            }
 
             Text(scene.title)
                 .font(.caption)
@@ -307,7 +366,7 @@ struct StoryStudioView: View {
 
             Spacer()
 
-            if scene.generatedImageData != nil {
+            if !scene.variants.isEmpty {
                 Image(systemName: "photo")
                     .font(.caption2)
                     .foregroundColor(.neuTextSecondary)
@@ -325,6 +384,19 @@ struct StoryStudioView: View {
             viewModel.selectScene(scene)
         }
         .contextMenu {
+            let scenes = chapter.sortedScenes
+            let idx = scenes.firstIndex(where: { $0.id == scene.id }) ?? -1
+            if idx > 0 {
+                Button("Move Up") {
+                    viewModel.moveScenes(in: chapter, fromOffsets: IndexSet(integer: idx), toOffset: idx - 1)
+                }
+            }
+            if idx >= 0 && idx < scenes.count - 1 {
+                Button("Move Down") {
+                    viewModel.moveScenes(in: chapter, fromOffsets: IndexSet(integer: idx), toOffset: idx + 2)
+                }
+            }
+            if idx >= 0 { Divider() }
             Button("Delete Scene", role: .destructive) {
                 viewModel.deleteScene(scene)
             }
