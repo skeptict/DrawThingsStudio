@@ -68,13 +68,13 @@ struct ContentView: View {
                 Color.neuBackground
                     .ignoresSafeArea()
 
-                WorkflowBuilderView(viewModel: workflowViewModel)
+                WorkflowBuilderView(viewModel: workflowViewModel, isActive: selectedItem == .workflow)
                     .opacity(selectedItem == .workflow ? 1 : 0)
                     .scaleEffect(selectedItem == .workflow ? 1 : 0.98)
                     .allowsHitTesting(selectedItem == .workflow)
                     .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
-                ImageGenerationView(viewModel: imageGenViewModel, storyStudioViewModel: storyStudioViewModel, selectedSidebarItem: $selectedItem)
+                ImageGenerationView(viewModel: imageGenViewModel, storyStudioViewModel: storyStudioViewModel, selectedSidebarItem: $selectedItem, isActive: selectedItem == .generateImage)
                     .opacity(selectedItem == .generateImage ? 1 : 0)
                     .scaleEffect(selectedItem == .generateImage ? 1 : 0.98)
                     .allowsHitTesting(selectedItem == .generateImage)

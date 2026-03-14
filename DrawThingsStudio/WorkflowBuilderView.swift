@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 /// Main view for building StoryFlow workflows (generates Storyflow pipeline JSON)
 struct WorkflowBuilderView: View {
     @ObservedObject var viewModel: WorkflowBuilderViewModel
+    var isActive: Bool = true
     @Environment(\.modelContext) private var modelContext
     @State private var showJSONPreview = false
     @State private var showAddInstructionSheet = false
@@ -19,8 +20,9 @@ struct WorkflowBuilderView: View {
     @State private var showAIGeneration = false
     @State private var showSaveToLibrary = false
 
-    init(viewModel: WorkflowBuilderViewModel? = nil) {
+    init(viewModel: WorkflowBuilderViewModel? = nil, isActive: Bool = true) {
         self.viewModel = viewModel ?? WorkflowBuilderViewModel()
+        self.isActive = isActive
     }
 
     var body: some View {
@@ -36,6 +38,7 @@ struct WorkflowBuilderView: View {
         .padding(20)
         .neuBackground()
         .toolbar {
+            if isActive {
             ToolbarItemGroup(placement: .primaryAction) {
                 // Open workflow
                 Button {
@@ -133,6 +136,7 @@ struct WorkflowBuilderView: View {
                 .help("Export workflow to a JSON file")
                 .accessibilityIdentifier("workflowBuilder_exportButton")
             }
+            } // if isActive
         }
         .sheet(isPresented: $showAIGeneration) {
             AIGenerationSheet(viewModel: viewModel, isPresented: $showAIGeneration)

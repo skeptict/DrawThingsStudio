@@ -13,6 +13,7 @@ struct ImageGenerationView: View {
     @ObservedObject var viewModel: ImageGenerationViewModel
     @ObservedObject var storyStudioViewModel: StoryStudioViewModel
     @Binding var selectedSidebarItem: SidebarItem?
+    var isActive: Bool = true
     // DrawThingsAssetManager.shared is a pre-existing singleton — use @ObservedObject,
     // not @StateObject, since this view does not own or create it.
     @ObservedObject private var assetManager = DrawThingsAssetManager.shared
@@ -95,14 +96,16 @@ struct ImageGenerationView: View {
             await viewModel.checkConnection()
         }
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    showSavePipeline = true
-                } label: {
-                    Label("Save Pipeline", systemImage: "tray.and.arrow.down")
+            if isActive {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        showSavePipeline = true
+                    } label: {
+                        Label("Save Pipeline", systemImage: "tray.and.arrow.down")
+                    }
+                    .help("Save this pipeline to the library")
+                    .accessibilityIdentifier("generate_savePipelineButton")
                 }
-                .help("Save this pipeline to the library")
-                .accessibilityIdentifier("generate_savePipelineButton")
             }
         }
         .sheet(isPresented: $showSavePipeline) {
