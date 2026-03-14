@@ -313,24 +313,52 @@ struct SceneEditorView: View {
 
             // Appearance picker (if character has appearances)
             if let character = character, !character.appearances.isEmpty {
-                HStack(spacing: 8) {
-                    Text("Appearance:")
-                        .font(.caption2)
-                        .foregroundColor(.neuTextSecondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text("Appearance:")
+                            .font(.caption2)
+                            .foregroundColor(.neuTextSecondary)
 
-                    Picker("", selection: Binding(
-                        get: { presence.appearanceId },
-                        set: {
-                            presence.appearanceId = $0
-                            viewModel.updateAssembledPrompt()
+                        // Thumbnail of the currently selected appearance
+                        let selectedAppearance = character.sortedAppearances.first { $0.id == presence.appearanceId }
+                        let refData = selectedAppearance?.referenceImageData ?? character.primaryReferenceImageData
+                        if let data = refData, let nsImage = NSImage(data: data) {
+                            Image(nsImage: nsImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 18, height: 18)
+                                .clipShape(Circle())
                         }
-                    )) {
-                        Text("Default").tag(UUID?.none)
-                        ForEach(character.sortedAppearances) { appearance in
-                            Text(appearance.name).tag(UUID?.some(appearance.id))
+
+                        Picker("", selection: Binding(
+                            get: { presence.appearanceId },
+                            set: {
+                                presence.appearanceId = $0
+                                viewModel.updateAssembledPrompt()
+                            }
+                        )) {
+                            Text("Default").tag(UUID?.none)
+                            ForEach(character.sortedAppearances) { appearance in
+                                Text(appearance.name).tag(UUID?.some(appearance.id))
+                            }
                         }
+                        .font(.caption)
                     }
-                    .font(.caption)
+
+                    // Apply from here — propagate selection to all subsequent scenes in chapter
+                    if let chapter = viewModel.selectedChapter {
+                        Button("Apply from here →") {
+                            viewModel.applyAppearanceForward(
+                                appearanceId: presence.appearanceId,
+                                character: character,
+                                fromScene: scene,
+                                in: chapter
+                            )
+                        }
+                        .font(.caption2)
+                        .buttonStyle(NeumorphicPlainButtonStyle())
+                        .help("Set this appearance for this scene and all subsequent scenes in the chapter")
+                    }
                 }
             }
         }

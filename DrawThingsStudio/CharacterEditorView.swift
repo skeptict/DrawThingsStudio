@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct CharacterEditorView: View {
     @Bindable var character: StoryCharacter
@@ -59,7 +60,7 @@ struct CharacterEditorView: View {
         .frame(minWidth: 600, maxWidth: 600, minHeight: 500, maxHeight: 700)
         .sheet(isPresented: $showingAppearanceEditor) {
             if let appearance = editingAppearance {
-                AppearanceEditorSheet(appearance: appearance)
+                AppearanceEditorSheet(appearance: appearance, character: character, viewModel: viewModel)
             }
         }
     }
@@ -407,6 +408,9 @@ struct CharacterEditorView: View {
                 for a in character.appearances { a.isDefault = false }
                 appearance.isDefault = !appearance.isDefault
             }
+            Button("Duplicate") {
+                viewModel.duplicateAppearance(appearance, for: character)
+            }
             Divider()
             Button("Delete", role: .destructive) {
                 character.appearances.removeAll { $0.id == appearance.id }
@@ -432,7 +436,10 @@ struct CharacterEditorView: View {
 
 struct AppearanceEditorSheet: View {
     @Bindable var appearance: CharacterAppearance
+    var character: StoryCharacter? = nil
+    var viewModel: StoryStudioViewModel? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var isHoveringDropZone = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -446,97 +453,205 @@ struct AppearanceEditorSheet: View {
                     .keyboardShortcut(.cancelAction)
             }
 
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Name")
-                        .font(.subheadline)
-                        .foregroundColor(.neuTextSecondary)
-                    TextField("Winter Outfit, Battle-Scarred...", text: $appearance.name)
-                        .textFieldStyle(.roundedBorder)
-                }
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Reference image
+                    referenceImageSection
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Prompt Override (replaces base fragment)")
-                        .font(.subheadline)
-                        .foregroundColor(.neuTextSecondary)
-                    TextField("Full replacement prompt for this appearance", text: Binding(
-                        get: { appearance.promptOverride ?? "" },
-                        set: { appearance.promptOverride = $0.isEmpty ? nil : $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                }
-
-                HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Clothing Override")
+                        Text("Name")
                             .font(.subheadline)
                             .foregroundColor(.neuTextSecondary)
-                        TextField("Heavy winter coat, fur boots", text: Binding(
-                            get: { appearance.clothingOverride ?? "" },
-                            set: { appearance.clothingOverride = $0.isEmpty ? nil : $0 }
+                        TextField("Winter Outfit, Battle-Scarred...", text: $appearance.name)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Prompt Override (replaces base fragment)")
+                            .font(.subheadline)
+                            .foregroundColor(.neuTextSecondary)
+                        TextField("Full replacement prompt for this appearance", text: Binding(
+                            get: { appearance.promptOverride ?? "" },
+                            set: { appearance.promptOverride = $0.isEmpty ? nil : $0 }
                         ))
                         .textFieldStyle(.roundedBorder)
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Expression Override")
-                            .font(.subheadline)
-                            .foregroundColor(.neuTextSecondary)
-                        TextField("worried, angry...", text: Binding(
-                            get: { appearance.expressionOverride ?? "" },
-                            set: { appearance.expressionOverride = $0.isEmpty ? nil : $0 }
-                        ))
-                        .textFieldStyle(.roundedBorder)
-                    }
-                }
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Clothing Override")
+                                .font(.subheadline)
+                                .foregroundColor(.neuTextSecondary)
+                            TextField("Heavy winter coat, fur boots", text: Binding(
+                                get: { appearance.clothingOverride ?? "" },
+                                set: { appearance.clothingOverride = $0.isEmpty ? nil : $0 }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                        }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Physical Changes")
-                        .font(.subheadline)
-                        .foregroundColor(.neuTextSecondary)
-                    TextField("Scar on left cheek, grey hair...", text: Binding(
-                        get: { appearance.physicalChanges ?? "" },
-                        set: { appearance.physicalChanges = $0.isEmpty ? nil : $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                }
-
-                HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("LoRA Override")
-                            .font(.subheadline)
-                            .foregroundColor(.neuTextSecondary)
-                        TextField("appearance_lora.safetensors", text: Binding(
-                            get: { appearance.loraFilenameOverride ?? "" },
-                            set: { appearance.loraFilenameOverride = $0.isEmpty ? nil : $0 }
-                        ))
-                        .textFieldStyle(.roundedBorder)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("LoRA Weight Override")
-                            .font(.subheadline)
-                            .foregroundColor(.neuTextSecondary)
-                        HStack {
-                            Slider(
-                                value: Binding(
-                                    get: { appearance.loraWeightOverride ?? 1.0 },
-                                    set: { appearance.loraWeightOverride = $0 }
-                                ),
-                                in: 0...2,
-                                step: 0.05
-                            )
-                            Text(String(format: "%.2f", appearance.loraWeightOverride ?? 1.0))
-                                .font(.system(.caption, design: .monospaced))
-                                .frame(width: 36)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Expression Override")
+                                .font(.subheadline)
+                                .foregroundColor(.neuTextSecondary)
+                            TextField("worried, angry...", text: Binding(
+                                get: { appearance.expressionOverride ?? "" },
+                                set: { appearance.expressionOverride = $0.isEmpty ? nil : $0 }
+                            ))
+                            .textFieldStyle(.roundedBorder)
                         }
                     }
-                }
 
-                Toggle("Default Appearance", isOn: $appearance.isDefault)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Physical Changes")
+                            .font(.subheadline)
+                            .foregroundColor(.neuTextSecondary)
+                        TextField("Scar on left cheek, grey hair...", text: Binding(
+                            get: { appearance.physicalChanges ?? "" },
+                            set: { appearance.physicalChanges = $0.isEmpty ? nil : $0 }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                    }
+
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("LoRA Override")
+                                .font(.subheadline)
+                                .foregroundColor(.neuTextSecondary)
+                            TextField("appearance_lora.safetensors", text: Binding(
+                                get: { appearance.loraFilenameOverride ?? "" },
+                                set: { appearance.loraFilenameOverride = $0.isEmpty ? nil : $0 }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("LoRA Weight Override")
+                                .font(.subheadline)
+                                .foregroundColor(.neuTextSecondary)
+                            HStack {
+                                Slider(
+                                    value: Binding(
+                                        get: { appearance.loraWeightOverride ?? 1.0 },
+                                        set: { appearance.loraWeightOverride = $0 }
+                                    ),
+                                    in: 0...2,
+                                    step: 0.05
+                                )
+                                Text(String(format: "%.2f", appearance.loraWeightOverride ?? 1.0))
+                                    .font(.system(.caption, design: .monospaced))
+                                    .frame(width: 36)
+                            }
+                        }
+                    }
+
+                    Toggle("Default Appearance", isOn: $appearance.isDefault)
+                }
             }
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 520, height: 580)
+    }
+
+    // MARK: - Reference Image Section
+
+    private var referenceImageSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Reference Image")
+                .font(.subheadline)
+                .foregroundColor(.neuTextSecondary)
+
+            HStack(spacing: 12) {
+                // Thumbnail / drop zone
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isHoveringDropZone ? Color.neuAccent.opacity(0.15) : Color.neuBackground.opacity(0.5))
+                        .frame(width: 80, height: 80)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(
+                                    isHoveringDropZone ? Color.neuAccent : Color.neuTextSecondary.opacity(0.3),
+                                    style: StrokeStyle(lineWidth: 1.5, dash: appearance.referenceImageData == nil ? [4] : [])
+                                )
+                        )
+
+                    if let data = appearance.referenceImageData, let nsImage = NSImage(data: data) {
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else {
+                        VStack(spacing: 4) {
+                            Image(systemName: "photo.badge.plus")
+                                .font(.title3)
+                                .foregroundColor(.neuTextSecondary)
+                            Text("Drop image")
+                                .font(.system(size: 9))
+                                .foregroundColor(.neuTextSecondary)
+                        }
+                    }
+                }
+                .onDrop(of: [.fileURL, .image], isTargeted: $isHoveringDropZone) { providers in
+                    loadDroppedImage(from: providers)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Button("Choose File...") {
+                        viewModel?.importReferenceImage(for: appearance)
+                    }
+                    .buttonStyle(NeumorphicButtonStyle())
+
+                    if let vm = viewModel, let char = character {
+                        Button {
+                            Task { await vm.generateAppearanceReference(appearance, character: char) }
+                        } label: {
+                            HStack(spacing: 4) {
+                                if vm.isGenerating {
+                                    ProgressView().scaleEffect(0.6)
+                                } else {
+                                    Image(systemName: "wand.and.stars")
+                                }
+                                Text("Generate Reference")
+                            }
+                        }
+                        .buttonStyle(NeumorphicButtonStyle())
+                        .disabled(vm.isGenerating)
+                        .help("Generate a reference image using Draw Things with this appearance's prompt")
+                    }
+
+                    if appearance.referenceImageData != nil {
+                        Button("Clear") { appearance.referenceImageData = nil }
+                            .buttonStyle(NeumorphicButtonStyle())
+                            .foregroundColor(.red)
+                    }
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private func loadDroppedImage(from providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                guard let data = item as? Data,
+                      let url = URL(dataRepresentation: data, relativeTo: nil),
+                      let imageData = try? Data(contentsOf: url),
+                      imageData.count <= 10 * 1024 * 1024 else { return }
+                DispatchQueue.main.async { appearance.referenceImageData = imageData }
+            }
+            return true
+        } else if provider.canLoadObject(ofClass: NSImage.self) {
+            provider.loadObject(ofClass: NSImage.self) { obj, _ in
+                guard let image = obj as? NSImage,
+                      let tiff = image.tiffRepresentation,
+                      let rep = NSBitmapImageRep(data: tiff),
+                      let png = rep.representation(using: .png, properties: [:]) else { return }
+                DispatchQueue.main.async { appearance.referenceImageData = png }
+            }
+            return true
+        }
+        return false
     }
 }

@@ -216,6 +216,139 @@ final class StoryStudioViewModel: ObservableObject {
         project.modifiedAt = Date()
     }
 
+    // MARK: - Appearance Management (SSP3)
+
+    func duplicateAppearance(_ appearance: CharacterAppearance, for character: StoryCharacter) {
+        guard let context = modelContext else { return }
+        let nextOrder = (character.appearances.map(\.sortOrder).max() ?? -1) + 1
+        let copy = CharacterAppearance(
+            name: "Copy of \(appearance.name)",
+            promptOverride: appearance.promptOverride,
+            clothingOverride: appearance.clothingOverride,
+            expressionOverride: appearance.expressionOverride,
+            physicalChanges: appearance.physicalChanges,
+            loraFilenameOverride: appearance.loraFilenameOverride,
+            loraWeightOverride: appearance.loraWeightOverride,
+            isDefault: false,
+            sortOrder: nextOrder
+        )
+        copy.referenceImageData = appearance.referenceImageData
+        context.insert(copy)
+        copy.character = character
+        character.appearances.append(copy)
+        selectedProject?.modifiedAt = Date()
+    }
+
+    func importReferenceImage(for appearance: CharacterAppearance) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg]
+        panel.allowsMultipleSelection = false
+        panel.message = "Select a reference image for this appearance"
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { [weak self] in
+                guard let self else { return }
+                let maxBytes = 10 * 1024 * 1024
+                do {
+                    let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+                    guard (attrs[.size] as? Int ?? 0) <= maxBytes else {
+                        self.errorMessage = "Image is too large (max 10 MB)"
+                        return
+                    }
+                    appearance.referenceImageData = try Data(contentsOf: url)
+                    self.selectedProject?.modifiedAt = Date()
+                } catch {
+                    self.errorMessage = "Could not load image: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    /// Generates a reference image for an appearance using Draw Things
+    /// and saves it as the appearance's referenceImageData.
+    func generateAppearanceReference(_ appearance: CharacterAppearance, character: StoryCharacter) async {
+        guard let project = selectedProject else { return }
+        guard !isGenerating && !isGeneratingChapter else { return }
+        isGenerating = true
+        defer { isGenerating = false }
+        do {
+            let settings = AppSettings.shared
+            if client == nil { client = settings.createDrawThingsClient() }
+            guard let client else { throw DrawThingsError.connectionFailed("No client available") }
+            guard await client.checkConnection() else {
+                throw DrawThingsError.connectionFailed("Draw Things is not reachable")
+            }
+            connectionStatus = .connected
+
+            // Build appearance prompt: art style + character + appearance overrides
+            var parts: [String] = []
+            if let artStyle = project.artStyle, !artStyle.isEmpty { parts.append(artStyle) }
+            if let promptOverride = appearance.promptOverride, !promptOverride.isEmpty {
+                parts.append(promptOverride)
+            } else {
+                parts.append(character.promptFragment)
+            }
+            if let clothing = appearance.clothingOverride, !clothing.isEmpty { parts.append(clothing) }
+            if let physical = appearance.physicalChanges, !physical.isEmpty { parts.append(physical) }
+            let prompt = parts.filter { !$0.isEmpty }.joined(separator: ", ")
+
+            var config = DrawThingsGenerationConfig()
+            config.model = project.baseModelName
+            config.sampler = project.baseSampler
+            config.steps = project.baseSteps
+            config.guidanceScale = Double(project.baseGuidanceScale)
+            config.shift = Double(project.baseShift)
+            config.width = project.outputWidth
+            config.height = project.outputHeight
+            config.negativePrompt = project.baseNegativePrompt ?? ""
+            config.batchCount = 1
+            config.batchSize = 1
+            let loraFile = appearance.loraFilenameOverride ?? character.loraFilename
+            let loraWeight = appearance.loraWeightOverride ?? character.loraWeight
+            if let file = loraFile, let weight = loraWeight {
+                config.loras = [.init(file: file, weight: weight)]
+            }
+
+            let images = try await client.generateImage(
+                prompt: prompt,
+                config: config,
+                onProgress: { [weak self] p in
+                    self?.progress = p
+                    self?.progressFraction = p.fraction
+                }
+            )
+
+            if let image = images.first,
+               let tiffData = image.tiffRepresentation,
+               let bitmapRep = NSBitmapImageRep(data: tiffData),
+               let pngData = bitmapRep.representation(using: .png, properties: [:]) {
+                appearance.referenceImageData = pngData
+                project.modifiedAt = Date()
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Sets the selected appearance for all scenes from `fromScene` onward
+    /// (by sort order) in the given chapter. Pass nil to reset to default.
+    func applyAppearanceForward(
+        appearanceId: UUID?,
+        character: StoryCharacter,
+        fromScene: StoryScene,
+        in chapter: StoryChapter
+    ) {
+        let scenes = chapter.scenes.sorted { $0.sortOrder < $1.sortOrder }
+        guard let fromIndex = scenes.firstIndex(where: { $0.id == fromScene.id }) else { return }
+        for scene in scenes[fromIndex...] {
+            if let presence = scene.characterPresences.first(where: { $0.characterId == character.id }) {
+                presence.appearanceId = appearanceId
+            }
+        }
+        selectedProject?.modifiedAt = Date()
+        updateAssembledPrompt()
+    }
+
     func deleteCharacter(_ character: StoryCharacter) {
         guard let context = modelContext, let project = selectedProject else { return }
         // SceneCharacterPresence stores characterId as a plain UUID (not a
