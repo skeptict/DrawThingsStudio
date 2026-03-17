@@ -30,6 +30,7 @@ struct AssembledPrompt {
             model: project.baseModelName,
             shift: Double(project.baseShift),
             strength: Double(scene.strengthOverride ?? 1.0),
+            stochasticSamplingGamma: Double(project.baseStochasticSamplingGamma),
             negativePrompt: negativePrompt,
             loras: loras.map { DrawThingsGenerationConfig.LoRAConfig(file: $0.file, weight: $0.weight) }
         )

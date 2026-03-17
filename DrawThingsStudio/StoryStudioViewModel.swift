@@ -317,6 +317,7 @@ final class StoryStudioViewModel: ObservableObject {
             var config = DrawThingsGenerationConfig()
             config.model = project.baseModelName
             config.sampler = project.baseSampler
+            config.stochasticSamplingGamma = Double(project.baseStochasticSamplingGamma)
             config.steps = project.baseSteps
             config.guidanceScale = Double(project.baseGuidanceScale)
             config.shift = Double(project.baseShift)

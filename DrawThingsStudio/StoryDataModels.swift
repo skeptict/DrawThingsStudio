@@ -27,6 +27,7 @@ class StoryProject {
     var baseSteps: Int
     var baseGuidanceScale: Float
     var baseShift: Float
+    var baseStochasticSamplingGamma: Float
     var baseNegativePrompt: String?
     var baseRefinerModel: String?
     var baseRefinerStart: Float?
@@ -58,6 +59,7 @@ class StoryProject {
         baseSteps: Int = 8,
         baseGuidanceScale: Float = 1.0,
         baseShift: Float = 3.0,
+        baseStochasticSamplingGamma: Float = 0.3,
         baseNegativePrompt: String? = nil,
         baseRefinerModel: String? = nil,
         baseRefinerStart: Float? = nil
@@ -74,6 +76,7 @@ class StoryProject {
         self.baseSteps = baseSteps
         self.baseGuidanceScale = baseGuidanceScale
         self.baseShift = baseShift
+        self.baseStochasticSamplingGamma = baseStochasticSamplingGamma
         self.baseNegativePrompt = baseNegativePrompt
         self.baseRefinerModel = baseRefinerModel
         self.baseRefinerStart = baseRefinerStart

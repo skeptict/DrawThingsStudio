@@ -1258,6 +1258,28 @@ struct ProjectSettingsSheet: View {
                 )
             }
 
+            // SSS — only shown for TCD family samplers
+            if project.baseSampler == "TCD" || project.baseSampler == "TCD Trailing" {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Stochastic Sampling (SSS)")
+                        .font(.subheadline)
+                        .foregroundColor(.neuTextSecondary)
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { Double(project.baseStochasticSamplingGamma) },
+                                set: { project.baseStochasticSamplingGamma = Float($0) }
+                            ),
+                            in: 0...1, step: 0.01
+                        )
+                        Text(String(format: "%.0f%%", project.baseStochasticSamplingGamma * 100))
+                            .font(.caption)
+                            .foregroundColor(.neuTextSecondary)
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                }
+            }
+
             // Dimensions
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -1586,6 +1608,9 @@ struct ProjectSettingsSheet: View {
         project.baseSampler = config.samplerName
         if let shift = config.shift {
             project.baseShift = shift
+        }
+        if let ssg = config.stochasticSamplingGamma {
+            project.baseStochasticSamplingGamma = ssg
         }
     }
 
