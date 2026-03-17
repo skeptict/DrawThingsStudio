@@ -16,6 +16,7 @@ struct CharacterEditorView: View {
 
     @State private var showingAppearanceEditor = false
     @State private var editingAppearance: CharacterAppearance?
+    @State private var showEnhanceStylePicker = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,11 +54,16 @@ struct CharacterEditorView: View {
 
                     // Appearances section
                     appearancesSection
+
+                    Divider()
+
+                    // Appearance timeline
+                    timelineSection
                 }
                 .padding(20)
             }
         }
-        .frame(minWidth: 600, maxWidth: 600, minHeight: 500, maxHeight: 700)
+        .frame(minWidth: 600, maxWidth: 600, minHeight: 500, maxHeight: 780)
         .sheet(isPresented: $showingAppearanceEditor) {
             if let appearance = editingAppearance {
                 AppearanceEditorSheet(appearance: appearance, character: character, viewModel: viewModel)
@@ -100,14 +106,31 @@ struct CharacterEditorView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Physical Description")
-                    .font(.subheadline)
-                    .foregroundColor(.neuTextSecondary)
+                HStack {
+                    Text("Physical Description")
+                        .font(.subheadline)
+                        .foregroundColor(.neuTextSecondary)
+                    Spacer()
+                    Button {
+                        let desc = [character.name, character.age, character.physicalDescription, character.clothingDefault, character.species]
+                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+                        guard !desc.isEmpty else { return }
+                        Task { await viewModel.generateCharacterPrompt(description: desc, for: character) }
+                    } label: {
+                        LLMActionLabel(isActive: viewModel.activeLLMOp == .generatingCharacterPrompt, icon: "wand.and.stars", text: "Generate Prompt")
+                    }
+                    .buttonStyle(NeumorphicPlainButtonStyle())
+                    .disabled(viewModel.isEnhancing)
+                    .help("Generate a prompt fragment from the character description above")
+                }
                 TextField("Detailed physical traits for reference", text: Binding(
                     get: { character.physicalDescription ?? "" },
                     set: { character.physicalDescription = $0.isEmpty ? nil : $0 }
                 ))
                 .textFieldStyle(.roundedBorder)
+                if let err = viewModel.enhanceError {
+                    Text(err).font(.caption).foregroundColor(.red)
+                }
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -196,9 +219,29 @@ struct CharacterEditorView: View {
             NeuSectionHeader("Prompt Fragments", icon: "text.quote")
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Positive Prompt Fragment")
-                    .font(.subheadline)
-                    .foregroundColor(.neuTextSecondary)
+                HStack {
+                    Text("Positive Prompt Fragment")
+                        .font(.subheadline)
+                        .foregroundColor(.neuTextSecondary)
+                    Spacer()
+                    Button {
+                        showEnhanceStylePicker.toggle()
+                    } label: {
+                        LLMActionLabel(isActive: viewModel.activeLLMOp == .enhancingPromptFragment, icon: "sparkles", text: "Enhance")
+                    }
+                    .buttonStyle(NeumorphicPlainButtonStyle())
+                    .disabled(viewModel.isEnhancing || character.promptFragment.isEmpty)
+                    .popover(isPresented: $showEnhanceStylePicker, arrowEdge: .top) {
+                        EnhanceStylePickerView { style in
+                            showEnhanceStylePicker = false
+                            Task {
+                                await viewModel.enhanceTextAndApply(character.promptFragment, style: style, op: .enhancingPromptFragment) {
+                                    character.promptFragment = $0
+                                }
+                            }
+                        }
+                    }
+                }
                 TextEditor(text: $character.promptFragment)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 60, maxHeight: 100)
@@ -416,6 +459,121 @@ struct CharacterEditorView: View {
                 character.appearances.removeAll { $0.id == appearance.id }
             }
         }
+    }
+
+    // MARK: - Appearance Timeline
+
+    @State private var timelineExpanded = true
+
+    private var timelineSection: some View {
+        DisclosureGroup(isExpanded: $timelineExpanded) {
+            timelineContent
+        } label: {
+            NeuSectionHeader("Appearance Timeline", icon: "calendar.badge.clock")
+        }
+    }
+
+    @ViewBuilder
+    private var timelineContent: some View {
+        let project = viewModel.selectedProject
+        let chapters = project?.sortedChapters ?? []
+        let allEmpty = chapters.allSatisfy { $0.scenes.isEmpty }
+
+        if project == nil || allEmpty {
+            Text("No scenes yet")
+                .font(.caption)
+                .foregroundColor(.neuTextSecondary)
+                .padding(.top, 4)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Shows which appearance is active per scene. Click a cell to change it.")
+                    .font(.caption)
+                    .foregroundColor(.neuTextSecondary)
+
+                ForEach(chapters) { chapter in
+                    if !chapter.scenes.isEmpty {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(chapter.title)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(.neuTextSecondary)
+                                .padding(.horizontal, 2)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 5) {
+                                    ForEach(chapter.sortedScenes) { scene in
+                                        timelineCell(scene: scene)
+                                    }
+                                }
+                                .padding(.bottom, 2)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.top, 6)
+        }
+    }
+
+    private func timelineCell(scene: StoryScene) -> some View {
+        let presence = scene.characterPresences.first { $0.characterId == character.id }
+        let isPresent = presence != nil
+        let selectedAppearance = presence.flatMap { p in
+            p.appearanceId.flatMap { aid in character.sortedAppearances.first { $0.id == aid } }
+        }
+        let label = selectedAppearance?.name ?? (isPresent ? "Default" : "—")
+        let cellColor = isPresent ? colorForAppearance(selectedAppearance) : Color.secondary.opacity(0.25)
+
+        return Menu {
+            if isPresent {
+                Button("Default") {
+                    presence?.appearanceId = nil
+                    viewModel.updateAssembledPrompt()
+                }
+                if !character.sortedAppearances.isEmpty {
+                    Divider()
+                    ForEach(character.sortedAppearances) { appearance in
+                        Button {
+                            presence?.appearanceId = appearance.id
+                            viewModel.updateAssembledPrompt()
+                        } label: {
+                            Label(appearance.name,
+                                  systemImage: presence?.appearanceId == appearance.id ? "checkmark" : "circle")
+                        }
+                    }
+                }
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Text(scene.title)
+                    .font(.system(size: 9))
+                    .lineLimit(1)
+                    .frame(width: 66, alignment: .center)
+                    .foregroundColor(isPresent ? .primary : .secondary)
+
+                Text(label)
+                    .font(.system(size: 8, weight: .medium))
+                    .lineLimit(1)
+                    .frame(width: 66)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 2)
+                    .background(cellColor.opacity(0.2))
+                    .foregroundColor(isPresent ? cellColor : .secondary)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .strokeBorder(cellColor, lineWidth: isPresent ? 1 : 0.5)
+                    )
+                    .cornerRadius(3)
+            }
+        }
+        .disabled(!isPresent)
+        .help(isPresent ? "Change \(character.name)'s appearance in \"\(scene.title)\"" : "\(character.name) is not in this scene")
+    }
+
+    private func colorForAppearance(_ appearance: CharacterAppearance?) -> Color {
+        guard let appearance else { return .neuAccent }
+        let palette: [Color] = [.neuAccent, .blue, .orange, .purple, .green, .pink, .teal, .brown]
+        let idx = character.sortedAppearances.firstIndex(where: { $0.id == appearance.id }) ?? 0
+        return palette[idx % palette.count]
     }
 
     private func addAppearance() {
