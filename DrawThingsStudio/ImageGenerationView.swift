@@ -1280,104 +1280,104 @@ struct ImageGenerationView: View {
                 .onTapGesture { lightboxImage = generatedImage.image }
 
             // Image info card
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 8) {
-                    if !generatedImage.prompt.isEmpty {
-                        Text(generatedImage.prompt)
-                            .font(.callout)
-                            .foregroundColor(.primary)
-                            .lineLimit(3)
-                            .textSelection(.enabled)
-                    }
+            VStack(alignment: .leading, spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !generatedImage.prompt.isEmpty {
+                            Text(generatedImage.prompt)
+                                .font(.callout)
+                                .foregroundColor(.primary)
+                                .lineLimit(3)
+                                .textSelection(.enabled)
+                        }
 
-                    if !generatedImage.negativePrompt.isEmpty {
-                        Text("Neg: \(generatedImage.negativePrompt)")
-                            .font(.caption)
-                            .foregroundColor(.neuTextSecondary)
-                            .lineLimit(2)
-                            .textSelection(.enabled)
-                    }
-
-                    let cfg = generatedImage.config
-                    LazyVGrid(columns: [
-                        GridItem(.flexible(), spacing: 6),
-                        GridItem(.flexible(), spacing: 6),
-                        GridItem(.flexible(), spacing: 6)
-                    ], spacing: 6) {
-                        neuInfoChip("\(cfg.width)x\(cfg.height)")
-                        neuInfoChip("\(cfg.steps) steps")
-                        neuInfoChip(String(format: "%.1f cfg", cfg.guidanceScale))
-                        if !cfg.sampler.isEmpty {
-                            neuInfoChip(cfg.sampler)
-                        }
-                        neuInfoChip("seed \(cfg.seed)")
-                        if !cfg.seedMode.isEmpty {
-                            neuInfoChip(cfg.seedMode)
-                        }
-                        neuInfoChip(String(format: "shift %.1f", cfg.shift))
-                        if cfg.strength < 1.0 {
-                            neuInfoChip(String(format: "str %.2f", cfg.strength))
-                        }
-                        if cfg.stochasticSamplingGamma > 0 && cfg.stochasticSamplingGamma < 1.0 {
-                            neuInfoChip(String(format: "sss %.0f%%", cfg.stochasticSamplingGamma * 100))
-                        }
-                        if let rds = cfg.resolutionDependentShift {
-                            neuInfoChip(rds ? "RDS on" : "RDS off")
-                        }
-                        if let czs = cfg.cfgZeroStar {
-                            neuInfoChip(czs ? "CZS on" : "CZS off")
-                        }
-                    }
-
-                    if !cfg.model.isEmpty {
-                        Text(cfg.model)
-                            .font(.caption2)
-                            .foregroundColor(.neuTextSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .textSelection(.enabled)
-                    }
-
-                    if !cfg.loras.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "link")
-                                .font(.caption2)
+                        if !generatedImage.negativePrompt.isEmpty {
+                            Text("Neg: \(generatedImage.negativePrompt)")
+                                .font(.caption)
                                 .foregroundColor(.neuTextSecondary)
-                            ForEach(cfg.loras, id: \.file) { lora in
-                                neuInfoChip("\(lora.file) (\(String(format: "%.1f", lora.weight)))")
+                                .lineLimit(2)
+                                .textSelection(.enabled)
+                        }
+
+                        let cfg = generatedImage.config
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 6),
+                            GridItem(.flexible(), spacing: 6),
+                            GridItem(.flexible(), spacing: 6)
+                        ], spacing: 6) {
+                            neuInfoChip("\(cfg.width)x\(cfg.height)")
+                            neuInfoChip("\(cfg.steps) steps")
+                            neuInfoChip(String(format: "%.1f cfg", cfg.guidanceScale))
+                            if !cfg.sampler.isEmpty {
+                                neuInfoChip(cfg.sampler)
+                            }
+                            neuInfoChip("seed \(cfg.seed)")
+                            if !cfg.seedMode.isEmpty {
+                                neuInfoChip(cfg.seedMode)
+                            }
+                            neuInfoChip(String(format: "shift %.1f", cfg.shift))
+                            if cfg.strength < 1.0 {
+                                neuInfoChip(String(format: "str %.2f", cfg.strength))
+                            }
+                            if cfg.stochasticSamplingGamma > 0 && cfg.stochasticSamplingGamma < 1.0 {
+                                neuInfoChip(String(format: "sss %.0f%%", cfg.stochasticSamplingGamma * 100))
+                            }
+                            if let rds = cfg.resolutionDependentShift {
+                                neuInfoChip(rds ? "RDS on" : "RDS off")
+                            }
+                            if let czs = cfg.cfgZeroStar {
+                                neuInfoChip(czs ? "CZS on" : "CZS off")
                             }
                         }
+
+                        if !cfg.model.isEmpty {
+                            Text(cfg.model)
+                                .font(.caption2)
+                                .foregroundColor(.neuTextSecondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                        }
+
+                        if !cfg.loras.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "link")
+                                    .font(.caption2)
+                                    .foregroundColor(.neuTextSecondary)
+                                ForEach(cfg.loras, id: \.file) { lora in
+                                    neuInfoChip("\(lora.file) (\(String(format: "%.1f", lora.weight)))")
+                                }
+                            }
+                        }
+
+                        Text(generatedImage.generatedAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption2)
+                            .foregroundColor(.neuTextSecondary)
                     }
+                    .padding(.bottom, 8)
+                }
 
-                    Text(generatedImage.generatedAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption2)
-                        .foregroundColor(.neuTextSecondary)
+                // Action buttons are outside the ScrollView — macOS ScrollView intercepts
+                // mouse-down for scroll detection, making buttons inside it unreliable.
+                Divider()
+                    .padding(.bottom, 8)
 
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                        Button("Copy") { viewModel.copyToClipboard(generatedImage) }
-                            .font(.caption)
-                            .buttonStyle(NeumorphicButtonStyle())
-                        Button("Reveal") { viewModel.revealInFinder(generatedImage) }
-                            .font(.caption)
-                            .buttonStyle(NeumorphicButtonStyle())
-                        Button("Use Prompt") {
-                            viewModel.prompt = generatedImage.prompt
-                            viewModel.negativePrompt = generatedImage.negativePrompt
-                        }
-                        .font(.caption)
-                        .buttonStyle(NeumorphicButtonStyle())
-                        Button("Describe…") {
-                            generatedImageToDescribe = generatedImage
-                        }
-                        .font(.caption)
-                        .buttonStyle(NeumorphicButtonStyle())
-                        Button("Story Studio…") {
-                            imageForStoryStudio = generatedImage
-                        }
-                        .font(.caption)
-                        .buttonStyle(NeumorphicButtonStyle())
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    Button("Copy") { viewModel.copyToClipboard(generatedImage) }
+                    Button("Reveal") { viewModel.revealInFinder(generatedImage) }
+                    Button("Use Prompt") {
+                        viewModel.prompt = generatedImage.prompt
+                        viewModel.negativePrompt = generatedImage.negativePrompt
+                    }
+                    Button("Describe…") {
+                        generatedImageToDescribe = generatedImage
+                    }
+                    Button("Story Studio…") {
+                        imageForStoryStudio = generatedImage
                     }
                 }
+                .font(.caption)
+                .buttonStyle(NeumorphicButtonStyle())
             }
             .padding(12)
             .neuInset(cornerRadius: 14)
