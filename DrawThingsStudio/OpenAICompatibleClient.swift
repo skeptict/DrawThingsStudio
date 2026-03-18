@@ -416,9 +416,15 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
 
         let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            throw LLMError.requestFailed("Chat request failed")
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LLMError.invalidResponse
+        }
+        guard httpResponse.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                throw LLMError.requestFailed("Unauthorized (HTTP \(httpResponse.statusCode)) — check API key in \(providerType.displayName) settings")
+            }
+            throw LLMError.requestFailed("Chat request failed (HTTP \(httpResponse.statusCode))\(body.isEmpty ? "" : ": \(body.prefix(200))")")
         }
 
         let result = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)

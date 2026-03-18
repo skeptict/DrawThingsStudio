@@ -31,6 +31,7 @@ struct ImageGenerationView: View {
     @State private var generatedImageToDescribe: GeneratedImage?
     @State private var lightboxImage: NSImage?
     @State private var imageForStoryStudio: GeneratedImage?
+    @State private var imageCopied = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1363,7 +1364,11 @@ struct ImageGenerationView: View {
                     .padding(.bottom, 8)
 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                    Button("Copy") { viewModel.copyToClipboard(generatedImage) }
+                    Button(imageCopied ? "Copied!" : "Copy Image") {
+                        viewModel.copyToClipboard(generatedImage)
+                        imageCopied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { imageCopied = false }
+                    }
                     Button("Reveal") { viewModel.revealInFinder(generatedImage) }
                     Button("Use Prompt") {
                         viewModel.prompt = generatedImage.prompt
