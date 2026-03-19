@@ -396,6 +396,7 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         model: String? = nil,
         options: LLMGenerationOptions = .default
     ) async throws -> String {
+        let resolvedModelName = try await resolvedModel(model ?? defaultModel)
         let url = try validatedBaseURL().appendingPathComponent("chat/completions")
 
         var request = URLRequest(url: url)
@@ -404,7 +405,7 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
         addAuthHeader(to: &request)
 
         let body: [String: Any] = [
-            "model": model ?? defaultModel,
+            "model": resolvedModelName,
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "temperature": options.temperature,
             "top_p": options.topP,
