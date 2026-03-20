@@ -154,6 +154,135 @@ struct DrawThingsGenerationConfig: Codable {
                lower.contains("mochi")
     }
 
+    // MARK: - Model Family Detection & Defaults
+
+    enum ModelFamily: String {
+        case sd15        = "SD 1.5"
+        case sdxl        = "SDXL"
+        case flux        = "FLUX"
+        case zImage      = "Z Image"
+        case sd3         = "SD 3"
+        case ltx         = "LTX Video"
+        case wan         = "WAN Video"
+        case hunyuan     = "HunyuanVideo"
+        case animateDiff = "AnimateDiff"
+        case cogVideo    = "CogVideo"
+        case mochi       = "Mochi"
+        case unknown     = "Unknown"
+    }
+
+    var modelFamily: ModelFamily {
+        let lower = model.lowercased()
+        if lower.contains("ltx")                                        { return .ltx }
+        if lower.contains("wan")                                        { return .wan }
+        if lower.contains("animatediff") || lower.contains("animate_diff") { return .animateDiff }
+        if lower.contains("hunyuan") && lower.contains("video")         { return .hunyuan }
+        if lower.contains("cogvideo") || lower.contains("cog_video")    { return .cogVideo }
+        if lower.contains("mochi")                                      { return .mochi }
+        if lower.contains("flux")                                       { return .flux }
+        if lower.contains("zimage") || lower.contains("z_image") || lower.contains("z-image") { return .zImage }
+        if lower.contains("sd3") || lower.contains("sd_3") || lower.contains("stable-diffusion-3") { return .sd3 }
+        if lower.contains("xl") || lower.contains("sdxl")              { return .sdxl }
+        if lower.contains("v1") || lower.contains("v2") || lower.contains("sd1") ||
+           lower.contains("sd_1") || lower.contains("dreamshaper") ||
+           lower.contains("realistic") || lower.contains("deliberate") { return .sd15 }
+        return .unknown
+    }
+
+    /// Returns a config pre-filled with known-good defaults for the detected model family.
+    /// The caller's model name is preserved; only generation parameters are changed.
+    func withModelFamilyDefaults() -> DrawThingsGenerationConfig {
+        var c = self
+        switch modelFamily {
+        case .flux:
+            c.width = 1024; c.height = 1024
+            c.steps = 20; c.guidanceScale = 3.5
+            c.sampler = "Euler A Trailing"
+            c.shift = 3.0
+            c.resolutionDependentShift = true
+            c.cfgZeroStar = nil
+        case .zImage:
+            c.width = 1024; c.height = 1024
+            c.steps = 8; c.guidanceScale = 1.0
+            c.sampler = "UniPC Trailing"
+            c.shift = 3.0
+            c.resolutionDependentShift = false
+            c.cfgZeroStar = true
+        case .sd3:
+            c.width = 1024; c.height = 1024
+            c.steps = 28; c.guidanceScale = 4.5
+            c.sampler = "UniPC Trailing"
+            c.shift = 3.0
+            c.resolutionDependentShift = false
+            c.cfgZeroStar = nil
+        case .sdxl:
+            c.width = 1024; c.height = 1024
+            c.steps = 20; c.guidanceScale = 7.0
+            c.sampler = "DPM++ 2M Karras"
+            c.shift = 1.0
+            c.resolutionDependentShift = nil
+            c.cfgZeroStar = nil
+        case .sd15:
+            c.width = 512; c.height = 512
+            c.steps = 20; c.guidanceScale = 7.0
+            c.sampler = "DPM++ 2M Karras"
+            c.shift = 1.0
+            c.resolutionDependentShift = nil
+            c.cfgZeroStar = nil
+        case .ltx:
+            c.width = 768; c.height = 512
+            c.steps = 25; c.guidanceScale = 3.5
+            c.sampler = "UniPC Trailing"
+            c.shift = 1.0
+            c.batchCount = 25
+            c.resolutionDependentShift = nil
+            c.cfgZeroStar = nil
+        case .wan:
+            c.width = 832; c.height = 480
+            c.steps = 30; c.guidanceScale = 5.0
+            c.sampler = "UniPC Trailing"
+            c.shift = 5.0
+            c.batchCount = 16
+            c.resolutionDependentShift = nil
+            c.cfgZeroStar = nil
+        case .hunyuan:
+            c.width = 848; c.height = 480
+            c.steps = 30; c.guidanceScale = 6.0
+            c.sampler = "UniPC Trailing"
+            c.shift = 7.0
+            c.batchCount = 25
+            c.resolutionDependentShift = nil
+            c.cfgZeroStar = nil
+        case .animateDiff:
+            c.width = 512; c.height = 512
+            c.steps = 20; c.guidanceScale = 7.0
+            c.sampler = "DPM++ SDE Karras"
+            c.shift = 1.0
+            c.batchCount = 16
+            c.resolutionDependentShift = nil
+            c.cfgZeroStar = nil
+        case .cogVideo:
+            c.width = 720; c.height = 480
+            c.steps = 50; c.guidanceScale = 6.0
+            c.sampler = "UniPC Trailing"
+            c.shift = 1.0
+            c.batchCount = 49
+            c.resolutionDependentShift = nil
+            c.cfgZeroStar = nil
+        case .mochi:
+            c.width = 848; c.height = 480
+            c.steps = 64; c.guidanceScale = 4.5
+            c.sampler = "UniPC Trailing"
+            c.shift = 1.0
+            c.batchCount = 25
+            c.resolutionDependentShift = nil
+            c.cfgZeroStar = nil
+        case .unknown:
+            break
+        }
+        return c
+    }
+
     /// Convert to HTTP API request body dictionary
     func toRequestBody(prompt: String) -> [String: Any] {
         var body: [String: Any] = [

@@ -998,6 +998,19 @@ struct ImageGenerationView: View {
                 onRefresh: { Task { await assetManager.forceRefresh() } }
             )
 
+            // Model family defaults button — only shown when a family is detected
+            if viewModel.config.modelFamily != .unknown {
+                HStack {
+                    Button(action: { viewModel.applyModelFamilyDefaults() }) {
+                        Label("Use \(viewModel.config.modelFamily.rawValue) Defaults", systemImage: "wand.and.stars")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundColor(.neuAccent)
+                    Spacer()
+                }
+            }
+
             // Sampler (searchable dropdown)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Sampler").font(.caption).foregroundColor(.neuTextSecondary)

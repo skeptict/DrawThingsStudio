@@ -635,6 +635,12 @@ final class ImageGenerationViewModel: ObservableObject {
         syncSweepTexts()
     }
 
+    /// Apply known-good defaults for the currently selected model family.
+    /// Model name is preserved; only generation parameters are updated.
+    func applyModelFamilyDefaults() {
+        applyConfig(config.withModelFamilyDefaults())
+    }
+
     func loadPreset(_ modelConfig: ModelConfig) {
         config.width = modelConfig.width
         config.height = modelConfig.height
