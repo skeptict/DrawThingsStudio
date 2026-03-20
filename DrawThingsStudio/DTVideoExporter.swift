@@ -34,6 +34,94 @@ enum DTVideoExportError: LocalizedError {
 /// The caller is responsible for moving the result to the final destination.
 struct DTVideoExporter {
 
+    /// Export a flat array of images (e.g. directly from a generation call) to a temporary .mov.
+    /// Metadata is embedded from `prompt` and `config`. The caller moves the result to its
+    /// final destination.
+    static func exportFrames(
+        _ frames: [NSImage],
+        fps: Double = 16.0,
+        prompt: String = "",
+        config: DrawThingsGenerationConfig
+    ) async throws -> URL {
+        guard !frames.isEmpty else { throw DTVideoExportError.noFrames }
+        let width  = config.width  > 0 ? config.width  : Int(frames[0].size.width)
+        let height = config.height > 0 ? config.height : Int(frames[0].size.height)
+        guard width > 0, height > 0 else { throw DTVideoExportError.invalidDimensions }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("mov")
+
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
+
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey:  width,
+            AVVideoHeightKey: height,
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey:    max(width * height * 2, 500_000),
+                AVVideoProfileLevelKey:      AVVideoProfileLevelH264HighAutoLevel
+            ] as [String: Any]
+        ]
+        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        writerInput.expectsMediaDataInRealTime = false
+
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: writerInput,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey  as String: width,
+                kCVPixelBufferHeightKey as String: height
+            ]
+        )
+
+        // Embed generation metadata
+        var metadataItems: [AVMetadataItem] = []
+        if !prompt.isEmpty {
+            let titleItem = AVMutableMetadataItem()
+            titleItem.identifier = .commonIdentifierTitle
+            titleItem.locale = Locale(identifier: "und")
+            titleItem.value = String(prompt.prefix(255)) as NSString
+            metadataItems.append(titleItem)
+        }
+        let descParts: [String] = [
+            config.model.isEmpty ? nil : "Model: \(config.model)",
+            "Seed: \(config.seed)",
+            config.steps > 0 ? "Steps: \(config.steps)" : nil,
+            "Guidance: \(config.guidanceScale)",
+            "Sampler: \(config.sampler)",
+            "\(width)×\(height)",
+            config.loras.isEmpty ? nil : config.loras.map { "LoRA: \($0.file) @ \(String(format: "%.2f", $0.weight))" }.joined(separator: ", ")
+        ].compactMap { $0 }.filter { !$0.isEmpty }
+        if !descParts.isEmpty {
+            let descItem = AVMutableMetadataItem()
+            descItem.identifier = .commonIdentifierDescription
+            descItem.locale = Locale(identifier: "und")
+            descItem.value = descParts.joined(separator: "\n") as NSString
+            metadataItems.append(descItem)
+        }
+        writer.metadata = metadataItems
+        writer.add(writerInput)
+
+        writer.startWriting()
+        writer.startSession(atSourceTime: .zero)
+
+        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(fps))
+        for (index, image) in frames.enumerated() {
+            let pts = CMTimeMultiply(frameDuration, multiplier: Int32(index))
+            if let pb = image.toDTCVPixelBuffer(width: width, height: height) {
+                if !adaptor.append(pb, withPresentationTime: pts) { break }
+            }
+        }
+
+        writerInput.markAsFinished()
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            writer.finishWriting { cont.resume() }
+        }
+        if let error = writer.error { throw DTVideoExportError.writerFailed(error.localizedDescription) }
+        return outputURL
+    }
+
     /// Export the clip and return the URL of the temporary .mov file.
     /// This function is designed to run inside a `Task.detached` on a background thread.
     static func export(clip: DTVideoClip, fps: Double = 8.0, projectURL: URL) async throws -> URL {

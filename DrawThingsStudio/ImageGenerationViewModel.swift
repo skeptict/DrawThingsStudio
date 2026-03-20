@@ -169,10 +169,18 @@ final class ImageGenerationViewModel: ObservableObject {
 
                 for (jobIndex, job) in jobs.enumerated() {
                     var jobConfig = job.config
-                    jobConfig.batchCount = 1
-                    jobConfig.batchSize = 1
+                    let isVideo = jobConfig.isVideoModel
 
-                    for imageIndex in 0..<imagesPerJob {
+                    // For video models keep the original batchCount (= frame count).
+                    // For image models force batchCount=1 and loop imagesPerJob times instead.
+                    if !isVideo {
+                        jobConfig.batchCount = 1
+                        jobConfig.batchSize = 1
+                    }
+
+                    let iterationsForJob = isVideo ? 1 : imagesPerJob
+
+                    for imageIndex in 0..<iterationsForJob {
                         try Task.checkCancellation()
 
                         let overallIndex = jobIndex * imagesPerJob + imageIndex
@@ -198,6 +206,21 @@ final class ImageGenerationViewModel: ObservableObject {
                                 self.progressFraction = base + prog.fraction * slice
                             }
                         )
+
+                        if isVideo && images.count > 1 {
+                            if let saved = await storageManager.saveVideo(
+                                images,
+                                prompt: job.prompt,
+                                negativePrompt: jobConfig.negativePrompt,
+                                config: jobConfig,
+                                inferenceTimeMs: nil
+                            ) {
+                                generatedImages.insert(saved, at: 0)
+                                if selectedImage == nil { selectedImage = saved }
+                                totalSaved += 1
+                            }
+                            continue
+                        }
 
                         // Ensure NSImage has a valid bitmap rep (gRPC may return CGImage-backed images)
                         guard let rawImage = images.first else {
@@ -378,8 +401,14 @@ final class ImageGenerationViewModel: ObservableObject {
 
                     var stepConfig = steps[index].config
                     stepConfig.negativePrompt = steps[index].negativePrompt
-                    stepConfig.batchCount = 1
-                    stepConfig.batchSize = 1
+                    let isVideoStep = stepConfig.isVideoModel
+
+                    // Keep original batchCount for video models (= frame count).
+                    // Force batchCount=1 for image models to stay deterministic.
+                    if !isVideoStep {
+                        stepConfig.batchCount = 1
+                        stepConfig.batchSize = 1
+                    }
                     // Always set strength explicitly: img2img value when chaining, 1.0 otherwise.
                     // Never rely on a leftover value in config — it could trigger accidental
                     // img2img denoising (pure noise input → static output).
@@ -411,6 +440,25 @@ final class ImageGenerationViewModel: ObservableObject {
                         isGenerating = false
                         generationImageLabel = ""
                         return
+                    }
+
+                    if isVideoStep && images.count > 1 {
+                        // Assemble frames into .mov; use first frame for pipeline chaining
+                        previousImage = firstImage
+                        if let saved = await storageManager.saveVideo(
+                            images,
+                            prompt: steps[index].prompt,
+                            negativePrompt: steps[index].negativePrompt,
+                            config: stepConfig,
+                            inferenceTimeMs: nil
+                        ) {
+                            steps[index].resultImages.insert(saved, at: 0)
+                            if index == selectedStepIndex {
+                                generatedImages.insert(saved, at: 0)
+                                if selectedImage == nil { selectedImage = saved }
+                            }
+                        }
+                        continue
                     }
 
                     // Ensure valid bitmap rep before saving

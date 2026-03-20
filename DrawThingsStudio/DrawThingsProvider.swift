@@ -141,6 +141,19 @@ struct DrawThingsGenerationConfig: Codable {
         self.refinerStart = refinerStart
     }
 
+    /// Returns true if the model name identifies a video-generation model
+    /// (LTX, Wan, AnimateDiff, HunyuanVideo, Seedance, CogVideo, Mochi, etc.)
+    var isVideoModel: Bool {
+        let lower = model.lowercased()
+        return lower.contains("ltx") ||
+               lower.contains("wan") ||
+               lower.contains("animatediff") || lower.contains("animate_diff") ||
+               (lower.contains("hunyuan") && lower.contains("video")) ||
+               lower.contains("seedance") ||
+               lower.contains("cogvideo") || lower.contains("cog_video") ||
+               lower.contains("mochi")
+    }
+
     /// Convert to HTTP API request body dictionary
     func toRequestBody(prompt: String) -> [String: Any] {
         var body: [String: Any] = [

@@ -1794,6 +1794,8 @@ private struct ThumbnailItemView: View {
 
     private var isSelected: Bool { viewModel.selectedImage?.id == generatedImage.id }
 
+    private var isVideo: Bool { generatedImage.filePath?.pathExtension.lowercased() == "mov" }
+
     var body: some View {
         Image(nsImage: generatedImage.image)
             .resizable()
@@ -1809,6 +1811,14 @@ private struct ThumbnailItemView: View {
                 x: 3, y: 3
             )
             .shadow(color: Color.neuShadowLight.opacity(colorScheme == .dark ? 0.17 : 0.6), radius: 4, x: -2, y: -2)
+            .overlay(alignment: .bottomTrailing) {
+                if isVideo {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.white, Color.black.opacity(0.5))
+                        .padding(6)
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(isSelected ? Color.neuAccent.opacity(0.5) : Color.clear, lineWidth: 2)

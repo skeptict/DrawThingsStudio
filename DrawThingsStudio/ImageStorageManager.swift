@@ -129,6 +129,75 @@ final class ImageStorageManager: ObservableObject {
         return generatedImage
     }
 
+    /// Assemble `frames` into a .mov and save it to the gallery directory.
+    /// A thumbnail PNG (first frame + metadata) is saved alongside for gallery display and reload.
+    /// Returns a `GeneratedImage` whose `filePath` points to the .mov.
+    func saveVideo(
+        _ frames: [NSImage],
+        prompt: String,
+        negativePrompt: String,
+        config: DrawThingsGenerationConfig,
+        inferenceTimeMs: Int?
+    ) async -> GeneratedImage? {
+        guard let thumbnail = frames.first else { return nil }
+        ensureDirectoryExists()
+
+        let timestamp = Self.filenameFormatter.string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+            .replacingOccurrences(of: "T", with: "_")
+        let filename = "gen_\(timestamp)_\(UUID().uuidString.prefix(8))"
+
+        let movDestURL = storageDirectory.appendingPathComponent("\(filename).mov")
+        let thumbURL   = storageDirectory.appendingPathComponent("\(filename).png")
+
+        // Export .mov on background thread
+        do {
+            let tmpURL = try await DTVideoExporter.exportFrames(frames, fps: 16.0, prompt: prompt, config: config)
+            try FileManager.default.moveItem(at: tmpURL, to: movDestURL)
+        } catch {
+            logger.error("Video export failed: \(error.localizedDescription)")
+            return nil
+        }
+
+        // Save thumbnail PNG with embedded metadata (same as saveImage)
+        let parametersText = buildA1111Parameters(prompt: prompt, negativePrompt: negativePrompt, config: config)
+        if let tiffData = thumbnail.tiffRepresentation,
+           let bitmapRep = NSBitmapImageRep(data: tiffData),
+           let cgImage = bitmapRep.cgImage {
+            let mutableData = NSMutableData()
+            if let dest = CGImageDestinationCreateWithData(mutableData, UTType.png.identifier as CFString, 1, nil) {
+                let imageProps: [CFString: Any] = [
+                    kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFImageDescription: parametersText] as [CFString: Any],
+                    kCGImagePropertyIPTCDictionary: [kCGImagePropertyIPTCCaptionAbstract: parametersText] as [CFString: Any],
+                    kCGImagePropertyExifDictionary: [kCGImagePropertyExifUserComment: parametersText] as [CFString: Any]
+                ]
+                CGImageDestinationAddImage(dest, cgImage, imageProps as CFDictionary)
+                if CGImageDestinationFinalize(dest) {
+                    let metadata = ImageMetadata(prompt: prompt, negativePrompt: negativePrompt, config: config, generatedAt: Date(), inferenceTimeMs: inferenceTimeMs)
+                    var pngData = injectPNGTextChunk(into: mutableData as Data, keyword: "parameters", text: parametersText)
+                    if let jsonData = try? JSONEncoder().encode(metadata),
+                       let jsonString = String(data: jsonData, encoding: .utf8) {
+                        pngData = injectPNGTextChunk(into: pngData, keyword: "dts_metadata", text: jsonString)
+                    }
+                    try? pngData.write(to: thumbURL)
+                }
+            }
+        }
+
+        let generatedImage = GeneratedImage(
+            image: thumbnail,
+            prompt: prompt,
+            negativePrompt: negativePrompt,
+            config: config,
+            generatedAt: Date(),
+            inferenceTimeMs: inferenceTimeMs,
+            filePath: movDestURL
+        )
+        savedImages.insert(generatedImage, at: 0)
+        logger.info("Saved video to \(movDestURL.path)")
+        return generatedImage
+    }
+
     /// Save a Story Studio scene variant to the StoryStudioImages directory.
     /// Does NOT add to `savedImages` — Story Studio images are managed separately
     /// from the Generate Image gallery.
@@ -230,6 +299,10 @@ final class ImageStorageManager: ObservableObject {
                 inferenceTimeMs = metadata.inferenceTimeMs
             }
 
+            // If a .mov exists alongside this PNG it's a video thumbnail — point filePath at the video
+            let movURL = pngURL.deletingPathExtension().appendingPathExtension("mov")
+            let effectivePath = FileManager.default.fileExists(atPath: movURL.path) ? movURL : pngURL
+
             loaded.append(GeneratedImage(
                 image: image,
                 prompt: prompt,
@@ -237,7 +310,7 @@ final class ImageStorageManager: ObservableObject {
                 config: config,
                 generatedAt: generatedAt,
                 inferenceTimeMs: inferenceTimeMs,
-                filePath: pngURL
+                filePath: effectivePath
             ))
         }
 
@@ -245,12 +318,24 @@ final class ImageStorageManager: ObservableObject {
         logger.info("Loaded \(loaded.count) saved images from disk")
     }
 
-    /// Delete a saved image and its metadata
+    /// Delete a saved image (or video) and its associated files
     func deleteImage(_ generatedImage: GeneratedImage) {
         guard let filePath = generatedImage.filePath else { return }
 
         let fileManager = FileManager.default
-        try? fileManager.removeItem(at: filePath)
+        let ext = filePath.pathExtension.lowercased()
+
+        if ext == "mov" {
+            // Delete the .mov and the companion thumbnail PNG
+            try? fileManager.removeItem(at: filePath)
+            let thumbURL = filePath.deletingPathExtension().appendingPathExtension("png")
+            try? fileManager.removeItem(at: thumbURL)
+        } else {
+            try? fileManager.removeItem(at: filePath)
+            // Also delete any .mov sibling (defensive)
+            let movURL = filePath.deletingPathExtension().appendingPathExtension("mov")
+            try? fileManager.removeItem(at: movURL)
+        }
 
         let metadataURL = filePath.deletingPathExtension().appendingPathExtension("json")
         try? fileManager.removeItem(at: metadataURL)
