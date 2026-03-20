@@ -58,6 +58,9 @@ struct ImageGenerationView: View {
         .padding(.trailing, 20)
         .neuBackground()
         .lightbox(image: $lightboxImage, browseList: viewModel.generatedImages.map(\.image))
+        .sheet(isPresented: $showEnhanceStyleEditor) {
+            PromptStyleEditorView()
+        }
         .sheet(item: $imageForStoryStudio) { gi in
             SendToStoryStudioView(
                 prompt: gi.prompt,
@@ -740,9 +743,6 @@ struct ImageGenerationView: View {
         }
         .padding()
         .frame(width: 300)
-        .sheet(isPresented: $showEnhanceStyleEditor) {
-            PromptStyleEditorView()
-        }
     }
 
     private func runEnhance(style: CustomPromptStyle) {
