@@ -150,12 +150,10 @@ final class ImageStorageManager: ObservableObject {
         let movDestURL = storageDirectory.appendingPathComponent("\(filename).mov")
         let thumbURL   = storageDirectory.appendingPathComponent("\(filename).png")
 
-        // Export .mov fully off @MainActor to avoid actor-executor check failures
-        // during SwiftData @Query updates triggered by SwiftUI toolbar layout.
+        // Export .mov — exportFrames runs all work on DispatchQueue.global internally,
+        // using a single outer continuation with no actor hops inside the export path.
         do {
-            let tmpURL = try await Task.detached(priority: .userInitiated) {
-                try await DTVideoExporter.exportFrames(frames, fps: 16.0, prompt: prompt, config: config)
-            }.value
+            let tmpURL = try await DTVideoExporter.exportFrames(frames, fps: 16.0, prompt: prompt, config: config)
             try FileManager.default.moveItem(at: tmpURL, to: movDestURL)
         } catch {
             logger.error("Video export failed: \(error.localizedDescription)")
