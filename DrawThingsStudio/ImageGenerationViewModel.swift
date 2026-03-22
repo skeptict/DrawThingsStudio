@@ -48,6 +48,7 @@ final class ImageGenerationViewModel: ObservableObject {
 
     @Published var connectionStatus: DrawThingsConnectionStatus = .disconnected
     @Published var errorMessage: String?
+    @Published var noticeMessage: String?
 
     // MARK: - Prompt Enhancement
     @Published var isEnhancing: Bool = false
@@ -115,9 +116,10 @@ final class ImageGenerationViewModel: ObservableObject {
     // MARK: - Generation
 
     func generate() {
-        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            errorMessage = "Please enter a prompt"
-            return
+        if prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            noticeMessage = "Sending with blank prompt"
+        } else {
+            noticeMessage = nil
         }
 
         guard !config.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -276,6 +278,7 @@ final class ImageGenerationViewModel: ObservableObject {
             }
 
             isGenerating = false
+            noticeMessage = nil
         }
     }
 
@@ -283,6 +286,7 @@ final class ImageGenerationViewModel: ObservableObject {
         generationTask?.cancel()
         generationTask = nil
         isGenerating = false
+        noticeMessage = nil
         progress = .failed("Cancelled")
     }
 
@@ -571,18 +575,11 @@ final class ImageGenerationViewModel: ObservableObject {
         }
         inputImage = image
         inputImageName = url.lastPathComponent
-        // Default strength for img2img if currently at 1.0 (txt2img default)
-        if config.strength >= 1.0 {
-            config.strength = 0.7
-        }
     }
 
     func loadInputImage(from image: NSImage, name: String) {
         inputImage = image
         inputImageName = name
-        if config.strength >= 1.0 {
-            config.strength = 0.7
-        }
     }
 
     func clearInputImage() {

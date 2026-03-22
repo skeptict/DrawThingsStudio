@@ -1129,6 +1129,14 @@ struct ImageGenerationView: View {
 
     private var generateSection: some View {
         VStack(spacing: 10) {
+            if let notice = viewModel.noticeMessage {
+                Text(notice)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .neuInset(cornerRadius: 8)
+            }
             if let error = viewModel.errorMessage {
                 Text(error)
                     .font(.caption)
