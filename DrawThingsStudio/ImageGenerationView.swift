@@ -1054,13 +1054,24 @@ struct ImageGenerationView: View {
                 Spacer()
             }
 
-            // Seed
+            // Seed & Seed Mode
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Seed").font(.caption).foregroundColor(.neuTextSecondary)
                     TextField("", value: $viewModel.config.seed, format: .number)
                         .textFieldStyle(NeumorphicTextFieldStyle())
                         .frame(width: 90)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Seed Mode").font(.caption).foregroundColor(.neuTextSecondary)
+                    Picker("", selection: $viewModel.config.seedMode) {
+                        Text("Legacy").tag("Legacy")
+                        Text("Torch CPU").tag("Torch CPU Compatible")
+                        Text("Scale Alike").tag("Scale Alike")
+                        Text("Nvidia GPU").tag("Nvidia GPU Compatible")
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
                 }
                 Spacer()
             }
