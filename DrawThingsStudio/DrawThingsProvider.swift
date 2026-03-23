@@ -100,6 +100,40 @@ struct DrawThingsGenerationConfig: Codable {
             self.weight = weight
             self.mode = mode
         }
+
+        /// Tolerant decoder: `mode` was added later; default to "all" if absent.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            file   = try c.decode(String.self, forKey: .file)
+            weight = try c.decode(Double.self, forKey: .weight)
+            mode   = try c.decodeIfPresent(String.self, forKey: .mode) ?? "all"
+        }
+    }
+
+    /// Tolerant decoder: fields added after v0.7.0 use `decodeIfPresent` so that
+    /// metadata chunks written by older builds can still be read.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        width                   = try c.decode(Int.self,    forKey: .width)
+        height                  = try c.decode(Int.self,    forKey: .height)
+        steps                   = try c.decode(Int.self,    forKey: .steps)
+        guidanceScale           = try c.decode(Double.self, forKey: .guidanceScale)
+        seed                    = try c.decode(Int.self,    forKey: .seed)
+        seedMode                = try c.decode(String.self, forKey: .seedMode)
+        sampler                 = try c.decode(String.self, forKey: .sampler)
+        model                   = try c.decode(String.self, forKey: .model)
+        shift                   = try c.decode(Double.self, forKey: .shift)
+        strength                = try c.decode(Double.self, forKey: .strength)
+        stochasticSamplingGamma = try c.decodeIfPresent(Double.self, forKey: .stochasticSamplingGamma) ?? 0.3
+        batchSize               = try c.decodeIfPresent(Int.self,    forKey: .batchSize)    ?? 1
+        batchCount              = try c.decodeIfPresent(Int.self,    forKey: .batchCount)   ?? 1
+        numFrames               = try c.decodeIfPresent(Int.self,    forKey: .numFrames)    ?? 0
+        negativePrompt          = try c.decodeIfPresent(String.self, forKey: .negativePrompt) ?? ""
+        loras                   = try c.decodeIfPresent([LoRAConfig].self, forKey: .loras) ?? []
+        resolutionDependentShift = try c.decodeIfPresent(Bool.self,   forKey: .resolutionDependentShift)
+        cfgZeroStar             = try c.decodeIfPresent(Bool.self,   forKey: .cfgZeroStar)
+        refinerModel            = try c.decodeIfPresent(String.self, forKey: .refinerModel) ?? ""
+        refinerStart            = try c.decodeIfPresent(Double.self, forKey: .refinerStart) ?? 0.7
     }
 
     init(
