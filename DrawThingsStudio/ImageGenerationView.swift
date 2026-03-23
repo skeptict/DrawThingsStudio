@@ -1757,6 +1757,7 @@ private struct VideoDetailView: View {
             .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark ? 0.36 : 0.2), radius: 8, x: 4, y: 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onChange(of: url) { _, newURL in
+                player.pause()
                 player = AVPlayer(url: newURL)
             }
     }
@@ -1882,8 +1883,6 @@ private struct ThumbnailItemView: View {
 
     private var isSelected: Bool { viewModel.selectedImage?.id == generatedImage.id }
 
-    private var isVideo: Bool { generatedImage.isVideo }
-
     var body: some View {
         Image(nsImage: generatedImage.image)
             .resizable()
@@ -1900,7 +1899,7 @@ private struct ThumbnailItemView: View {
             )
             .shadow(color: Color.neuShadowLight.opacity(colorScheme == .dark ? 0.17 : 0.6), radius: 4, x: -2, y: -2)
             .overlay(alignment: .bottomTrailing) {
-                if isVideo {
+                if generatedImage.isVideo {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: 22))
                         .foregroundStyle(.white, Color.black.opacity(0.5))
