@@ -70,19 +70,7 @@ struct DrawThingsStudioApp: App {
         let lastDestructiveVersion = 3  // last version that required a store wipe
         let schemaVersionKey = "dts.schemaVersion"
 
-        let schema = Schema([
-            SavedWorkflow.self,
-            ModelConfig.self,
-            SavedPipeline.self,
-            StoryProject.self,
-            StoryCharacter.self,
-            CharacterAppearance.self,
-            StorySetting.self,
-            StoryChapter.self,
-            StoryScene.self,
-            SceneCharacterPresence.self,
-            SceneVariant.self
-        ])
+        let schema = Schema(DrawThingsStudioSchema.models)
 
         // Naming the configuration pins the store filename to
         // "DrawThingsStudio.store" so the migration path is predictable —

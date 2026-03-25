@@ -33,7 +33,7 @@ enum DrawThingsTransport: String, CaseIterable, Identifiable {
 
 // MARK: - Generated Image
 
-struct GeneratedImage: Identifiable {
+struct GeneratedImage: Identifiable, @unchecked Sendable {
     let id: UUID
     let image: NSImage
     let prompt: String

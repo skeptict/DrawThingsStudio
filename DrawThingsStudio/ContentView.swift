@@ -81,16 +81,18 @@ struct ContentView: View {
                     .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
 
                 ImageInspectorView(
-                    viewModel: imageInspectorViewModel,
-                    imageGenViewModel: imageGenViewModel,
-                    workflowViewModel: workflowViewModel,
-                    storyStudioViewModel: storyStudioViewModel,
-                    selectedSidebarItem: $selectedItem
+                    viewModel: imageInspectorViewModel
                 )
                 .opacity(selectedItem == .imageInspector || selectedItem == nil ? 1 : 0)
                 .scaleEffect(selectedItem == .imageInspector || selectedItem == nil ? 1 : 0.98)
                 .allowsHitTesting(selectedItem == .imageInspector || selectedItem == nil)
                 .neuAnimation(.spring(response: 0.18, dampingFraction: 0.8), value: selectedItem)
+                .onChange(of: imageInspectorViewModel.pendingAssistPrompt) { _, prompt in
+                    guard let prompt else { return }
+                    imageGenViewModel.prompt = prompt
+                    imageInspectorViewModel.pendingAssistPrompt = nil
+                    selectedItem = .generateImage
+                }
 
                 StoryStudioView(viewModel: storyStudioViewModel)
                     .opacity(selectedItem == .storyStudio ? 1 : 0)
@@ -516,7 +518,7 @@ struct SavedWorkflowsView: View {
 
         viewModel.clearAllInstructions()
         for dict in instructions {
-            if let type = viewModel.parseInstructionDict(dict) {
+            if let type = WorkflowBuilderViewModel.parseInstructionDict(dict) {
                 viewModel.addInstruction(type)
             }
         }

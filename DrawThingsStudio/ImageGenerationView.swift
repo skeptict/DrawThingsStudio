@@ -1107,6 +1107,22 @@ struct ImageGenerationView: View {
                 }
             }
 
+            // Resolution Dependent Shift
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Resolution Dependent Shift").font(.caption).foregroundColor(.neuTextSecondary)
+                    Picker("", selection: $viewModel.config.resolutionDependentShift) {
+                        Text("Auto").tag(Bool?.none)
+                        Text("On").tag(Bool?.some(true))
+                        Text("Off").tag(Bool?.some(false))
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .accessibilityLabel("Resolution Dependent Shift")
+                }
+                Spacer()
+            }
+
             // Refiner model
             Divider()
                 .padding(.vertical, 4)

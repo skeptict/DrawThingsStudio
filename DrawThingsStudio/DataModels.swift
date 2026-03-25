@@ -9,6 +9,26 @@ import Foundation
 import SwiftData
 import AppKit
 
+// MARK: - Shared Schema
+
+/// The canonical SwiftData schema used by both the main app and AppIntents.
+/// All schema changes must be made here.
+enum DrawThingsStudioSchema {
+    static let models: [any PersistentModel.Type] = [
+        SavedWorkflow.self,
+        ModelConfig.self,
+        SavedPipeline.self,
+        StoryProject.self,
+        StoryCharacter.self,
+        CharacterAppearance.self,
+        StorySetting.self,
+        StoryChapter.self,
+        StoryScene.self,
+        SceneCharacterPresence.self,
+        SceneVariant.self
+    ]
+}
+
 // MARK: - Model Config
 
 /// A saved configuration preset for a specific model

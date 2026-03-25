@@ -262,7 +262,7 @@ final class WorkflowBuilderViewModel: ObservableObject {
             clearAllInstructions()
 
             for dict in instructions {
-                if let instruction = parseInstructionDict(dict) {
+                if let instruction = Self.parseInstructionDict(dict) {
                     addInstruction(instruction)
                 }
             }
@@ -276,8 +276,15 @@ final class WorkflowBuilderViewModel: ObservableObject {
         }
     }
 
+    /// Parse a JSON-serialized instruction dictionary into a WorkflowInstruction array.
+    /// Used by both library loading and AppIntents workflow execution.
+    nonisolated static func parseInstructions(from data: Data) -> [WorkflowInstruction] {
+        guard let dicts = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return dicts.compactMap { parseInstructionDict($0).map { WorkflowInstruction(type: $0) } }
+    }
+
     /// Parse instruction dictionary to InstructionType
-    func parseInstructionDict(_ dict: [String: Any]) -> InstructionType? {
+    nonisolated static func parseInstructionDict(_ dict: [String: Any]) -> InstructionType? {
         guard let key = dict.keys.first else { return nil }
 
         switch key {
