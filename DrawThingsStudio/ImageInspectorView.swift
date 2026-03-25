@@ -10,88 +10,494 @@ import UniformTypeIdentifiers
 
 struct ImageInspectorView: View {
     @ObservedObject var viewModel: ImageInspectorViewModel
-    @ObservedObject var imageGenViewModel: ImageGenerationViewModel
-    @ObservedObject var workflowViewModel: WorkflowBuilderViewModel
-    @ObservedObject var storyStudioViewModel: StoryStudioViewModel
-    @Binding var selectedSidebarItem: SidebarItem?
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var sendImageToGenerate = false
-    @State private var showDescribeSheet = false
     @State private var lightboxImage: NSImage?
-    @State private var showSendToStoryStudio = false
+
+    // Layout state indicator
+    @State private var stageIndicatorVisible = true
+    @State private var stageHovering = false
+    @State private var indicatorTask: Task<Void, Never>?
+
+    @State private var selectedRightTab: RightPanelTab = .metadata
+    @FocusState private var isFocused: Bool
 
     var body: some View {
-        HSplitView {
-            // Left: History timeline
-            historyPanel
-                .frame(minWidth: 160, idealWidth: 200, maxWidth: 260)
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                collectionSidebar
+                    .frame(width: leftColumnWidth)
+                    .clipped()
+                    .allowsHitTesting(leftColumnWidth > 0)
 
-            // Right: Selected image detail + metadata
-            detailPanel
-                .frame(minWidth: 500)
+                imageStage
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                rightPanel
+                    .frame(width: rightColumnWidth)
+                    .clipped()
+                    .allowsHitTesting(rightColumnWidth > 0)
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.82), value: viewModel.layoutState)
+
+            Divider()
+
+            filmstripPlaceholder
+                .frame(height: 104)
         }
         .padding(20)
         .neuBackground()
-        .lightbox(image: $lightboxImage, browseList: viewModel.history.map(\.image))
+        .lightbox(image: $lightboxImage, browseList: viewModel.filteredHistory.map(\.image))
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                layoutStatePicker
+            }
+        }
+        .focusable()
+        .focused($isFocused)
+        .onKeyPress(.upArrow)    { viewModel.selectPrevious(); return .handled }
+        .onKeyPress(.leftArrow)  { viewModel.selectPrevious(); return .handled }
+        .onKeyPress(.downArrow)  { viewModel.selectNext(); return .handled }
+        .onKeyPress(.rightArrow) { viewModel.selectNext(); return .handled }
+        .onAppear { isFocused = true; scheduleIndicatorFade() }
+        .onChange(of: viewModel.layoutState) {
+            withAnimation(.easeIn(duration: 0.15)) { stageIndicatorVisible = true }
+            scheduleIndicatorFade()
+        }
+        .onChange(of: viewModel.sourceFilter) {
+            // If selected image is no longer visible under new filter, pick first visible
+            if let selected = viewModel.selectedImage,
+               !viewModel.filteredHistory.contains(where: { $0.id == selected.id }) {
+                viewModel.selectedImage = viewModel.filteredHistory.first
+            }
+        }
     }
 
-    // MARK: - History Panel
+    // MARK: - Column Widths
 
-    private var historyPanel: some View {
-        VStack(spacing: 0) {
-            HStack {
-                NeuSectionHeader("History", icon: "clock.arrow.circlepath")
-                Spacer()
-                Button("Open File…") { openFilePanel() }
-                    .font(.caption)
-                    .buttonStyle(NeumorphicButtonStyle())
-                    .accessibilityIdentifier("inspector_openFileButton")
+    private var leftColumnWidth: CGFloat {
+        switch viewModel.layoutState {
+        case .balanced:  return 200
+        case .focus:     return 48
+        case .immersive: return 0
+        }
+    }
 
-                if !viewModel.history.isEmpty {
-                    Button("Clear All") {
-                        viewModel.clearHistory()
+    private var rightColumnWidth: CGFloat {
+        switch viewModel.layoutState {
+        case .balanced:  return 300
+        case .focus:     return 44
+        case .immersive: return 0
+        }
+    }
+
+    // MARK: - Image Stage
+
+    private var imageStage: some View {
+        ZStack(alignment: .bottomLeading) {
+            Color.black
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    if let selected = viewModel.selectedImage { lightboxImage = selected.image }
+                }
+                .onTapGesture(count: 1) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                        viewModel.layoutState = viewModel.layoutState.next()
                     }
-                    .font(.caption)
-                    .foregroundColor(.neuTextSecondary)
-                    .buttonStyle(NeumorphicPlainButtonStyle())
-                    .accessibilityIdentifier("inspector_clearHistoryButton")
-                    .accessibilityLabel("Clear history")
                 }
-            }
-            .padding(12)
+                .onHover { hovering in
+                    stageHovering = hovering
+                    if hovering {
+                        indicatorTask?.cancel()
+                        withAnimation(.easeIn(duration: 0.15)) { stageIndicatorVisible = true }
+                    } else {
+                        scheduleIndicatorFade()
+                    }
+                }
 
-            if viewModel.history.isEmpty {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "photo.badge.arrow.down")
-                        .font(.system(size: 36))
-                        .foregroundColor(.neuTextSecondary.opacity(0.4))
-                        .symbolEffect(.pulse, options: .repeating)
-                    Text("Drop images here")
-                        .font(.callout)
-                        .foregroundColor(.neuTextSecondary)
-                        .accessibilityIdentifier("inspector_dropZoneText")
-                    Text("PNG, JPG from Finder or Discord")
-                        .font(.caption2)
-                        .foregroundColor(.neuTextSecondary.opacity(0.6))
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel("Drop images here to inspect metadata. Supports PNG and JPG from Finder or Discord.")
+            if let selected = viewModel.selectedImage {
+                Image(nsImage: selected.image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
             } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 8) {
-                        ForEach(viewModel.history) { entry in
-                            historyRow(entry)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 8)
-                }
+                stageEmptyState
+            }
+
+            // State indicator: bottom-left, fades after 2s, reappears on hover
+            Text(viewModel.layoutState.indicatorText)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+                .padding(.leading, 12)
+                .padding(.bottom, 12)
+                .opacity((stageIndicatorVisible || stageHovering) ? 1 : 0)
+                .animation(.easeOut(duration: 0.35), value: stageIndicatorVisible)
+                .animation(.easeOut(duration: 0.35), value: stageHovering)
+        }
+    }
+
+    private var stageEmptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "photo.badge.arrow.down")
+                .font(.system(size: 56))
+                .foregroundColor(.white.opacity(0.2))
+                .symbolEffect(.pulse, options: .repeating)
+            Text("Drop an Image to Inspect")
+                .font(.title3)
+                .foregroundColor(.white.opacity(0.5))
+            Text("Drag a PNG from Finder, Discord, or any app.\nSupports A1111/Forge, Draw Things, and ComfyUI metadata.")
+                .font(.callout)
+                .foregroundColor(.white.opacity(0.3))
+                .multilineTextAlignment(.center)
+            Button("Open File…") { openFilePanel() }
+                .buttonStyle(NeumorphicButtonStyle())
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Right Panel (tabbed)
+
+    private var rightPanel: some View {
+        Group {
+            if viewModel.layoutState == .focus {
+                rightFocusRail
+            } else {
+                rightPanelContent
             }
         }
         .neuCard(cornerRadius: 20)
+    }
+
+    private var rightFocusRail: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            ForEach(RightPanelTab.allCases, id: \.self) { tab in
+                Button {
+                    selectedRightTab = tab
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                        viewModel.layoutState = .balanced
+                    }
+                } label: {
+                    Image(systemName: tab.icon)
+                        .font(.system(size: 14))
+                        .foregroundColor(selectedRightTab == tab ? .neuAccent : .neuTextSecondary)
+                }
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(selectedRightTab == tab ? Color.neuAccent.opacity(0.12) : Color.clear)
+                )
+                .buttonStyle(.plain)
+                .help(tab.label)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var rightPanelContent: some View {
+        VStack(spacing: 0) {
+            rightTabBar
+            Divider()
+            Group {
+                switch selectedRightTab {
+                case .metadata:
+                    DTImageInspectorMetadataView(
+                        entry: viewModel.selectedImage,
+                        errorMessage: viewModel.errorMessage
+                    )
+                case .assist:
+                    assistTabContent
+                case .actions:
+                    actionsTabContent
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var rightTabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(RightPanelTab.allCases, id: \.self) { tab in
+                Button { selectedRightTab = tab } label: {
+                    VStack(spacing: 0) {
+                        Spacer()
+                        Text(tab.label)
+                            .font(.system(size: 12, weight: selectedRightTab == tab ? .semibold : .regular))
+                            .foregroundColor(
+                                selectedRightTab == tab
+                                    ? Color(NSColor.labelColor)
+                                    : Color(NSColor.secondaryLabelColor)
+                            )
+                            .padding(.bottom, 7)
+                        Rectangle()
+                            .fill(selectedRightTab == tab ? Color.accentColor : Color.clear)
+                            .frame(height: 1.5)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, minHeight: 36)
+            }
+        }
+    }
+
+    private var assistTabContent: some View {
+        DTImageInspectorAssistView(entry: viewModel.selectedImage, viewModel: viewModel)
+    }
+
+    private var actionsTabContent: some View {
+        DTImageInspectorActionsView(entry: viewModel.selectedImage, viewModel: viewModel)
+    }
+
+    // MARK: - Filmstrip
+
+    private var filmstripPlaceholder: some View { filmstrip }
+
+    private var filmstrip: some View {
+        HStack(spacing: 0) {
+            // SIBLINGS section
+            if !viewModel.filmstripSiblings.isEmpty {
+                // Pinned label
+                Text("SIBLINGS")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.neuTextSecondary.opacity(0.6))
+                    .kerning(0.4)
+                    .frame(width: 52)
+                    .rotationEffect(.degrees(-90))
+                    .fixedSize()
+                    .frame(width: 18)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(viewModel.filmstripSiblings) { entry in
+                            FilmstripCell(
+                                entry: entry,
+                                isSelected: viewModel.selectedImage?.id == entry.id
+                            )
+                            .onTapGesture {
+                                viewModel.selectedImage = entry
+                                viewModel.errorMessage = nil
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                }
+
+                // Divider between sections
+                Rectangle()
+                    .fill(Color(NSColor.separatorColor).opacity(0.5))
+                    .frame(width: 0.5, height: 56)
+                    .padding(.horizontal, 4)
+            }
+
+            // HISTORY section
+            if !viewModel.filmstripHistory.isEmpty {
+                // Pinned label
+                Text("HISTORY")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.neuTextSecondary.opacity(0.6))
+                    .kerning(0.4)
+                    .frame(width: 52)
+                    .rotationEffect(.degrees(-90))
+                    .fixedSize()
+                    .frame(width: 18)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(viewModel.filmstripHistory) { entry in
+                            FilmstripCell(
+                                entry: entry,
+                                isSelected: viewModel.selectedImage?.id == entry.id
+                            )
+                            .onTapGesture {
+                                viewModel.selectedImage = entry
+                                viewModel.errorMessage = nil
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                }
+            } else if viewModel.filmstripSiblings.isEmpty {
+                // Empty state — no images at all
+                Spacer()
+                HStack(spacing: 8) {
+                    Image(systemName: "film.stack")
+                        .font(.caption)
+                        .foregroundColor(.neuTextSecondary.opacity(0.3))
+                    Text("Drop images to inspect")
+                        .font(.caption2)
+                        .foregroundColor(.neuTextSecondary.opacity(0.3))
+                }
+                Spacer()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color.neuBackground)
+    }
+
+    // MARK: - Layout Picker (Toolbar)
+
+    private var layoutStatePicker: some View {
+        HStack(spacing: 2) {
+            ForEach(LayoutState.allCases, id: \.self) { state in
+                Button(state.label) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                        viewModel.layoutState = state
+                    }
+                }
+                .buttonStyle(LayoutPillButtonStyle(isActive: viewModel.layoutState == state))
+            }
+        }
+    }
+
+    // MARK: - Indicator Timer
+
+    private func scheduleIndicatorFade() {
+        indicatorTask?.cancel()
+        stageIndicatorVisible = true
+        indicatorTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, !stageHovering else { return }
+            withAnimation(.easeOut(duration: 0.4)) {
+                stageIndicatorVisible = false
+            }
+        }
+    }
+
+    // MARK: - Collection Sidebar (left column)
+
+    private var collectionSidebar: some View {
+        Group {
+            if viewModel.layoutState == .focus {
+                focusRailContent
+            } else {
+                balancedSidebarContent
+            }
+        }
+        .neuCard(cornerRadius: 20)
+    }
+
+    private var balancedSidebarContent: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("COLLECTION")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.neuTextSecondary)
+                    .kerning(0.5)
+                Spacer()
+                Button(action: importFilePanel) {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.caption)
+                }
+                .buttonStyle(NeumorphicIconButtonStyle())
+                .help("Import image")
+                .accessibilityIdentifier("inspector_importButton")
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            // Source filter tabs
+            Picker("Source", selection: $viewModel.sourceFilter) {
+                ForEach(SourceFilter.allCases, id: \.self) { filter in
+                    Text(filter.label).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+            .accessibilityIdentifier("inspector_sourceFilterPicker")
+
+            // Thumbnail grid or empty state
+            if viewModel.filteredHistory.isEmpty {
+                sidebarEmptyState
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 3),
+                        spacing: 4
+                    ) {
+                        ForEach(viewModel.filteredHistory) { entry in
+                            CollectionThumbnailCell(
+                                entry: entry,
+                                isSelected: viewModel.selectedImage?.id == entry.id,
+                                fixedSize: nil
+                            )
+                            .onTapGesture {
+                                viewModel.selectedImage = entry
+                                viewModel.errorMessage = nil
+                            }
+                            .contextMenu {
+                                Button("Delete", role: .destructive) {
+                                    viewModel.deleteImage(entry)
+                                }
+                            }
+                        }
+                    }
+                    .padding(8)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var focusRailContent: some View {
+        VStack(spacing: 6) {
+            // Import button
+            Button(action: importFilePanel) {
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .frame(width: 28, height: 28)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .buttonStyle(.plain)
+            .help("Import image")
+            .padding(.top, 8)
+
+            // Mini thumbnails (32×32pt)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 4) {
+                    ForEach(viewModel.filteredHistory) { entry in
+                        CollectionThumbnailCell(
+                            entry: entry,
+                            isSelected: viewModel.selectedImage?.id == entry.id,
+                            fixedSize: 32
+                        )
+                        .onTapGesture {
+                            viewModel.selectedImage = entry
+                            viewModel.errorMessage = nil
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var sidebarEmptyState: some View {
+        VStack(spacing: 8) {
+            Spacer()
+            Image(systemName: "photo.badge.arrow.down")
+                .font(.title2)
+                .foregroundColor(.neuTextSecondary.opacity(0.4))
+                .symbolEffect(.pulse, options: .repeating)
+            Text("Drop images here")
+                .font(.caption)
+                .foregroundColor(.neuTextSecondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func historyRow(_ entry: InspectedImage) -> some View {
@@ -108,344 +514,8 @@ struct ImageInspectorView: View {
         )
     }
 
-    // MARK: - Detail Panel
-
-    private var detailPanel: some View {
-        VStack(spacing: 0) {
-            if let selected = viewModel.selectedImage {
-                HSplitView {
-                    // Image preview
-                    VStack(spacing: 12) {
-                        HStack {
-                            NeuSectionHeader("Preview", icon: "photo")
-                            Spacer()
-                            Text(selected.sourceName)
-                                .font(.caption2)
-                                .foregroundColor(.neuTextSecondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-
-                        Image(nsImage: selected.image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .shadow(color: Color.neuShadowDark.opacity(colorScheme == .dark ? 0.36 : 0.2), radius: 8, x: 4, y: 4)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .onTapGesture { lightboxImage = selected.image }
-                    }
-                    .padding(16)
-                    .frame(minWidth: 250)
-
-                    // Metadata + actions
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            HStack {
-                                NeuSectionHeader("Metadata", icon: "doc.text.magnifyingglass")
-                                Spacer()
-                                if let meta = selected.metadata {
-                                    Text(meta.format.rawValue)
-                                        .font(.caption)
-                                        .foregroundColor(.neuAccent)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .neuInset(cornerRadius: 6)
-                                }
-                            }
-
-                            if let error = viewModel.errorMessage {
-                                Text(error)
-                                    .font(.callout)
-                                    .foregroundColor(.orange)
-                                    .padding(12)
-                                    .neuInset(cornerRadius: 10)
-                            }
-
-                            if let meta = selected.metadata {
-                                metadataContent(meta)
-                                Divider().padding(.vertical, 4)
-                                actionButtons
-                            } else {
-                                noMetadataView
-                            }
-                        }
-                        .padding(16)
-                    }
-                    .frame(minWidth: 280)
-                }
-            } else {
-                // Empty state
-                VStack(spacing: 16) {
-                    Spacer()
-                    Image(systemName: "photo.badge.arrow.down")
-                        .font(.system(size: 56))
-                        .foregroundColor(.neuTextSecondary.opacity(0.4))
-                        .symbolEffect(.pulse, options: .repeating)
-                    Text("Drop an Image to Inspect")
-                        .font(.title3)
-                        .foregroundColor(.neuTextSecondary)
-                    Text("Drag a PNG from Finder, Discord, or any app.\nSupports A1111/Forge, Draw Things, and ComfyUI metadata.")
-                        .font(.callout)
-                        .foregroundColor(.neuTextSecondary.opacity(0.7))
-                        .multilineTextAlignment(.center)
-
-                    HStack(spacing: 12) {
-                        Button("Open File...") { openFilePanel() }
-                            .buttonStyle(NeumorphicButtonStyle())
-                    }
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .neuCard(cornerRadius: 20)
-        .sheet(isPresented: $showDescribeSheet) {
-            if let entry = viewModel.selectedImage {
-                ImageDescriptionView(
-                    image: entry.image,
-                    onSendToGeneratePrompt: { text, sourceImage in
-                        imageGenViewModel.prompt = text
-                        if let img = sourceImage {
-                            imageGenViewModel.loadInputImage(from: img, name: entry.sourceName)
-                        }
-                        selectedSidebarItem = .generateImage
-                    },
-                    onSendToWorkflowPrompt: { text in
-                        if let scene = storyStudioViewModel.selectedScene {
-                            scene.promptOverride = text
-                        }
-                        selectedSidebarItem = .storyStudio
-                    }
-                )
-            }
-        }
-        .sheet(isPresented: $showSendToStoryStudio) {
-            if let entry = viewModel.selectedImage {
-                SendToStoryStudioView(
-                    prompt: entry.metadata?.prompt ?? "",
-                    negativePrompt: entry.metadata?.negativePrompt ?? "",
-                    thumbnail: entry.image,
-                    onNavigate: { selectedSidebarItem = $0 }
-                )
-            }
-        }
-    }
-
-    private var noMetadataView: some View {
-        VStack(spacing: 12) {
-            Text("No generation metadata found.")
-                .font(.callout)
-                .foregroundColor(.neuTextSecondary)
-            Text("Images from Discord or web browsers often have metadata stripped during re-encoding. Try saving the original image file first, then drag it from Finder.")
-                .font(.caption)
-                .foregroundColor(.neuTextSecondary.opacity(0.7))
-                .padding(12)
-                .neuInset(cornerRadius: 10)
-
-            Button(action: { showDescribeSheet = true }) {
-                HStack {
-                    Image(systemName: "eye")
-                    Text("Describe with AI...")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(NeumorphicButtonStyle(isProminent: true))
-            .controlSize(.large)
-            .accessibilityIdentifier("inspector_describeButtonNoMeta")
-        }
-    }
-
-    // MARK: - Metadata Content
-
-    @ViewBuilder
-    private func metadataContent(_ meta: PNGMetadata) -> some View {
-        if let prompt = meta.prompt, !prompt.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Prompt").font(.caption).foregroundColor(.neuTextSecondary)
-                Text(prompt)
-                    .font(.body)
-                    .textSelection(.enabled)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .neuInset(cornerRadius: 10)
-            }
-        }
-
-        if let neg = meta.negativePrompt, !neg.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Negative Prompt").font(.caption).foregroundColor(.neuTextSecondary)
-                Text(neg)
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-                    .textSelection(.enabled)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .neuInset(cornerRadius: 10)
-            }
-        }
-
-        if meta.hasConfig {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Configuration").font(.caption).foregroundColor(.neuTextSecondary)
-                LazyVGrid(columns: [
-                    GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())
-                ], spacing: 8) {
-                    if let w = meta.width, let h = meta.height { configChip("Size", "\(w)x\(h)") }
-                    if let steps = meta.steps { configChip("Steps", "\(steps)") }
-                    if let guidance = meta.guidanceScale { configChip("CFG", String(format: "%.1f", guidance)) }
-                    if let seed = meta.seed { configChip("Seed", "\(seed)") }
-                    if let sampler = meta.sampler { configChip("Sampler", sampler) }
-                    if let model = meta.model { configChip("Model", model) }
-                    if let strength = meta.strength { configChip("Strength", String(format: "%.2f", strength)) }
-                    if let shift = meta.shift { configChip("Shift", String(format: "%.1f", shift)) }
-                    if let rm = meta.refinerModel, !rm.isEmpty { configChip("Refiner", rm) }
-                    if let rs = meta.refinerStart { configChip("Refiner Start", String(format: "%.0f%%", rs * 100)) }
-                }
-            }
-        }
-
-        if meta.hasLoRAs {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("LoRAs").font(.caption).foregroundColor(.neuTextSecondary)
-                ForEach(Array(meta.loras.enumerated()), id: \.offset) { _, lora in
-                    HStack(spacing: 8) {
-                        Text(lora.file)
-                            .font(.caption)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer()
-                        Text(String(format: "%.2f", lora.weight))
-                            .font(.caption)
-                            .foregroundColor(.neuTextSecondary)
-                    }
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.neuBackground.opacity(0.6)))
-                }
-            }
-        }
-    }
-
-    private func configChip(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption2).foregroundColor(.neuTextSecondary)
-            Text(value)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.neuBackground.opacity(0.6)))
-    }
-
-    // MARK: - Action Buttons
-
-    private var actionButtons: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Button("Copy Prompt") { viewModel.copyPromptToClipboard() }
-                    .buttonStyle(NeumorphicButtonStyle())
-                    .accessibilityIdentifier("inspector_copyPromptButton")
-                    .disabled(viewModel.selectedImage?.metadata?.hasPrompt != true)
-
-                Button("Copy Config") { viewModel.copyConfigToClipboard() }
-                    .buttonStyle(NeumorphicButtonStyle())
-                    .accessibilityIdentifier("inspector_copyConfigButton")
-                    .disabled(viewModel.selectedImage?.metadata?.hasConfig != true)
-
-                Button("Copy All") { viewModel.copyAllToClipboard() }
-                    .buttonStyle(NeumorphicButtonStyle())
-                    .accessibilityIdentifier("inspector_copyAllButton")
-            }
-
-            Button(action: { showDescribeSheet = true }) {
-                HStack {
-                    Image(systemName: "eye")
-                    Text("Describe with AI...")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(NeumorphicButtonStyle())
-            .controlSize(.large)
-            .disabled(viewModel.selectedImage == nil)
-            .accessibilityIdentifier("inspector_describeButton")
-
-            Button(action: sendToGenerate) {
-                HStack {
-                    Image(systemName: "arrow.right.circle.fill")
-                    Text("Send to Generate Image")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(NeumorphicButtonStyle(isProminent: true))
-            .controlSize(.large)
-            .accessibilityIdentifier("inspector_sendToGenerateButton")
-            .accessibilityLabel("Send to Generate Image")
-            .accessibilityHint("Uses this image's prompt and settings in Generate Image")
-
-            Toggle("Include image as img2img source", isOn: $sendImageToGenerate)
-                .font(.caption)
-                .toggleStyle(.checkbox)
-                .disabled(viewModel.selectedImage == nil)
-                .accessibilityIdentifier("inspector_sendImageToggle")
-
-            Button(action: { showSendToStoryStudio = true }) {
-                HStack {
-                    Image(systemName: "theatermasks.fill")
-                    Text("Add to Story Studio…")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(NeumorphicButtonStyle())
-            .controlSize(.large)
-            .disabled(viewModel.selectedImage == nil)
-            .accessibilityIdentifier("inspector_sendToStoryStudioButton")
-        }
-    }
 
     // MARK: - Actions
-
-    private func sendToGenerate() {
-        guard let meta = viewModel.selectedImage?.metadata else { return }
-
-        // Set prompt fields
-        if let prompt = meta.prompt { imageGenViewModel.prompt = prompt }
-        if let neg = meta.negativePrompt { imageGenViewModel.negativePrompt = neg }
-
-        // Set individual config fields only where metadata provides values,
-        // preserving existing user settings for fields not in the metadata
-        if let w = meta.width { imageGenViewModel.config.width = w }
-        if let h = meta.height { imageGenViewModel.config.height = h }
-        if let steps = meta.steps { imageGenViewModel.config.steps = steps }
-        if let guidance = meta.guidanceScale { imageGenViewModel.config.guidanceScale = guidance }
-        if let seed = meta.seed { imageGenViewModel.config.seed = seed }
-        if let sampler = meta.sampler { imageGenViewModel.config.sampler = sampler }
-        if let model = meta.model { imageGenViewModel.config.model = model }
-        if let strength = meta.strength { imageGenViewModel.config.strength = strength }
-        if let shift = meta.shift { imageGenViewModel.config.shift = shift }
-        if let rm = meta.refinerModel, !rm.isEmpty { imageGenViewModel.config.refinerModel = rm }
-        if let rs = meta.refinerStart { imageGenViewModel.config.refinerStart = rs }
-
-        // Set LoRAs
-        if meta.hasLoRAs {
-            imageGenViewModel.config.loras = meta.loras.map { lora in
-                DrawThingsGenerationConfig.LoRAConfig(
-                    file: lora.file,
-                    weight: lora.weight,
-                    mode: lora.mode
-                )
-            }
-        }
-
-        // Optionally send the image as img2img source
-        if sendImageToGenerate, let entry = viewModel.selectedImage {
-            imageGenViewModel.loadInputImage(from: entry.image, name: entry.sourceName)
-        }
-
-        imageGenViewModel.syncSweepTexts()
-        selectedSidebarItem = .generateImage
-    }
 
     private func openFilePanel() {
         let panel = NSOpenPanel()
@@ -458,6 +528,140 @@ struct ImageInspectorView: View {
         }
     }
 
+    private func importFilePanel() {
+        let panel = NSOpenPanel()
+        var types: [UTType] = [.png, .jpeg, .tiff, .image]
+        if let webp = UTType(filenameExtension: "webp") { types.append(webp) }
+        panel.allowedContentTypes = types
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = "Import Image"
+        panel.begin { [viewModel] response in
+            guard response == .OK, let url = panel.url else { return }
+            viewModel.loadImage(url: url, source: .imported(sourceURL: url))
+        }
+    }
+
+}
+
+// MARK: - Right Panel Tab
+
+private enum RightPanelTab: CaseIterable {
+    case metadata, assist, actions
+
+    var label: String {
+        switch self {
+        case .metadata: return "Metadata"
+        case .assist:   return "Assist"
+        case .actions:  return "Actions"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .metadata: return "doc.text"
+        case .assist:   return "wand.and.stars"
+        case .actions:  return "square.and.arrow.up"
+        }
+    }
+}
+
+// MARK: - Layout Pill Button Style
+
+private struct LayoutPillButtonStyle: ButtonStyle {
+    let isActive: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(isActive ? .white : Color(NSColor.secondaryLabelColor))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(isActive ? Color.neuAccent : Color.clear)
+                    .opacity(configuration.isPressed ? 0.75 : 1)
+            )
+    }
+}
+
+// MARK: - Collection Thumbnail Cell
+
+private struct CollectionThumbnailCell: View {
+    let entry: InspectedImage
+    let isSelected: Bool
+    let fixedSize: CGFloat?
+
+    @State private var isHovered = false
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Image(nsImage: entry.image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+
+            // Source indicator dot
+            Circle()
+                .fill(entry.source.dotColor)
+                .frame(width: 6, height: 6)
+                .padding(3)
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .frame(width: fixedSize, height: fixedSize)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(
+                    isSelected ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.6),
+                    lineWidth: isSelected ? 2 : 0.5
+                )
+        )
+        .scaleEffect(isHovered && !isSelected ? 1.03 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovered)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Filmstrip Cell
+
+private struct FilmstripCell: View {
+    let entry: InspectedImage
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Image(nsImage: entry.image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 76, height: 76)
+                .clipped()
+
+            // Caption scrim + filename
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.5)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+            .frame(height: 28)
+
+            Text(entry.sourceName)
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.9))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 3)
+        }
+        .frame(width: 76, height: 76)
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(
+                    isSelected ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.5),
+                    lineWidth: isSelected ? 2 : 0.5
+                )
+        )
+    }
 }
 
 // MARK: - History Row View with Hover State

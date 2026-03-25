@@ -94,7 +94,7 @@ private struct PersistedInspectorEntry: Codable {
         switch entry.source {
         case .drawThings(let url):
             self.sourceType = "drawThings"
-            self.sourceURLString = url.absoluteString
+            self.sourceURLString = url?.absoluteString
         case .civitai(let url):
             self.sourceType = "civitai"
             self.sourceURLString = url?.absoluteString
@@ -159,8 +159,7 @@ private struct PersistedInspectorEntry: Codable {
     func toSource() -> DTImageSource {
         switch sourceType {
         case "drawThings":
-            let url = sourceURLString.flatMap { URL(string: $0) } ?? URL(fileURLWithPath: "/")
-            return .drawThings(projectURL: url)
+            return .drawThings(projectURL: sourceURLString.flatMap { URL(string: $0) })
         case "civitai":
             return .civitai(sourceURL: sourceURLString.flatMap { URL(string: $0) })
         case "imported":
