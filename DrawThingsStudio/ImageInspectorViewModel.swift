@@ -209,6 +209,20 @@ enum LayoutState: String, CaseIterable {
     }
 }
 
+/// MARK: - Send to Generate Request
+
+struct SendToGenerateRequest: Equatable {
+    let id: UUID = UUID()
+    let prompt: String
+    let negativePrompt: String
+    let config: DrawThingsGenerationConfig
+    let sourceImage: NSImage
+
+    static func == (lhs: SendToGenerateRequest, rhs: SendToGenerateRequest) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 // MARK: - Inpaint Request
 
 struct InpaintRequest: Equatable {
@@ -254,6 +268,8 @@ final class ImageInspectorViewModel: ObservableObject {
     @Published var pendingCropForGenerate: NSImage? = nil
     /// Set by mask "Send to Draw Things"; ContentView forwards both to imageGenViewModel.
     @Published var pendingInpaintForGenerate: InpaintRequest? = nil
+    /// Set by Actions tab "Send to Generate Image"; ContentView populates imageGenViewModel and navigates.
+    @Published var pendingSendToGenerate: SendToGenerateRequest? = nil
     /// Full-resolution mask bitmap (black background, white = painted region). Nil outside paint mode.
     @Published var maskImage: NSImage? = nil
     /// Cached mutable backing bitmap for the mask — avoids TIFF roundtrip on every brush stroke.

@@ -9,7 +9,7 @@ Read project context from the AI-Memory vault:
 
 ## Project Overview
 
-DrawThingsStudio (DTS) is a macOS native app (Swift/SwiftUI) for AI image generation workflows. It connects to Draw Things via HTTP and gRPC, provides an image research workbench (Image Inspector), LLM-assisted prompt tools, a visual workflow builder, and Story Studio for narrative image creation.
+DrawThingsStudio (DTS) is a macOS native app (Swift/SwiftUI) for AI image generation. It connects to Draw Things via HTTP and gRPC, provides an image research workbench (Image Inspector), LLM-assisted prompt tools, a visual workflow builder, Story Studio for narrative image creation, and a DT project database browser.
 
 **Platform:** macOS 14.0+ (use `#available` checks for newer APIs — never raise the deployment target)
 **Architecture:** SwiftUI + SwiftData + MVVM
@@ -27,6 +27,16 @@ After every implementation task, before declaring done:
 4. **Risks or follow-ups** — flag anything out of scope, any shortcuts taken, or anything to revisit
 
 Do not declare a task complete until all four are confirmed.
+
+---
+
+## Branch Conventions
+- `main` — stable, always builds. Never commit directly to main.
+- `ui-polish` — UI polish phases (NeumorphicStyle, view files)
+- `feature/generate-workbench` — Generate Image enhancements
+- Always confirm which branch you're on before touching any files.
+- When a feature branch is complete and builds cleanly, ask for
+  explicit instruction before merging to main.
 
 ---
 
@@ -137,14 +147,22 @@ DrawThingsGenerationConfig → DrawThingsConfiguration (FlatBuffer)
 - shift: Float32, resolutionDependentShift: Bool
 ```
 
-### Resolution Dependent Shift
-Only applies to rectified flow models (Flux, SD3). Formula in Draw Things:
-`actualShift = shift × (max(width, height) / 1024)`
-DTS sends both `shift` (base value, typically 3.0 for Flux) and `resolutionDependentShift: true` together — this is correct. The explicit `shift` is the base for the formula, not an override.
+### Resolution Dependent Shift — Computed Formula
+When `resolutionDependentShift` is true, DTS pre-computes the shift value using the community-verified formula rather than relying on DT to honor the flag over gRPC:
+```swift
+shift = round(exp(((width * height / 256) - 256) * 0.00016927 + 0.5), 2)
+```
 
+Verified values: 1024×1024 → 3.16, 1280×1280 → 4.66.
+Implemented in `DrawThingsGenerationConfig.rdsComputedShift(width:height:)`.
+Called in `convertConfig()` and via `applyRDSShiftIfNeeded()` before image save.
 ---
 
 ## Image Inspector
+
+### Config Paste (Generate Image)
+Pasting a Draw Things config JSON populates all Generate Image fields. Known fields mapped: model, sampler, steps, guidanceScale, seed, seedMode, width, height, shift, strength, resolutionDependentShift. 
+LoRA paste status: see Known Issues.
 
 ### Layout States
 Three states cycled by clicking the image stage or using toolbar pills:
@@ -210,7 +228,10 @@ Max 50 entries. Loaded at launch via `loadHistoryFromDisk()`.
 - Protocol-based LLM and Draw Things providers — swappable without UI changes
 - `AppSettings.shared` singleton for global settings access
 - Context menu + confirmation dialog for destructive actions (established pattern — always follow this)
-
+- **Typography tokens**: Use `NeuTypography` semantic tokens (defined in 
+  `NeumorphicStyle.swift`) for font sizes rather than hardcoded values. 
+  Tokens: `.title`, `.sectionHeader`, `.body`, `.bodyMedium`, `.caption`, 
+  `.captionMedium`, `.micro`, `.microMedium`
 ---
 
 ## UI Testing
@@ -228,7 +249,9 @@ Max 50 entries. Loaded at launch via `loadHistoryFromDisk()`.
 - **gRPC model browsing returns 0 models:** User needs to enable "Enable Model Browsing" in Draw Things settings.
 - **Vision models return empty for text-only prompts:** App shows hint to switch to a text-only model.
 - **resolutionDependentShift FlatBuffer bug:** Writing `false` results in DT reading `true` (upstream library issue, not fixable in DTS). Documented above under FlatBuffer Gotcha.
-
+- **RDS shift in StoryflowExecutor / StoryStudioViewModel**: These generation paths don't call `applyRDSShiftIfNeeded()` before saving metadata, so stored shift values may show the manual setting rather than the RDS-computed value. Low priority since these paths don't write to InspectorHistory.
+- **LoRA paste fixed**: Was dropped during `ModelConfig` SwiftData round-trip don uninserted `@Model` objects. Fixed by adding `loadPreset(_ preset: StudioConfigPreset)` overload in `ImageGenerationViewModel` that bypasses `ModelConfig` entirely for clipboard paste. The `ModelConfig` path is preserved for the preset picker where objects are properly inserted.
+  
 ---
 
 ## Adding New Features

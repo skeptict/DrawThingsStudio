@@ -330,7 +330,20 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             useCfgZeroStar = modelLower.contains("turbo")
         }
 
-        logger.debug("Model config: model=\(config.model), family=\(modelFamily.rawValue), sampler=\(config.sampler), gamma=\(config.stochasticSamplingGamma), t5=\(useT5), resDependentShift=\(useResolutionDependentShift), cfgZeroStar=\(useCfgZeroStar)")
+        // When resolution-dependent shift is enabled, compute the effective shift using the
+        // community formula rather than sending the manual value alongside the flag. DT's UI
+        // treats an explicit Shift change as disabling resolutionDependentShift, so pre-computing
+        // here ensures DT receives and uses the correct resolution-scaled value.
+        let effectiveShift: Float
+        if useResolutionDependentShift {
+            effectiveShift = Float(DrawThingsGenerationConfig.rdsComputedShift(
+                width: config.width, height: config.height
+            ))
+        } else {
+            effectiveShift = Float(config.shift)
+        }
+
+        logger.debug("Model config: model=\(config.model), family=\(modelFamily.rawValue), sampler=\(config.sampler), gamma=\(config.stochasticSamplingGamma), t5=\(useT5), resDependentShift=\(useResolutionDependentShift), shift=\(effectiveShift), cfgZeroStar=\(useCfgZeroStar)")
 
         return DrawThingsConfiguration(
             width: Int32(config.width),
@@ -341,7 +354,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
             guidanceScale: Float(config.guidanceScale),
             seed: config.seed >= 0 ? Int64(config.seed) : nil,
             loras: loras,
-            shift: Float(config.shift),
+            shift: effectiveShift,
             batchCount: Int32(config.batchCount),
             batchSize: Int32(config.batchSize),
             strength: Float(config.strength),

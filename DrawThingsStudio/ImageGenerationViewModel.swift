@@ -178,6 +178,8 @@ final class ImageGenerationViewModel: ObservableObject {
                     // Image models: force batchCount=1 and loop imagesPerJob times instead.
                     jobConfig.batchCount = 1
                     jobConfig.batchSize = 1
+                    // Pre-compute RDS shift so saved metadata reflects the actual shift used.
+                    jobConfig.applyRDSShiftIfNeeded()
                     let iterationsForJob = isVideo ? 1 : imagesPerJob
 
                     for imageIndex in 0..<iterationsForJob {
@@ -419,6 +421,8 @@ final class ImageGenerationViewModel: ObservableObject {
                     } else {
                         stepConfig.strength = 1.0
                     }
+                    // Pre-compute RDS shift so saved metadata reflects the actual shift used.
+                    stepConfig.applyRDSShiftIfNeeded()
 
                     let images = try await client.generateImage(
                         prompt: steps[index].prompt,
@@ -659,6 +663,31 @@ final class ImageGenerationViewModel: ObservableObject {
         config.resolutionDependentShift = modelConfig.resolutionDependentShift
         config.cfgZeroStar = modelConfig.cfgZeroStar
         config.loras = modelConfig.loras
+        syncSweepTexts()
+    }
+
+    /// Apply a `StudioConfigPreset` directly, bypassing the `ModelConfig` SwiftData round-trip.
+    /// Use this for clipboard paste and other immediate-apply paths where loras must not be dropped.
+    func loadPreset(_ preset: StudioConfigPreset) {
+        config.width = preset.width
+        config.height = preset.height
+        config.steps = preset.steps
+        config.guidanceScale = Double(preset.guidanceScale)
+        config.sampler = preset.samplerName
+        if let shift = preset.shift {
+            config.shift = Double(shift)
+        }
+        if let strength = preset.strength {
+            config.strength = Double(strength)
+        }
+        config.stochasticSamplingGamma = Double(preset.stochasticSamplingGamma ?? 0.3)
+        config.model = preset.modelName
+        if let seedMode = preset.seedMode {
+            config.seedMode = SeedModeMapping.name(for: seedMode)
+        }
+        config.resolutionDependentShift = preset.resolutionDependentShift
+        config.cfgZeroStar = preset.cfgZeroStar
+        config.loras = preset.loras
         syncSweepTexts()
     }
 

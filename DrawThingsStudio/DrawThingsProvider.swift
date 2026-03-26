@@ -322,6 +322,30 @@ struct DrawThingsGenerationConfig: Codable {
         return c
     }
 
+    // MARK: - Resolution-Dependent Shift
+
+    /// Computes the resolution-dependent shift value using the Draw Things community formula.
+    ///
+    /// Formula source: Draw Things community (verified against known DT values)
+    ///   - 1024 × 1024 → 3.16
+    ///   - 1280 × 1280 → 4.66
+    ///
+    /// Background: DT's UI says "manual Shift changes disable resolution-dependent shift", which
+    /// suggests sending an explicit shift value may cause DT to ignore the resolutionDependentShift
+    /// flag. DTS therefore computes the shift locally and sends the pre-calculated value directly,
+    /// rather than relying on DT to apply the formula.
+    static func rdsComputedShift(width: Int, height: Int) -> Double {
+        let exponent = (Double(height * width) / 256.0 - 256.0) * 0.00016927 + 0.5
+        return (exp(exponent) * 100).rounded() / 100
+    }
+
+    /// Applies resolution-dependent shift to `self.shift` when `resolutionDependentShift == true`.
+    /// Call this before passing the config to storage so saved metadata reflects the actual shift used.
+    mutating func applyRDSShiftIfNeeded() {
+        guard resolutionDependentShift == true else { return }
+        shift = DrawThingsGenerationConfig.rdsComputedShift(width: width, height: height)
+    }
+
     /// Convert to HTTP API request body dictionary
     func toRequestBody(prompt: String) -> [String: Any] {
         var body: [String: Any] = [
