@@ -112,6 +112,14 @@ struct GenerateWorkbenchView: View {
     @State private var rightPanelImmersive = false
     @State private var immersiveNavIndex: Int = 0
 
+    // Pipeline
+    @State private var pipelineSteps: [PipelineStep] = []
+    @State private var isPipelineExpanded: Bool = false
+    @State private var currentExecutingStep: Int? = nil
+    @State private var completedStepIndices: Set<Int> = []
+    @State private var expandedStepID: UUID? = nil
+    @State private var pipelineTask: Task<Void, Never>? = nil
+
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
@@ -1151,6 +1159,11 @@ struct GenerateWorkbenchView: View {
 
             Divider()
 
+            // Pipeline panel (collapsible)
+            pipelinePanel
+
+            Divider()
+
             // Config form — .id on the ScrollView forces NSScrollView to discard its
             // cached documentView size when LoRAs are added/removed, preventing the
             // content from being clipped to the old height.
@@ -1190,22 +1203,45 @@ struct GenerateWorkbenchView: View {
                 .accessibilityIdentifier("workbench_promptField")
 
             // Generate + Enhance
-            if viewModel.isGenerating {
+            if viewModel.isGenerating || currentExecutingStep != nil {
                 VStack(spacing: 4) {
+                    if let step = currentExecutingStep {
+                        HStack(spacing: 4) {
+                            ProgressView().scaleEffect(0.6)
+                            Text("Step \(step + 1) of \(pipelineSteps.count)")
+                                .font(.caption2).foregroundColor(.neuTextSecondary)
+                        }
+                    }
                     NeumorphicProgressBar(value: viewModel.progressFraction)
                     Text(viewModel.progress.description)
                         .font(.caption2)
                         .foregroundColor(.neuTextSecondary)
                 }
-                Button("Cancel") { viewModel.cancelGeneration() }
-                    .buttonStyle(NeumorphicButtonStyle())
-                    .controlSize(.small)
+                Button("Cancel") {
+                    pipelineTask?.cancel()
+                    pipelineTask = nil
+                    viewModel.cancelGeneration()
+                    currentExecutingStep = nil
+                    completedStepIndices = []
+                }
+                .buttonStyle(NeumorphicButtonStyle())
+                .controlSize(.small)
             } else {
                 HStack(spacing: 6) {
-                    Button(action: { viewModel.generateOrRunPipeline() }) {
+                    Button(action: {
+                        if pipelineSteps.isEmpty {
+                            viewModel.generateOrRunPipeline()
+                        } else {
+                            completedStepIndices = []
+                            currentExecutingStep = nil
+                            pipelineTask = Task { await executePipeline() }
+                        }
+                    }) {
                         HStack(spacing: 4) {
-                            Image(systemName: viewModel.inputImage != nil ? "photo.on.rectangle.angled" : "wand.and.stars")
-                            Text("Generate")
+                            Image(systemName: pipelineSteps.isEmpty
+                                  ? (viewModel.inputImage != nil ? "photo.on.rectangle.angled" : "wand.and.stars")
+                                  : "arrow.triangle.2.circlepath.circle")
+                            Text(pipelineSteps.isEmpty ? "Generate" : "Run Pipeline (\(pipelineSteps.count))")
                         }
                         .frame(maxWidth: .infinity)
                     }
@@ -1479,6 +1515,358 @@ struct GenerateWorkbenchView: View {
             }) {
                 await MainActor.run { viewModel.loadInputImage(from: image, name: "Dropped Image") }
             }
+        }
+    }
+
+    // MARK: - Pipeline Panel
+
+    @ViewBuilder
+    private var pipelinePanel: some View {
+        // Collapsed header — always visible
+        Button {
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.82)) {
+                isPipelineExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 10))
+                    .foregroundColor(pipelineSteps.isEmpty ? .neuTextSecondary.opacity(0.6) : .neuAccent)
+                Text(pipelineSteps.isEmpty
+                     ? "Pipeline · Off"
+                     : "Pipeline · \(pipelineSteps.count) step\(pipelineSteps.count == 1 ? "" : "s")")
+                    .font(.system(size: 11, weight: pipelineSteps.isEmpty ? .regular : .semibold))
+                    .foregroundColor(pipelineSteps.isEmpty ? .neuTextSecondary : .neuAccent)
+                Spacer()
+                Image(systemName: isPipelineExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 9))
+                    .foregroundColor(.neuTextSecondary.opacity(0.6))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(pipelineSteps.isEmpty ? Color.clear : Color.neuAccent.opacity(0.04))
+
+        // Expanded content
+        if isPipelineExpanded {
+            VStack(spacing: 0) {
+                // Step list
+                ForEach(Array(pipelineSteps.enumerated()), id: \.element.id) { index, step in
+                    pipelineStepRow(index: index)
+                    if expandedStepID == step.id {
+                        pipelineStepEditor(index: index)
+                    }
+                    Divider().opacity(0.5)
+                }
+
+                // Add Step button
+                Button {
+                    var newStep = PipelineStep()
+                    newStep.usesPreviousOutput = !pipelineSteps.isEmpty
+                    pipelineSteps.append(newStep)
+                    expandedStepID = newStep.id
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle")
+                        Text("Add Step")
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(.neuAccent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
+                .background(Color.neuAccent.opacity(0.04))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func pipelineStepRow(index: Int) -> some View {
+        if index < pipelineSteps.count {
+            let step = pipelineSteps[index]
+            let isExpanded = expandedStepID == step.id
+            let isExecuting = currentExecutingStep == index
+            let isCompleted = completedStepIndices.contains(index)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    expandedStepID = isExpanded ? nil : step.id
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    // Step badge
+                    ZStack {
+                        if isExecuting {
+                            ProgressView()
+                                .scaleEffect(0.55)
+                                .frame(width: 20, height: 20)
+                        } else if isCompleted {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 13))
+                                .foregroundColor(.green.opacity(0.8))
+                        } else {
+                            Text("\(index + 1)")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundColor(isExpanded ? .neuAccent : .neuTextSecondary)
+                                .frame(width: 20, height: 20)
+                                .background(
+                                    Circle()
+                                        .fill(isExpanded ? Color.neuAccent.opacity(0.12) : Color.neuSurface)
+                                )
+                        }
+                    }
+                    .frame(width: 20, height: 20)
+
+                    // Model label
+                    Text(step.modelOverride.isEmpty ? "Inherited" : step.modelOverride)
+                        .font(.system(size: 10))
+                        .foregroundColor(step.modelOverride.isEmpty ? .neuTextSecondary.opacity(0.6) : .primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // Batch count badge
+                    if step.batchCount > 1 {
+                        Text("×\(step.batchCount)")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.neuAccent)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.neuAccent.opacity(0.12))
+                            .clipShape(Capsule())
+                    }
+
+                    // i2i badge
+                    if step.usesPreviousOutput {
+                        Text("i2i")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.orange.opacity(0.8))
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+
+                    // Delete
+                    Button {
+                        if expandedStepID == step.id { expandedStepID = nil }
+                        pipelineSteps.remove(at: index)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9))
+                            .foregroundColor(.neuTextSecondary.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove step")
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(isExpanded ? Color.neuAccent.opacity(0.06) : Color.clear)
+        }
+    }
+
+    @ViewBuilder
+    private func pipelineStepEditor(index: Int) -> some View {
+        if index < pipelineSteps.count {
+
+        VStack(alignment: .leading, spacing: 8) {
+            // Prompt override
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Prompt (empty = inherit)")
+                    .font(.system(size: 9)).foregroundColor(.neuTextSecondary)
+                TextEditor(text: $pipelineSteps[index].prompt)
+                    .font(.system(size: 10))
+                    .frame(minHeight: 38, maxHeight: 70)
+                    .padding(4)
+                    .scrollContentBackground(.hidden)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.neuBackground.opacity(0.6)))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.neuShadowDark.opacity(0.1), lineWidth: 0.5))
+            }
+
+            // Negative prompt override
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Negative prompt (empty = inherit)")
+                    .font(.system(size: 9)).foregroundColor(.neuTextSecondary)
+                TextEditor(text: $pipelineSteps[index].negativePrompt)
+                    .font(.system(size: 10))
+                    .frame(minHeight: 28, maxHeight: 50)
+                    .padding(4)
+                    .scrollContentBackground(.hidden)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.neuBackground.opacity(0.6)))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.neuShadowDark.opacity(0.1), lineWidth: 0.5))
+            }
+
+            // Model override
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Model (empty = inherit)").font(.system(size: 9)).foregroundColor(.neuTextSecondary)
+                TextField("Inherited", text: $pipelineSteps[index].modelOverride)
+                    .textFieldStyle(NeumorphicTextFieldStyle()).font(.system(size: 10))
+            }
+
+            // Sampler + Steps
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sampler").font(.system(size: 9)).foregroundColor(.neuTextSecondary)
+                    Picker("", selection: $pipelineSteps[index].samplerOverride) {
+                        Text("Inherited").tag(-1)
+                        ForEach(Array(DrawThingsSampler.builtIn.enumerated()), id: \.offset) { idx, s in
+                            Text(s.name).tag(idx)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .font(.system(size: 10))
+                    .frame(maxWidth: 90)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Steps (0=inh.)").font(.system(size: 9)).foregroundColor(.neuTextSecondary)
+                    TextField("", value: $pipelineSteps[index].stepsOverride, format: .number)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
+                        .font(.system(size: 10))
+                        .frame(maxWidth: 50)
+                }
+            }
+
+            // CFG + Batch
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("CFG (0=inh.)").font(.system(size: 9)).foregroundColor(.neuTextSecondary)
+                    TextField("", value: $pipelineSteps[index].cfgOverride, format: .number)
+                        .textFieldStyle(NeumorphicTextFieldStyle())
+                        .font(.system(size: 10))
+                        .frame(maxWidth: 50)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Batch").font(.system(size: 9)).foregroundColor(.neuTextSecondary)
+                    Stepper(value: $pipelineSteps[index].batchCount, in: 1...8) {
+                        Text("\(pipelineSteps[index].batchCount)").font(.system(size: 10))
+                    }
+                    .controlSize(.mini)
+                }
+            }
+
+            // Strength slider (only relevant when using previous output as i2i)
+            if pipelineSteps[index].usesPreviousOutput {
+                HStack(spacing: 6) {
+                    Text("Strength")
+                        .font(.system(size: 9)).foregroundColor(.neuTextSecondary)
+                        .frame(width: 46, alignment: .leading)
+                    Slider(value: $pipelineSteps[index].strengthOverride, in: 0...1, step: 0.05)
+                        .tint(Color.neuAccent)
+                    Text(String(format: "%.2f", pipelineSteps[index].strengthOverride))
+                        .font(.system(size: 9)).foregroundColor(.neuTextSecondary)
+                        .frame(width: 28)
+                }
+            }
+
+            // Use previous output toggle — forced on for steps 2+
+            Toggle("Use prev. output as i2i", isOn: $pipelineSteps[index].usesPreviousOutput)
+                .font(.system(size: 10))
+                .disabled(index > 0)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+            if index > 0 {
+                Text("Steps 2+ always use the previous step's output.")
+                    .font(.system(size: 9)).foregroundColor(.neuTextSecondary.opacity(0.6))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
+        .background(Color.neuBackground.opacity(0.5))
+        }  // end if index < pipelineSteps.count
+    }
+
+    // MARK: - Pipeline Execution
+
+    @MainActor
+    private func executePipeline() async {
+        let baseConfig = viewModel.config
+        let basePrompt = viewModel.prompt
+        let baseNegPrompt = viewModel.negativePrompt
+        let originalInputImage = viewModel.inputImage
+        let originalInputImageName = viewModel.inputImageName
+
+        var currentInputs: [NSImage?] = [nil]  // step 1 has no i2i source
+
+        for (index, step) in pipelineSteps.enumerated() {
+            guard !Task.isCancelled else { break }
+            currentExecutingStep = index
+            var stepOutputs: [NSImage] = []
+
+            // Build config for this step — start from base, apply overrides
+            var stepConfig = baseConfig
+            if !step.modelOverride.isEmpty { stepConfig.model = step.modelOverride }
+            if step.stepsOverride > 0 { stepConfig.steps = step.stepsOverride }
+            if step.cfgOverride > 0 { stepConfig.guidanceScale = step.cfgOverride }
+            if step.samplerOverride >= 0 && step.samplerOverride < DrawThingsSampler.builtIn.count {
+                stepConfig.sampler = DrawThingsSampler.builtIn[step.samplerOverride].name
+            }
+
+            let stepPrompt = step.prompt.isEmpty ? basePrompt : step.prompt
+            let stepNegPrompt = step.negativePrompt.isEmpty ? baseNegPrompt : step.negativePrompt
+
+            viewModel.config = stepConfig
+            viewModel.prompt = stepPrompt
+            viewModel.negativePrompt = stepNegPrompt
+
+            // Fan-out: run once per input image from the previous step
+            for input in currentInputs {
+                guard !Task.isCancelled else { break }
+
+                if step.usesPreviousOutput, let img = input {
+                    viewModel.loadInputImage(from: img, name: "Step \(index + 1) output")
+                    viewModel.config.strength = step.strengthOverride
+                } else if index == 0 {
+                    // Step 1: preserve any user-set source image, or clear
+                    if let orig = originalInputImage {
+                        viewModel.loadInputImage(from: orig, name: originalInputImageName ?? "Source")
+                    } else {
+                        viewModel.clearInputImage()
+                    }
+                }
+
+                for _ in 0..<max(1, step.batchCount) {
+                    guard !Task.isCancelled else { break }
+                    let countBefore = viewModel.generatedImages.count
+                    viewModel.generate()
+                    await waitForGeneration()
+                    // Collect newest output (generate() inserts at index 0)
+                    if viewModel.generatedImages.count > countBefore,
+                       let newest = viewModel.generatedImages.first {
+                        stepOutputs.append(newest.image)
+                    }
+                }
+            }
+
+            completedStepIndices.insert(index)
+            currentInputs = stepOutputs.isEmpty ? [nil] : stepOutputs.map { Optional($0) }
+        }
+
+        // Restore original viewModel state
+        viewModel.config = baseConfig
+        viewModel.prompt = basePrompt
+        viewModel.negativePrompt = baseNegPrompt
+        if let orig = originalInputImage {
+            viewModel.loadInputImage(from: orig, name: originalInputImageName ?? "Source")
+        } else {
+            viewModel.clearInputImage()
+        }
+
+        currentExecutingStep = nil
+        pipelineTask = nil
+    }
+
+    /// Polls until `viewModel.isGenerating` becomes false.
+    /// `generate()` sets `isGenerating = true` synchronously before spawning its Task,
+    /// so no initial delay is needed — the while loop will spin at least once.
+    private func waitForGeneration() async {
+        while viewModel.isGenerating {
+            try? await Task.sleep(for: .milliseconds(200))
         }
     }
 
