@@ -3,7 +3,7 @@
 ## Before Starting Work
 Read project context from the AI-Memory vault:
 - `/Users/skeptict/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI-Memory/context/user-profile.md`
-- `/Users/skeptict/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI-Memory/projects/draw-things-studio/`
+- `/Users/skeptict/Library/Mobile Documents/iCloud~md~obsidian/Documents/AI-Memory/projects/draw-things-studio/progress.md`
 
 ---
 
@@ -351,6 +351,7 @@ Max 50 entries. Loaded at launch via `loadHistoryFromDisk()`.
 
 ## Known Issues (Active)
 
+- **Canvas paint/inpainting (deferred): Paint mode for inpainting mask on workbench canvas not yet implemented. Crop mode (v0.9.4) covers the primary img2img use case. Paint mode is the next canvas stage feature — large scope, implement in isolation on its own branch.
 - **LTX-2.3 rendering seems to ignore Frames setting**
 - **gRPC model browsing returns 0 models:** User needs to enable "Enable Model Browsing" in Draw Things settings.
 - **Vision models return empty for text-only prompts:** App shows hint to switch to a text-only model.
@@ -360,4 +361,4 @@ Max 50 entries. Loaded at launch via `loadHistoryFromDisk()`.
 ---
 
 ## Session History
-See `CLAUDE-history.md` for full session log.
+See progress.md in the AI-Memory vault for full session log
