@@ -17,7 +17,7 @@ import UniformTypeIdentifiers
 final class ImageStorageManager: ObservableObject {
     static let shared = ImageStorageManager()
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "image-storage")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "image-storage")
 
     // Reused across calls — ISO8601DateFormatter is expensive to allocate.
     private static let filenameFormatter = ISO8601DateFormatter()

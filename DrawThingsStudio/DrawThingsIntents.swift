@@ -55,7 +55,7 @@ private func saveImageAsPNG(_ image: NSImage, filename: String = "output") throw
 struct GenerateImageIntent: AppIntent {
     static let title: LocalizedStringResource = "Generate Image"
     static let description = IntentDescription(
-        "Generate an AI image using Draw Things Studio. Draw Things must be running.",
+        "Generate an AI image using Tanque Studio. Draw Things must be running.",
         categoryName: "Image Generation"
     )
     static var openAppWhenRun: Bool = true
@@ -104,7 +104,7 @@ struct GenerateImageIntent: AppIntent {
 struct RunWorkflowIntent: AppIntent {
     static let title: LocalizedStringResource = "Run Saved Workflow"
     static let description = IntentDescription(
-        "Execute a saved workflow from Draw Things Studio's library. Draw Things must be running.",
+        "Execute a saved workflow from Tanque Studio's library. Draw Things must be running.",
         categoryName: "Workflows"
     )
     static var openAppWhenRun: Bool = true
@@ -168,8 +168,8 @@ struct RunWorkflowIntent: AppIntent {
     // MARK: Private
 
     private func fetchWorkflowJSON(named name: String) throws -> Data {
-        let schema = Schema(DrawThingsStudioSchema.models)
-        let config = ModelConfiguration("DrawThingsStudio", schema: schema, isStoredInMemoryOnly: false)
+        let schema = Schema(TanqueStudioSchema.models)
+        let config = ModelConfiguration("TanqueStudio", schema: schema, isStoredInMemoryOnly: false)
 
         do {
             let container = try ModelContainer(for: schema, configurations: [config])

@@ -1,4 +1,4 @@
-# DrawThingsStudio Functional Test Report
+# Tanque Studio Functional Test Report
 
 **Date:** 2026-02-07
 **Tester:** Claude (automated via AppleScript)
@@ -57,12 +57,12 @@ When the Model field is empty and the user clicks Generate, the app starts gener
 **Location:** `ImageStorageManager.swift`
 
 **Description:**
-The folder `~/Library/Application Support/DrawThingsStudio/GeneratedImages/` was not found during testing.
+The folder `~/Library/Application Support/TanqueStudio/GeneratedImages/` was not found during testing.
 
 **Investigation Result:**
 This is **expected behavior for a sandboxed macOS app**. The actual storage location is:
 ```
-~/Library/Containers/tanque.org.DrawThingsStudio/Data/Library/Application Support/DrawThingsStudio/GeneratedImages/
+~/Library/Containers/tanque.org.TanqueStudio/Data/Library/Application Support/TanqueStudio/GeneratedImages/
 ```
 
 **Evidence:**

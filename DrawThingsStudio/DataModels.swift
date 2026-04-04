@@ -13,7 +13,7 @@ import AppKit
 
 /// The canonical SwiftData schema used by both the main app and AppIntents.
 /// All schema changes must be made here.
-enum DrawThingsStudioSchema {
+enum TanqueStudioSchema {
     static let models: [any PersistentModel.Type] = [
         SavedWorkflow.self,
         ModelConfig.self,

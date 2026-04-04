@@ -15,7 +15,7 @@ final class OpenAICompatibleClient: LLMProvider, ObservableObject {
 
     // MARK: - Properties
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "openai-compat")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "openai-compat")
 
     @Published var connectionStatus: LLMConnectionStatus = .disconnected
     @Published var availableModels: [LLMModel] = []

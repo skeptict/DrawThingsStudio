@@ -30,7 +30,7 @@ struct GenerationStep: Identifiable {
 @MainActor
 final class ImageGenerationViewModel: ObservableObject {
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "image-generation")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "image-generation")
 
     // MARK: - Published State
 

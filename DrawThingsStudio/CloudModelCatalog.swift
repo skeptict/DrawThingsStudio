@@ -37,7 +37,7 @@ enum CloudCatalogError: LocalizedError {
 final class CloudModelCatalog: ObservableObject {
     static let shared = CloudModelCatalog()
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "cloud-catalog")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "cloud-catalog")
 
     // MARK: - Published State
 

@@ -192,7 +192,7 @@ struct CustomPromptStyle: Codable, Identifiable, Equatable {
 final class PromptStyleManager: ObservableObject {
     static let shared = PromptStyleManager()
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "prompt-styles")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "prompt-styles")
 
     @Published private(set) var styles: [CustomPromptStyle] = []
 
@@ -200,7 +200,7 @@ final class PromptStyleManager: ObservableObject {
     nonisolated let stylesDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let dir = appSupport.appendingPathComponent("DrawThingsStudio", isDirectory: true)
+        let dir = appSupport.appendingPathComponent("TanqueStudio", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
@@ -209,7 +209,7 @@ final class PromptStyleManager: ObservableObject {
     nonisolated let stylesFilePath: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return appSupport.appendingPathComponent("DrawThingsStudio/enhance_styles.json")
+        return appSupport.appendingPathComponent("TanqueStudio/enhance_styles.json")
     }()
 
     init() {

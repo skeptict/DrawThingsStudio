@@ -16,7 +16,7 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
 
     let transport: DrawThingsTransport = .grpc
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "drawthings-grpc")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "drawthings-grpc")
 
     private let host: String
     private let port: Int

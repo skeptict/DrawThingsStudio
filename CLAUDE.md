@@ -9,7 +9,7 @@ Read project context from the AI-Memory vault:
 
 ## Project Overview
 
-DrawThingsStudio (DTS) is a macOS native app (Swift/SwiftUI) for AI image generation. It connects to Draw Things via HTTP and gRPC, provides an image research workbench (Image Inspector), LLM-assisted prompt tools, a visual workflow builder, Story Studio for narrative image creation, and a DT project database browser.
+Tanque Studio (formerly DrawThingsStudio) is a macOS native app (Swift/SwiftUI) for AI image generation. It connects to Draw Things via HTTP and gRPC, provides an image research workbench (Image Inspector), LLM-assisted prompt tools, a visual workflow builder, Story Studio for narrative image creation, and a DT project database browser.
 
 **Platform:** macOS 14.0+ (use `#available` checks for newer APIs — never raise the deployment target)
 **Architecture:** SwiftUI + SwiftData + MVVM
@@ -117,10 +117,10 @@ Dropdowns triggered near the bottom of a scroll view will open below the visible
 
 ```bash
 # Debug build
-xcodebuild -project DrawThingsStudio.xcodeproj -scheme DrawThingsStudio -configuration Debug build
+xcodebuild -project DrawThingsStudio.xcodeproj -scheme TanqueStudio -configuration Debug build
 
 # Release build
-xcodebuild -project DrawThingsStudio.xcodeproj -scheme DrawThingsStudio -configuration Release build
+xcodebuild -project DrawThingsStudio.xcodeproj -scheme TanqueStudio -configuration Release build
 ```
 
 ---
@@ -174,7 +174,7 @@ Sidebar items: Image Inspector (default), Generate Image, StoryFlow, Story Studi
 | Settings | `AppSettings.swift` (UserDefaults) |
 
 **Sandbox path:** All file storage is under:
-`~/Library/Containers/tanque.org.DrawThingsStudio/Data/Library/Application Support/DrawThingsStudio/`
+`~/Library/Containers/tanque.org.TanqueStudio/Data/Library/Application Support/TanqueStudio/`
 
 ### LLM Providers
 `LLMProvider` protocol with:

@@ -69,12 +69,12 @@ struct PipelineBackup: Codable {
 final class SwiftDataBackupManager {
     static let shared = SwiftDataBackupManager()
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "backup")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "backup")
 
     let backupDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return appSupport.appendingPathComponent("DrawThingsStudio/Backup", isDirectory: true)
+        return appSupport.appendingPathComponent("TanqueStudio/Backup", isDirectory: true)
     }()
 
     private var presetsURL: URL { backupDirectory.appendingPathComponent("config_presets.json") }

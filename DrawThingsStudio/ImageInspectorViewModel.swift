@@ -253,7 +253,7 @@ enum StageMode {
 final class ImageInspectorViewModel: ObservableObject {
 
     private static let maxHistoryCount = 50
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "inspector")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "inspector")
 
     @Published var layoutState: LayoutState
     @Published var stageMode: StageMode = .view
@@ -305,7 +305,7 @@ final class ImageInspectorViewModel: ObservableObject {
     private let storageDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return appSupport.appendingPathComponent("DrawThingsStudio/InspectorHistory", isDirectory: true)
+        return appSupport.appendingPathComponent("TanqueStudio/InspectorHistory", isDirectory: true)
     }()
 
     private var isPersistenceEnabled: Bool {

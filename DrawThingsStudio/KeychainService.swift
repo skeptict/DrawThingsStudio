@@ -17,9 +17,9 @@ protocol KeychainService {
 
 final class MacKeychainService: KeychainService {
     private let service: String
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "keychain")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "keychain")
 
-    init(service: String = "DrawThingsStudio") {
+    init(service: String = "TanqueStudio") {
         self.service = service
     }
 

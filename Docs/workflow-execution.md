@@ -116,7 +116,7 @@ The **Execute** button is also disabled in this case, with a tooltip explaining 
 All file paths in `canvasLoad`, `canvasSave`, and `loopLoad`/`loopSave` are relative to the **working directory**. The default is:
 
 ```
-~/Library/Containers/tanque.org.DrawThingsStudio/Data/Library/Application Support/DrawThingsStudio/WorkflowOutput/
+~/Library/Containers/tanque.org.TanqueStudio/Data/Library/Application Support/TanqueStudio/WorkflowOutput/
 ```
 
 You can change the working directory using the folder button in the execution view header before running the workflow. Note: the app is sandboxed, so only directories the app has been granted access to will work.

@@ -1,11 +1,11 @@
-# DrawThingsStudio — Image Inspector Redesign
+# Tanque Studio — Image Inspector Redesign
 ## Claude Code Implementation Brief
 
 ---
 
 ## Overview
 
-This brief covers a redesign of the **Image Inspector** view in DrawThingsStudio. The goal is to transform it from a fixed three-panel layout into a flexible, image-first workbench that serves both browsing and research. The inspector handles native Draw Things images as well as externally imported images (CivitAI, DeviantArt, arbitrary sources), and connects to local LLM services for vision analysis and prompt assistance.
+This brief covers a redesign of the **Image Inspector** view in Tanque Studio. The goal is to transform it from a fixed three-panel layout into a flexible, image-first workbench that serves both browsing and research. The inspector handles native Draw Things images as well as externally imported images (CivitAI, DeviantArt, arbitrary sources), and connects to local LLM services for vision analysis and prompt assistance.
 
 All implementation targets **macOS 14** minimum deployment. Use `#available` checks for any APIs newer than macOS 14. SwiftUI throughout.
 

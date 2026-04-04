@@ -96,7 +96,7 @@ final class WorkflowExecutionViewModel: ObservableObject {
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory())
-        let dir = appSupport.appendingPathComponent("DrawThingsStudio/WorkflowOutput", isDirectory: true)
+        let dir = appSupport.appendingPathComponent("TanqueStudio/WorkflowOutput", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.workingDirectory = dir
     }

@@ -16,7 +16,7 @@ final class DrawThingsAssetManager: ObservableObject {
 
     static let shared = DrawThingsAssetManager()
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "asset-manager")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "asset-manager")
 
     // MARK: - Cloud Catalog
 
@@ -66,7 +66,7 @@ final class DrawThingsAssetManager: ObservableObject {
 
     private var customLoRAMetadataURL: URL? {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("DrawThingsStudio/custom_lora_metadata.json")
+            .appendingPathComponent("TanqueStudio/custom_lora_metadata.json")
     }
 
     private func parseCustomLoRAJSON(_ data: Data) -> [String: CustomLoRAEntry] {

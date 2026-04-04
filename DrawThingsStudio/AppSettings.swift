@@ -231,13 +231,13 @@ final class AppSettings: ObservableObject {
     private static var defaultGeneratedImagesURL: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return appSupport.appendingPathComponent("DrawThingsStudio/GeneratedImages", isDirectory: true)
+        return appSupport.appendingPathComponent("TanqueStudio/GeneratedImages", isDirectory: true)
     }
 
     private static var defaultStoryStudioImagesURL: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return appSupport.appendingPathComponent("DrawThingsStudio/StoryStudioImages", isDirectory: true)
+        return appSupport.appendingPathComponent("TanqueStudio/StoryStudioImages", isDirectory: true)
     }
 
     var effectiveGeneratedImagesURL: URL { _generatedImagesURL ?? AppSettings.defaultGeneratedImagesURL }

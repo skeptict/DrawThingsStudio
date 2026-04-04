@@ -14,11 +14,11 @@ final class RequestLogger {
 
     let logFileURL: URL? = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-        .appendingPathComponent("DrawThingsStudio/request_log.txt")
+        .appendingPathComponent("TanqueStudio/request_log.txt")
 
     private init() {
         if let url = logFileURL, !FileManager.default.fileExists(atPath: url.path) {
-            try? "DrawThingsStudio Request Log\n".write(to: url, atomically: true, encoding: .utf8)
+            try? "TanqueStudio Request Log\n".write(to: url, atomically: true, encoding: .utf8)
         }
     }
 
@@ -87,7 +87,7 @@ final class RequestLogger {
 
     func clearLog() {
         guard let url = logFileURL else { return }
-        try? "DrawThingsStudio Request Log\n".write(to: url, atomically: true, encoding: .utf8)
+        try? "TanqueStudio Request Log\n".write(to: url, atomically: true, encoding: .utf8)
     }
 
     func openLog() {
@@ -100,7 +100,7 @@ final class RequestLogger {
     /// Serial queue ensures concurrent callers (e.g. HTTP and gRPC in parallel)
     /// do not interleave writes and corrupt the log file.
     private let writeQueue = DispatchQueue(
-        label: "com.drawthingsstudio.requestlogger",
+        label: "com.tanquestudio.requestlogger",
         qos: .background
     )
 

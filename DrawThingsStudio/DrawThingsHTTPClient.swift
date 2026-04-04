@@ -14,7 +14,7 @@ final class DrawThingsHTTPClient: DrawThingsProvider {
 
     // MARK: - Properties
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "drawthings-http")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "drawthings-http")
 
     let transport: DrawThingsTransport = .http
 

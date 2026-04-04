@@ -17,7 +17,7 @@ import OSLog
 @MainActor
 final class StoryStudioViewModel: ObservableObject {
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "story-studio")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "story-studio")
 
     // MARK: - Selection State
 

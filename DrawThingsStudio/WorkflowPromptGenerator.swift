@@ -14,7 +14,7 @@ import OSLog
 
     // MARK: - Properties
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "promptgen")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "promptgen")
 
     let llmClient: any LLMProvider
 

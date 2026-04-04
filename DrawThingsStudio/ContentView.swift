@@ -1667,7 +1667,7 @@ private struct BackupCoordinator: View {
     @Query private var pipelines: [SavedPipeline]
     @Query private var storyProjects: [StoryProject]
     @Environment(\.modelContext) private var modelContext
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "backup")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "backup")
 
     /// Pending debounce task — cancelled and replaced on each change.
     @State private var pendingBackup: Task<Void, Never>?

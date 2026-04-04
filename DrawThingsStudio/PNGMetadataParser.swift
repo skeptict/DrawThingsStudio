@@ -97,7 +97,7 @@ struct PNGMetadataParser {
         // Write to sandbox-safe location (debug builds only)
         #if DEBUG
         if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let dir = appSupport.appendingPathComponent("DrawThingsStudio")
+            let dir = appSupport.appendingPathComponent("TanqueStudio")
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             try? debugInfo.write(to: dir.appendingPathComponent("png_debug.log"), atomically: true, encoding: .utf8)
         }

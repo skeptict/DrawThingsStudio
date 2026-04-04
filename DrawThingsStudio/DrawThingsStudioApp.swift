@@ -24,8 +24,50 @@ extension FocusedValues {
 // MARK: - Constants
 
 /// UserDefaults key signalling that BackupCoordinator should restore from JSON on next launch.
-/// Written by DrawThingsStudioApp (schema wipe / recovery), read and cleared by ContentView.
-let needsBackupRestoreKey = "dts.needsBackupRestore"
+/// Written by TanqueStudioApp (schema wipe / recovery), read and cleared by ContentView.
+let needsBackupRestoreKey = "tanqueStudio.needsBackupRestore"
+
+/// Migrates legacy `dts.*` UserDefaults keys to `tanqueStudio.*` on first launch after rename.
+/// Gates on `tanqueStudio.migrationV1.complete` so it runs exactly once.
+/// Old keys are preserved for safe rollback.
+private func migrateUserDefaultsKeys() {
+    let completedKey = "tanqueStudio.migrationV1.complete"
+    let defaults = UserDefaults.standard
+    guard !defaults.bool(forKey: completedKey) else { return }
+
+    let keyMigrations: [(old: String, new: String)] = [
+        ("dts.needsBackupRestore", "tanqueStudio.needsBackupRestore"),
+        ("dts.schemaVersion",      "tanqueStudio.schemaVersion"),
+    ]
+    for (old, new) in keyMigrations {
+        if let value = defaults.object(forKey: old) {
+            defaults.set(value, forKey: new)
+        }
+    }
+
+    defaults.set(true, forKey: completedKey)
+}
+
+/// Copies the Application Support subdirectory from `DrawThingsStudio/` to `TanqueStudio/`
+/// on first launch after rename. Old directory is preserved for safe rollback.
+/// Must run before any code reads from the TanqueStudio/ path.
+private func migrateAppSupportDirectoryIfNeeded() {
+    let completedKey = "tanqueStudio.appSupportMigrationV1.complete"
+    let defaults = UserDefaults.standard
+    guard !defaults.bool(forKey: completedKey) else { return }
+
+    defer { defaults.set(true, forKey: completedKey) }
+
+    let fm = FileManager.default
+    guard let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+
+    let oldDir = appSupport.appendingPathComponent("DrawThingsStudio", isDirectory: true)
+    let newDir = appSupport.appendingPathComponent("TanqueStudio", isDirectory: true)
+
+    guard fm.fileExists(atPath: oldDir.path), !fm.fileExists(atPath: newDir.path) else { return }
+
+    try? fm.copyItem(at: oldDir, to: newDir)
+}
 
 /// Removes a SQLite store and its WAL/SHM siblings. Safe to call when files are absent.
 private func wipeSQLiteStore(_ modelConfiguration: ModelConfiguration) {
@@ -48,7 +90,7 @@ private func wipeSQLiteStore(_ modelConfiguration: ModelConfiguration) {
 // MARK: - App
 
 @main
-struct DrawThingsStudioApp: App {
+struct TanqueStudioApp: App {
     var sharedModelContainer: ModelContainer = {
         // Schema versioning strategy:
         //
@@ -66,18 +108,21 @@ struct DrawThingsStudioApp: App {
         //   v1–v2: various early schema changes
         //   v3: switched to explicit store URL
         //   v4: added SceneVariant.isApproved (additive — no wipe needed)
+        migrateUserDefaultsKeys()
+        migrateAppSupportDirectoryIfNeeded()
+
         let currentSchemaVersion = 4
         let lastDestructiveVersion = 3  // last version that required a store wipe
-        let schemaVersionKey = "dts.schemaVersion"
+        let schemaVersionKey = "tanqueStudio.schemaVersion"
 
-        let schema = Schema(DrawThingsStudioSchema.models)
+        let schema = Schema(TanqueStudioSchema.models)
 
         // Naming the configuration pins the store filename to
         // "DrawThingsStudio.store" so the migration path is predictable —
         // without a name SwiftData may derive a different path across schema
         // versions, causing the guard to delete the wrong file.
         let modelConfiguration = ModelConfiguration(
-            "DrawThingsStudio", schema: schema, isStoredInMemoryOnly: false)
+            "TanqueStudio", schema: schema, isStoredInMemoryOnly: false)
 
         let storedVersion = UserDefaults.standard.integer(forKey: schemaVersionKey)
         if storedVersion < lastDestructiveVersion {

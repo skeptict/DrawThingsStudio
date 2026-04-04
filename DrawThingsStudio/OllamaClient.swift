@@ -15,7 +15,7 @@ final class OllamaClient: LLMProvider, ObservableObject {
 
     // MARK: - Properties
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "ollama")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "ollama")
 
     @Published var connectionStatus: LLMConnectionStatus = .disconnected
     @Published var availableModels: [LLMModel] = []

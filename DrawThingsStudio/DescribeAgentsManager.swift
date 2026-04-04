@@ -143,14 +143,14 @@ enum BuiltInDescribeAgent: String, CaseIterable {
 final class DescribeAgentsManager: ObservableObject {
     static let shared = DescribeAgentsManager()
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "describe-agents")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "describe-agents")
 
     @Published private(set) var agents: [DescribeAgent] = []
 
     nonisolated let agentsFilePath: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return appSupport.appendingPathComponent("DrawThingsStudio/describe_agents.json")
+        return appSupport.appendingPathComponent("TanqueStudio/describe_agents.json")
     }()
 
     init() {

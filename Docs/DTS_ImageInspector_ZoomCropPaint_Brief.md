@@ -1,4 +1,4 @@
-# DrawThingsStudio — Image Inspector: Zoom, Crop & Inpainting Mask
+# Tanque Studio — Image Inspector: Zoom, Crop & Inpainting Mask
 ## Claude Code Implementation Brief
 
 ---

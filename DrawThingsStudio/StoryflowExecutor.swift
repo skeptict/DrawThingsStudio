@@ -45,7 +45,7 @@ struct StoryflowExecutionState {
 
     init(workingDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSHomeDirectory())
-        return appSupport.appendingPathComponent("DrawThingsStudio/WorkflowOutput", isDirectory: true)
+        return appSupport.appendingPathComponent("TanqueStudio/WorkflowOutput", isDirectory: true)
     }()) {
         self.workingDirectory = workingDirectory
     }
@@ -152,7 +152,7 @@ final class StoryflowExecutor {
 
     // MARK: - Properties
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "storyflow-executor")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "storyflow-executor")
 
     private let provider: any DrawThingsProvider
     private var state: StoryflowExecutionState

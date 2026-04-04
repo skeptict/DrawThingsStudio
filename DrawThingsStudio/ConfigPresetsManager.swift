@@ -308,13 +308,13 @@ enum SeedModeMapping {
 final class ConfigPresetsManager {
     static let shared = ConfigPresetsManager()
 
-    private let logger = Logger(subsystem: "com.drawthingsstudio", category: "presets")
+    private let logger = Logger(subsystem: "com.tanquestudio", category: "presets")
 
     /// Directory for storing presets
     let presetsDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let dir = appSupport.appendingPathComponent("DrawThingsStudio/Presets", isDirectory: true)
+        let dir = appSupport.appendingPathComponent("TanqueStudio/Presets", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
@@ -323,7 +323,7 @@ final class ConfigPresetsManager {
     let presetsFilePath: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return appSupport.appendingPathComponent("DrawThingsStudio/Presets/config_presets.json")
+        return appSupport.appendingPathComponent("TanqueStudio/Presets/config_presets.json")
     }()
 
     // MARK: - Clipboard
