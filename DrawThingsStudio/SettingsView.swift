@@ -3,9 +3,15 @@ import SwiftUI
 struct SettingsView: View {
     @State private var settings = AppSettings.shared
     @State private var connectionStatus: ConnectionStatus = .idle
+    @State private var llmStatus: LLMStatus = .idle
 
-    enum ConnectionStatus {
-        case idle, testing, success, failure
+    enum ConnectionStatus { case idle, testing, success, failure }
+
+    enum LLMStatus {
+        case idle, testing
+        case success(Int)   // model count
+        case failure(String)
+        var isTesting: Bool { if case .testing = self { return true }; return false }
     }
 
     var body: some View {
@@ -51,6 +57,50 @@ struct SettingsView: View {
                     case .failure:
                         Label("Failed", systemImage: "xmark.circle.fill")
                             .foregroundStyle(.red)
+                    }
+                }
+            }
+
+            // MARK: LLM Assist
+            Section("LLM Assist") {
+                Picker("Provider", selection: $settings.llmProvider) {
+                    ForEach(LLMProvider.allCases, id: \.self) { p in
+                        Text(p.displayName).tag(p)
+                    }
+                }
+
+                TextField(
+                    settings.llmProvider.defaultBaseURL,
+                    text: $settings.llmBaseURL
+                )
+                .textFieldStyle(.roundedBorder)
+                .help("Leave blank to use the provider default URL")
+
+                TextField("Model name (e.g. llama3, mistral)", text: $settings.llmModelName)
+                    .textFieldStyle(.roundedBorder)
+
+                HStack {
+                    Button(action: testLLMConnection) {
+                        Label("Test Connection", systemImage: "network")
+                    }
+                    .disabled(llmStatus.isTesting)
+
+                    Spacer()
+
+                    switch llmStatus {
+                    case .idle:
+                        EmptyView()
+                    case .testing:
+                        ProgressView().scaleEffect(0.7)
+                    case .success(let count):
+                        Label("\(count) model\(count == 1 ? "" : "s")", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                    case .failure(let msg):
+                        Label(msg, systemImage: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                            .font(.caption)
+                            .lineLimit(2)
                     }
                 }
             }
@@ -114,6 +164,19 @@ struct SettingsView: View {
                 }
             } catch {
                 connectionStatus = .failure
+            }
+        }
+    }
+
+    private func testLLMConnection() {
+        llmStatus = .testing
+        let baseURL = settings.llmEffectiveBaseURL
+        Task {
+            do {
+                let models = try await LLMService.fetchModels(baseURL: baseURL)
+                llmStatus = .success(models.count)
+            } catch {
+                llmStatus = .failure(error.localizedDescription)
             }
         }
     }

@@ -165,7 +165,7 @@ private struct GalleryStripCell: View {
         Button(action: onTap) {
             VStack(spacing: 3) {
                 thumbnailView
-                    .frame(height: 90)
+                    .aspectRatio(1, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
                     .overlay {
                         RoundedRectangle(cornerRadius: 5)

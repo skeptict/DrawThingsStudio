@@ -65,6 +65,9 @@ struct ContentView: View {
         switch item {
         case .generate:
             GenerateView(vm: generateVM)
+                .onReceive(NotificationCenter.default.publisher(for: .tanqueNavigateToSettings)) { _ in
+                    selectedItem = .settings
+                }
         case .settings:
             SettingsView()
         default:

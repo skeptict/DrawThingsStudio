@@ -39,9 +39,22 @@ final class GenerateViewModel {
     enum RightTab: String, CaseIterable {
         case metadata = "Metadata"
         case enhance  = "Enhance"
+        case assist   = "Assist"
         case actions  = "Actions"
     }
     var selectedRightTab: RightTab = .metadata
+
+    // MARK: — LLM Assist
+    enum LLMAssistMode { case enhance, generate }
+    var llmAssistMode: LLMAssistMode = .enhance
+    /// Set to true by the ✨ button to auto-trigger enhance when the Assist tab appears.
+    var pendingLLMEnhance: Bool = false
+
+    func requestLLMEnhance() {
+        selectedRightTab = .assist
+        llmAssistMode = .enhance
+        pendingLLMEnhance = true
+    }
 
     // MARK: — Gallery selection
     var selectedGalleryID: UUID?

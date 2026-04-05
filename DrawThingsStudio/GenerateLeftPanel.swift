@@ -48,6 +48,16 @@ struct GenerateLeftPanel: View {
                     RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
                 )
+                .overlay(alignment: .bottomTrailing) {
+                    Button { vm.requestLLMEnhance() } label: {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10, weight: .semibold))
+                            .padding(5)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(4)
+                }
 
             DisclosureGroup(isExpanded: $vm.showNegativePrompt) {
                 TextEditor(text: $vm.negativePrompt)

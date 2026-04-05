@@ -50,6 +50,18 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(galleryStripWidth, forKey: "tanqueStudio.galleryStripWidth") }
     }
 
+    // MARK: - LLM Assist
+
+    var llmProvider: LLMProvider {
+        didSet { UserDefaults.standard.set(llmProvider.rawValue, forKey: "tanqueStudio.llmProvider") }
+    }
+    var llmBaseURL: String {
+        didSet { UserDefaults.standard.set(llmBaseURL, forKey: "tanqueStudio.llmBaseURL") }
+    }
+    var llmModelName: String {
+        didSet { UserDefaults.standard.set(llmModelName, forKey: "tanqueStudio.llmModelName") }
+    }
+
     // MARK: - Collection
 
     var selectedCollection: String? {
@@ -83,7 +95,19 @@ final class AppSettings {
         leftPanelCollapsed = d.object(forKey: "tanqueStudio.leftPanelCollapsed") as? Bool ?? false
         rightPanelWidth    = d.cgFloat(forKey: "tanqueStudio.rightPanelWidth")  ?? 300
         galleryStripWidth  = d.cgFloat(forKey: "tanqueStudio.galleryStripWidth") ?? 120
+        llmProvider  = LLMProvider(rawValue: d.string(forKey: "tanqueStudio.llmProvider") ?? "") ?? .ollama
+        llmBaseURL   = d.string(forKey: "tanqueStudio.llmBaseURL")   ?? ""
+        llmModelName = d.string(forKey: "tanqueStudio.llmModelName") ?? ""
         selectedCollection = d.string(forKey: "tanqueStudio.selectedCollection")
+    }
+}
+
+// MARK: - LLM Computed
+
+extension AppSettings {
+    /// Returns llmBaseURL if set by the user, else the selected provider's default URL.
+    var llmEffectiveBaseURL: String {
+        llmBaseURL.isEmpty ? llmProvider.defaultBaseURL : llmBaseURL
     }
 }
 

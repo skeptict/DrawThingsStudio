@@ -72,6 +72,7 @@ struct GenerateRightPanel: View {
         switch vm.selectedRightTab {
         case .metadata: metadataTab
         case .enhance:  enhanceTab
+        case .assist:   AssistTabView(vm: vm)
         case .actions:  actionsTab
         }
     }
@@ -254,6 +255,187 @@ private struct MetadataRow: View {
                 .textSelection(.enabled)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Assist Tab
+
+private struct AssistTabView: View {
+    @Bindable var vm: GenerateViewModel
+    @State private var localModelName: String = AppSettings.shared.llmModelName
+    @State private var conceptText: String = ""
+    @State private var isProcessing: Bool = false
+    @State private var errorText: String? = nil
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                // Mode toggle
+                Picker("", selection: $vm.llmAssistMode) {
+                    Text("Enhance").tag(GenerateViewModel.LLMAssistMode.enhance)
+                    Text("Generate").tag(GenerateViewModel.LLMAssistMode.generate)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                // Model name (inline override — does not write back to AppSettings)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Model")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    TextField("e.g. llama3, mistral", text: $localModelName)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.caption)
+                }
+
+                Divider()
+
+                // Mode content
+                if vm.llmAssistMode == .enhance {
+                    enhanceContent
+                } else {
+                    generateContent
+                }
+
+                // Error
+                if let error = errorText {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.primary)
+                    }
+                }
+
+                Divider()
+
+                // Open LLM Settings
+                Button {
+                    NotificationCenter.default.post(name: .tanqueNavigateToSettings, object: nil)
+                } label: {
+                    Label("Open LLM Settings", systemImage: "gearshape")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+            .padding(12)
+        }
+        .onAppear { checkPendingEnhance() }
+        .onChange(of: vm.pendingLLMEnhance) { _, pending in
+            if pending { checkPendingEnhance() }
+        }
+    }
+
+    // MARK: — Enhance mode
+
+    private var enhanceContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !vm.prompt.isEmpty {
+                Text(vm.prompt)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            Button { runEnhance() } label: {
+                HStack(spacing: 6) {
+                    if isProcessing {
+                        ProgressView().scaleEffect(0.7).frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: "wand.and.stars")
+                    }
+                    Text(isProcessing ? "Enhancing…" : "Enhance Prompt")
+                        .font(.callout.weight(.semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isProcessing || vm.prompt.isEmpty || localModelName.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+    }
+
+    // MARK: — Generate mode
+
+    private var generateContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Concept")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Describe your concept…", text: $conceptText, axis: .vertical)
+                    .lineLimit(3...5)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
+            }
+
+            Button { runGenerate() } label: {
+                HStack(spacing: 6) {
+                    if isProcessing {
+                        ProgressView().scaleEffect(0.7).frame(width: 14, height: 14)
+                    } else {
+                        Image(systemName: "sparkles")
+                    }
+                    Text(isProcessing ? "Generating…" : "Generate Prompt")
+                        .font(.callout.weight(.semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isProcessing || conceptText.trimmingCharacters(in: .whitespaces).isEmpty || localModelName.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+    }
+
+    // MARK: — Actions
+
+    private func checkPendingEnhance() {
+        guard vm.pendingLLMEnhance else { return }
+        vm.pendingLLMEnhance = false
+        if vm.llmAssistMode == .enhance { runEnhance() }
+    }
+
+    private func runEnhance() {
+        guard !vm.prompt.isEmpty else { return }
+        let prompt = vm.prompt
+        let model = localModelName.trimmingCharacters(in: .whitespaces)
+        let baseURL = AppSettings.shared.llmEffectiveBaseURL
+        isProcessing = true
+        errorText = nil
+        Task {
+            do {
+                let result = try await LLMService.enhance(prompt: prompt, model: model, baseURL: baseURL)
+                vm.prompt = result
+            } catch {
+                errorText = error.localizedDescription
+            }
+            isProcessing = false
+        }
+    }
+
+    private func runGenerate() {
+        let concept = conceptText.trimmingCharacters(in: .whitespaces)
+        guard !concept.isEmpty else { return }
+        let model = localModelName.trimmingCharacters(in: .whitespaces)
+        let baseURL = AppSettings.shared.llmEffectiveBaseURL
+        isProcessing = true
+        errorText = nil
+        Task {
+            do {
+                let result = try await LLMService.generate(concept: concept, model: model, baseURL: baseURL)
+                vm.prompt = result
+            } catch {
+                errorText = error.localizedDescription
+            }
+            isProcessing = false
+        }
     }
 }
 
