@@ -40,6 +40,9 @@ final class AppSettings {
     var leftPanelWidth: CGFloat {
         didSet { UserDefaults.standard.set(leftPanelWidth, forKey: "tanqueStudio.leftPanelWidth") }
     }
+    var leftPanelCollapsed: Bool {
+        didSet { UserDefaults.standard.set(leftPanelCollapsed, forKey: "tanqueStudio.leftPanelCollapsed") }
+    }
     var rightPanelWidth: CGFloat {
         didSet { UserDefaults.standard.set(rightPanelWidth, forKey: "tanqueStudio.rightPanelWidth") }
     }
@@ -77,6 +80,7 @@ final class AppSettings {
         defaultImageFolder         = folderPath
         defaultImageFolderBookmark = folderBookmark
         leftPanelWidth     = d.cgFloat(forKey: "tanqueStudio.leftPanelWidth")    ?? 260
+        leftPanelCollapsed = d.object(forKey: "tanqueStudio.leftPanelCollapsed") as? Bool ?? false
         rightPanelWidth    = d.cgFloat(forKey: "tanqueStudio.rightPanelWidth")  ?? 300
         galleryStripWidth  = d.cgFloat(forKey: "tanqueStudio.galleryStripWidth") ?? 120
         selectedCollection = d.string(forKey: "tanqueStudio.selectedCollection")

@@ -61,6 +61,10 @@ final class GenerateViewModel {
         get { AppSettings.shared.leftPanelWidth }
         set { AppSettings.shared.leftPanelWidth = newValue }
     }
+    var leftPanelCollapsed: Bool {
+        get { AppSettings.shared.leftPanelCollapsed }
+        set { AppSettings.shared.leftPanelCollapsed = newValue }
+    }
     var rightPanelWidth: CGFloat {
         get { AppSettings.shared.rightPanelWidth }
         set { AppSettings.shared.rightPanelWidth = newValue }
@@ -87,32 +91,40 @@ final class GenerateViewModel {
         cfg.applyRDSShiftIfNeeded()
         let capturedPrompt = prompt
         let capturedSource = sourceImage
+        let count = cfg.batchCount  // how many sequential renders were requested
+        cfg.batchCount = 1          // send one at a time so each result arrives individually
 
         generationTask = Task {
             do {
-                let images = try await client.generateImage(
-                    prompt: capturedPrompt,
-                    sourceImage: capturedSource,
-                    mask: nil,
-                    config: cfg,
-                    onProgress: { [weak self] p in
-                        Task { @MainActor [weak self] in self?.progress = p }
-                    }
-                )
-                self.generatedImage = images.first
-                self.currentMetadata = cfg.asPNGMetadata(prompt: capturedPrompt)
-                self.currentImageSource = .generated
+                for _ in 0..<count {
+                    if Task.isCancelled { break }
+                    let images = try await client.generateImage(
+                        prompt: capturedPrompt,
+                        sourceImage: capturedSource,
+                        mask: nil,
+                        config: cfg,
+                        onProgress: { [weak self] p in
+                            Task { @MainActor [weak self] in self?.progress = p }
+                        }
+                    )
+                    self.generatedImage = images.first
+                    self.currentMetadata = cfg.asPNGMetadata(prompt: capturedPrompt)
+                    self.currentImageSource = .generated
+                    self.selectedRightTab = .metadata
+                    self.lastGenerationID = UUID()  // triggers auto-save observer in GenerateView
+                }
                 self.isGenerating = false
                 self.progress = .complete
-                self.selectedRightTab = .metadata
-                self.lastGenerationID = UUID()  // triggers auto-save observer in GenerateView
+                self.config.batchCount = count  // restore stepper value
             } catch is CancellationError {
                 self.isGenerating = false
                 self.progress = .complete
+                self.config.batchCount = count  // restore stepper value
             } catch {
                 self.errorMessage = error.localizedDescription
                 self.isGenerating = false
                 self.progress = .failed(error.localizedDescription)
+                self.config.batchCount = count  // restore stepper value
             }
         }
     }
