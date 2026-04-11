@@ -29,6 +29,15 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(dtConfigsBookmark, forKey: "tanqueStudio.dtConfigsBookmark") }
     }
 
+    // MARK: - Host History
+
+    var dtHostHistory: [String] {
+        didSet { UserDefaults.standard.set(dtHostHistory, forKey: "tanqueStudio.dtHostHistory") }
+    }
+    var llmHostHistory: [String] {
+        didSet { UserDefaults.standard.set(llmHostHistory, forKey: "tanqueStudio.llmHostHistory") }
+    }
+
     // MARK: - Generation Behaviour
 
     var autoSaveGenerated: Bool {
@@ -99,6 +108,8 @@ final class AppSettings {
         llmModelName = d.string(forKey: "tanqueStudio.llmModelName") ?? ""
         selectedCollection = d.string(forKey: "tanqueStudio.selectedCollection")
         dtConfigsBookmark  = d.data(forKey: "tanqueStudio.dtConfigsBookmark")
+        dtHostHistory  = d.stringArray(forKey: "tanqueStudio.dtHostHistory")  ?? []
+        llmHostHistory = d.stringArray(forKey: "tanqueStudio.llmHostHistory") ?? []
     }
 }
 
@@ -125,6 +136,26 @@ extension AppSettings {
         return appSupport
             .appendingPathComponent("TanqueStudio", isDirectory: true)
             .appendingPathComponent("GeneratedImages", isDirectory: true)
+    }
+}
+
+// MARK: - Host History Helpers
+
+extension AppSettings {
+    func addDTHost(_ host: String) {
+        let h = host.trimmingCharacters(in: .whitespaces)
+        guard !h.isEmpty else { return }
+        dtHostHistory.removeAll { $0 == h }
+        dtHostHistory.insert(h, at: 0)
+        if dtHostHistory.count > 10 { dtHostHistory = Array(dtHostHistory.prefix(10)) }
+    }
+
+    func addLLMHost(_ host: String) {
+        let h = host.trimmingCharacters(in: .whitespaces)
+        guard !h.isEmpty else { return }
+        llmHostHistory.removeAll { $0 == h }
+        llmHostHistory.insert(h, at: 0)
+        if llmHostHistory.count > 10 { llmHostHistory = Array(llmHostHistory.prefix(10)) }
     }
 }
 

@@ -4,6 +4,8 @@ struct SettingsView: View {
     @State private var settings = AppSettings.shared
     @State private var connectionStatus: ConnectionStatus = .idle
     @State private var llmStatus: LLMStatus = .idle
+    @State private var showDTHostHistory = false
+    @State private var showLLMHostHistory = false
 
     enum ConnectionStatus { case idle, testing, success, failure }
 
@@ -18,8 +20,34 @@ struct SettingsView: View {
         Form {
             // MARK: Draw Things Connection
             Section("Draw Things Connection") {
-                TextField("Host", text: $settings.dtHost)
-                    .textFieldStyle(.roundedBorder)
+                HStack(spacing: 4) {
+                    TextField("Host", text: $settings.dtHost)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { settings.addDTHost(settings.dtHost) }
+                    Button {
+                        showDTHostHistory.toggle()
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .popover(isPresented: $showDTHostHistory, arrowEdge: .bottom) {
+                        hostHistoryPopover(
+                            history: settings.dtHostHistory,
+                            onSelect: { host in
+                                settings.dtHost = host
+                                showDTHostHistory = false
+                            },
+                            onDelete: { host in
+                                settings.dtHostHistory.removeAll { $0 == host }
+                            },
+                            onClear: {
+                                settings.dtHostHistory = []
+                                showDTHostHistory = false
+                            }
+                        )
+                    }
+                }
 
                 HStack {
                     Text("Port")
@@ -64,12 +92,38 @@ struct SettingsView: View {
                     }
                 }
 
-                TextField(
-                    settings.llmProvider.defaultBaseURL,
-                    text: $settings.llmBaseURL
-                )
-                .textFieldStyle(.roundedBorder)
-                .help("Leave blank to use the provider default URL")
+                HStack(spacing: 4) {
+                    TextField(
+                        settings.llmProvider.defaultBaseURL,
+                        text: $settings.llmBaseURL
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .help("Leave blank to use the provider default URL")
+                    .onSubmit { settings.addLLMHost(settings.llmBaseURL) }
+                    Button {
+                        showLLMHostHistory.toggle()
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .popover(isPresented: $showLLMHostHistory, arrowEdge: .bottom) {
+                        hostHistoryPopover(
+                            history: settings.llmHostHistory,
+                            onSelect: { host in
+                                settings.llmBaseURL = host
+                                showLLMHostHistory = false
+                            },
+                            onDelete: { host in
+                                settings.llmHostHistory.removeAll { $0 == host }
+                            },
+                            onClear: {
+                                settings.llmHostHistory = []
+                                showLLMHostHistory = false
+                            }
+                        )
+                    }
+                }
 
                 HStack {
                     Button(action: testLLMConnection) {
@@ -145,20 +199,66 @@ struct SettingsView: View {
             let client = DrawThingsGRPCClient(host: host, port: port)
             let reachable = await client.checkConnection()
             connectionStatus = reachable ? .success : .failure
+            if reachable { settings.addDTHost(host) }
         }
     }
 
     private func testLLMConnection() {
         llmStatus = .testing
         let baseURL = settings.llmEffectiveBaseURL
+        let enteredURL = settings.llmBaseURL
         Task { @MainActor in
             do {
                 let models = try await LLMService.fetchModels(baseURL: baseURL, provider: settings.llmProvider)
                 llmStatus = .success(models.count)
+                settings.addLLMHost(enteredURL)
             } catch {
                 llmStatus = .failure(error.localizedDescription)
             }
         }
+    }
+
+    @ViewBuilder
+    private func hostHistoryPopover(
+        history: [String],
+        onSelect: @escaping (String) -> Void,
+        onDelete: @escaping (String) -> Void,
+        onClear: @escaping () -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if history.isEmpty {
+                Text("No history")
+                    .foregroundStyle(.secondary)
+                    .padding()
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(history, id: \.self) { host in
+                            HStack {
+                                Button(host) { onSelect(host) }
+                                    .buttonStyle(.borderless)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Button { onDelete(host) } label: {
+                                    Image(systemName: "minus.circle")
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            Divider()
+                        }
+                    }
+                }
+                .frame(maxHeight: 220)
+                Divider()
+                Button("Clear history", action: onClear)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .padding(10)
+            }
+        }
+        .frame(minWidth: 260)
     }
 
     private func browseForFolder() {
