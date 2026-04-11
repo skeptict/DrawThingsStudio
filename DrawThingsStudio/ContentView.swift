@@ -68,6 +68,8 @@ struct ContentView: View {
                 .onReceive(NotificationCenter.default.publisher(for: .tanqueNavigateToSettings)) { _ in
                     selectedItem = .settings
                 }
+        case .dtProjects:
+            DTProjectBrowserView(vm: generateVM, onNavigateToGenerate: { selectedItem = .generate })
         case .settings:
             SettingsView()
         default:
