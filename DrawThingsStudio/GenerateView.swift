@@ -141,30 +141,6 @@ private struct GenerateCenterPanel: View {
             }
     }
 
-    private var dragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                guard canvasScale > 1.05 else { return }
-                canvasOffset = CGSize(
-                    width:  lastOffset.width  + value.translation.width,
-                    height: lastOffset.height + value.translation.height
-                )
-            }
-            .onEnded { _ in lastOffset = canvasOffset }
-    }
-
-    private var doubleTapGesture: some Gesture {
-        TapGesture(count: 2)
-            .onEnded {
-                withAnimation(.spring(response: 0.3)) {
-                    canvasScale  = 1.0
-                    canvasOffset = .zero
-                    lastScale    = 1.0
-                    lastOffset   = .zero
-                }
-            }
-    }
-
     private func resetZoom() {
         canvasScale  = 1.0
         canvasOffset = .zero
@@ -183,10 +159,29 @@ private struct GenerateCenterPanel: View {
                     .padding(16)
                     .scaleEffect(canvasScale)
                     .offset(canvasOffset)
-                    .onTapGesture { vm.showImmersive = true }
+                    .onTapGesture(count: 2) {
+                        withAnimation(.spring(response: 0.3)) {
+                            canvasScale  = 1.0
+                            canvasOffset = .zero
+                            lastScale    = 1.0
+                            lastOffset   = .zero
+                        }
+                    }
+                    .onTapGesture(count: 1) {
+                        vm.showImmersive = true
+                    }
                     .simultaneousGesture(magnificationGesture)
-                    .simultaneousGesture(dragGesture)
-                    .simultaneousGesture(doubleTapGesture)
+                    .simultaneousGesture(
+                        DragGesture()
+                            .onChanged { value in
+                                guard canvasScale > 1.05 else { return }
+                                canvasOffset = CGSize(
+                                    width:  lastOffset.width  + value.translation.width,
+                                    height: lastOffset.height + value.translation.height
+                                )
+                            }
+                            .onEnded { _ in lastOffset = canvasOffset }
+                    )
             } else {
                 emptyState
             }
@@ -221,6 +216,7 @@ private struct GenerateCenterPanel: View {
             .allowsHitTesting(false)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
             let ext = url.pathExtension.lowercased()
