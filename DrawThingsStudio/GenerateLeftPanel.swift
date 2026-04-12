@@ -143,8 +143,8 @@ struct GenerateLeftPanel: View {
             SliderConfigRow(
                 label: "CFG",
                 range: 0.5...20,
-                step: 0.5,
-                increment: 0.5,
+                step: 0.1,
+                increment: 0.1,
                 displayFormat: "%.1f",
                 value: $vm.config.guidanceScale
             )
@@ -683,25 +683,41 @@ private struct LoRARow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(file)
-                .font(.caption2)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Slider(value: $weight, in: 0...2, step: 0.05)
-                .frame(width: 72)
-
-            Text(String(format: "%.2f", weight))
-                .font(.caption2.monospacedDigit())
-                .frame(width: 30, alignment: .trailing)
-
-            Button(action: onRemove) {
-                Image(systemName: "minus.circle.fill")
-                    .foregroundStyle(.red.opacity(0.7))
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(file)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button(action: onRemove) {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundStyle(.red.opacity(0.7))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            HStack(spacing: 4) {
+                Slider(value: $weight, in: 0...2, step: 0.05)
+                Button {
+                    weight = max(0, weight - 0.05)
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .frame(width: 16)
+                Text(String(format: "%.2f", weight))
+                    .font(.caption2.monospacedDigit())
+                    .frame(width: 36, alignment: .center)
+                Button {
+                    weight = min(2, weight + 0.05)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .frame(width: 16)
+            }
         }
         .padding(.vertical, 2)
     }
