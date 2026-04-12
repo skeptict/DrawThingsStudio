@@ -176,7 +176,10 @@ struct GenerateRightPanel: View {
 
             ActionButton(icon: "photo.stack", title: "Add to Moodboard",
                          enabled: vm.generatedImage != nil) {
-                if let img = vm.generatedImage { vm.addToMoodboard(img) }
+                if let img = croppedCanvasImage(image: vm.generatedImage,
+                                               canvasScale: canvasScale,
+                                               canvasOffset: canvasOffset,
+                                               canvasSize: canvasSize) { vm.addToMoodboard(img) }
             }
 
             Divider()
