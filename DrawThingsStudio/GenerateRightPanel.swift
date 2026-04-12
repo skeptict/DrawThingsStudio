@@ -168,6 +168,11 @@ struct GenerateRightPanel: View {
 
             sendToGenerateSection
 
+            ActionButton(icon: "photo.stack", title: "Add to Moodboard",
+                         enabled: vm.generatedImage != nil) {
+                if let img = vm.generatedImage { vm.addToMoodboard(img) }
+            }
+
             Divider()
                 .padding(.vertical, 2)
 

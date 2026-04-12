@@ -22,6 +22,8 @@ struct GenerateLeftPanel: View {
                     loraSection
                     Divider()
                     img2imgSection
+                    Divider()
+                    moodboardSection
                 }
                 .padding(12)
             }
@@ -450,6 +452,92 @@ struct GenerateLeftPanel: View {
                 }
             }
         }
+    }
+
+    // MARK: — Moodboard
+
+    private var moodboardSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Moodboard")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !vm.moodboardEntries.isEmpty {
+                    Button("Clear") { vm.clearMoodboard() }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if vm.moodboardEntries.isEmpty {
+                moodboardDropZone(label: "Drop reference images", height: 64)
+            } else {
+                ForEach(vm.moodboardEntries) { entry in
+                    VStack(spacing: 4) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(nsImage: entry.image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxHeight: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                            Button { vm.removeMoodboardEntry(id: entry.id) } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .background(Color.black.opacity(0.4), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(4)
+                        }
+
+                        HStack(spacing: 4) {
+                            Text("Weight")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Slider(
+                                value: Binding(
+                                    get: { Double(entry.weight) },
+                                    set: { newVal in
+                                        if let idx = vm.moodboardEntries.firstIndex(where: { $0.id == entry.id }) {
+                                            vm.moodboardEntries[idx].weight = Float(newVal)
+                                        }
+                                    }
+                                ),
+                                in: 0...1, step: 0.05
+                            )
+                            Text(String(format: "%.2f", entry.weight))
+                                .font(.caption2.monospacedDigit())
+                                .frame(width: 30)
+                        }
+                    }
+                }
+
+                moodboardDropZone(label: "Add more", height: 40)
+            }
+        }
+    }
+
+    private func moodboardDropZone(label: String, height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1)
+            .frame(height: height)
+            .overlay {
+                Label(label, systemImage: "photo.stack")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .dropDestination(for: URL.self) { urls, _ in
+                var added = false
+                for url in urls {
+                    guard let img = NSImage(contentsOf: url) else { continue }
+                    vm.addToMoodboard(img)
+                    added = true
+                }
+                return added
+            }
     }
 
     // MARK: — Generate Button

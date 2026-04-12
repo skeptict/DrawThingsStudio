@@ -22,6 +22,20 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
     private let port: Int
     private var client: DrawThingsClient?
     private var service: DrawThingsService?
+    /// Hints built from moodboard entries; set by GenerateViewModel before generation, cleared after.
+    var moodboardHints: [HintProto] = []
+
+    /// Build HintProto array from moodboard (image, weight) pairs using HintBuilder.
+    /// Call this before generateImage() when moodboard entries are present.
+    func setMoodboard(_ entries: [(NSImage, Float)]) {
+        let builder = HintBuilder()
+        for (image, weight) in entries {
+            if let data = image.tiffRepresentation {
+                builder.addMoodboardImage(data, weight: weight)
+            }
+        }
+        moodboardHints = builder.build()
+    }
 
     init(host: String = "127.0.0.1", port: Int = 7859) {
         self.host = host
@@ -76,13 +90,16 @@ final class DrawThingsGRPCClient: DrawThingsProvider {
         logger.info("Starting \(isImg2Img ? "img2img" : "txt2img") generation")
 
         do {
-            // Generate the image - pass source image and mask if provided
+            // Generate the image - pass source image, mask, and moodboard hints if set
+            let hints = moodboardHints
+            moodboardHints = []   // clear before await so concurrent calls don't double-use
             let images = try await client.generateImage(
                 prompt: prompt,
                 negativePrompt: config.negativePrompt,
                 configuration: grpcConfig,
                 image: sourceImage,
-                mask: mask
+                mask: mask,
+                hints: hints
             )
 
             onProgress?(.complete)

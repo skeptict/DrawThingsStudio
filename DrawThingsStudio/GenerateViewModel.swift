@@ -35,6 +35,32 @@ final class GenerateViewModel {
     // MARK: — img2img source
     var sourceImage: NSImage?
 
+    // MARK: — Moodboard
+
+    struct MoodboardEntry: Identifiable {
+        let id: UUID
+        let image: NSImage
+        var weight: Float
+        init(image: NSImage, weight: Float = 1.0) {
+            self.id = UUID()
+            self.image = image
+            self.weight = weight
+        }
+    }
+    var moodboardEntries: [MoodboardEntry] = []
+
+    func addToMoodboard(_ image: NSImage) {
+        moodboardEntries.append(MoodboardEntry(image: image))
+    }
+
+    func removeMoodboardEntry(id: UUID) {
+        moodboardEntries.removeAll { $0.id == id }
+    }
+
+    func clearMoodboard() {
+        moodboardEntries = []
+    }
+
     // MARK: — Right panel tab
     enum RightTab: String, CaseIterable {
         case metadata = "Metadata"
@@ -104,6 +130,12 @@ final class GenerateViewModel {
         let capturedSource = sourceImage
         let count = cfg.batchCount  // how many sequential renders were requested
         cfg.batchCount = 1          // send one at a time so each result arrives individually
+
+        // Pass moodboard entries to the gRPC client as hints (no-op for HTTP or empty moodboard)
+        let capturedMoodboard = moodboardEntries.map { ($0.image, $0.weight) }
+        if !capturedMoodboard.isEmpty, let grpcClient = client as? DrawThingsGRPCClient {
+            grpcClient.setMoodboard(capturedMoodboard)
+        }
 
         generationTask = Task {
             do {
