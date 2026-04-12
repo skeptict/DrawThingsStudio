@@ -357,6 +357,11 @@ private struct AssistTabView: View {
             resultText = nil
             errorText = nil
         }
+        .onChange(of: vm.selectedGalleryID) { _, _ in
+            refreshInput()
+            resultText = nil
+            errorText = nil
+        }
     }
 
     // MARK: — Operation picker
@@ -665,7 +670,11 @@ private struct AssistTabView: View {
 
     private func refreshInput() {
         guard let op = currentOp else { return }
-        inputText = op.usesCurrentPrompt ? vm.prompt : ""
+        guard op.usesCurrentPrompt else { inputText = ""; return }
+        // Prefer the selected image's metadata prompt over the generation
+        // prompt — they are intentionally separate in v2
+        let metaPrompt = vm.currentMetadata?.prompt ?? ""
+        inputText = metaPrompt.isEmpty ? vm.prompt : metaPrompt
     }
 
     private func checkPendingTrigger() {
