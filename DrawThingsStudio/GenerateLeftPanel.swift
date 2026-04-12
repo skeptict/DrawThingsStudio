@@ -368,14 +368,22 @@ struct GenerateLeftPanel: View {
                     .foregroundStyle(.tertiary)
                     .padding(.vertical, 4)
             } else {
-                ForEach(vm.config.loras.indices, id: \.self) { idx in
+                ForEach(vm.config.loras, id: \.file) { lora in
                     LoRARow(
-                        file: vm.config.loras[idx].file,
+                        file: lora.file,
                         weight: Binding(
-                            get: { vm.config.loras[idx].weight },
-                            set: { vm.config.loras[idx].weight = $0 }
+                            get: {
+                                vm.config.loras.first(where: { $0.file == lora.file })?.weight ?? lora.weight
+                            },
+                            set: { newVal in
+                                if let idx = vm.config.loras.firstIndex(where: { $0.file == lora.file }) {
+                                    vm.config.loras[idx].weight = newVal
+                                }
+                            }
                         ),
-                        onRemove: { vm.removeLoRA(at: IndexSet([idx])) }
+                        onRemove: {
+                            vm.config.loras.removeAll { $0.file == lora.file }
+                        }
                     )
                 }
             }
