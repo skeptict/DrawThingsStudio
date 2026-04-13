@@ -108,10 +108,11 @@ final class StoryFlowViewModel {
     func addVariable(type: WorkflowVariableType) {
         var v = WorkflowVariable(name: "new-\(type.rawValue)-\(variables.count + 1)", type: type)
         switch type {
-        case .prompt: v.promptValue = ""
-        case .config: v.configJSON = nil
-        case .image:  v.imageFileName = nil
-        case .lora:   v.loraFile = ""; v.loraWeight = 1.0
+        case .prompt:   v.promptValue = ""
+        case .config:   v.configJSON = nil
+        case .image:    v.imageFileName = nil
+        case .lora:     v.loraFile = ""; v.loraWeight = 1.0
+        case .wildcard: v.wildcardOptions = []
         }
         try? storage.saveVariable(v)
         variables.append(v)
