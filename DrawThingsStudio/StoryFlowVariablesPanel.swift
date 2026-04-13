@@ -260,14 +260,30 @@ private struct VariableRow: View {
                 }
 
             case .config:
-                HStack {
+                HStack(alignment: .top) {
                     Text("Config")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .frame(width: 60, alignment: .trailing)
-                    Text(variable.configJSON != nil ? "JSON stored" : "None")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .padding(.top, 3)
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextEditor(text: Binding(
+                            get: { variable.configJSON ?? "" },
+                            set: { variable.configJSON = $0.isEmpty ? nil : $0 }
+                        ))
+                        .font(.system(size: 10, design: .monospaced))
+                        .frame(minHeight: 80)
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
+                        .onChange(of: variable.configJSON) { _, _ in onSave() }
+                        if let json = variable.configJSON, !json.isEmpty {
+                            let isValid = (try? JSONDecoder().decode(DrawThingsGenerationConfig.self,
+                                           from: Data(json.utf8))) != nil
+                            Label(isValid ? "Valid config" : "Invalid JSON",
+                                  systemImage: isValid ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(isValid ? Color.green : Color.orange)
+                        }
+                    }
                 }
 
             case .lora:
@@ -319,8 +335,9 @@ private struct VariableRow: View {
                     TextEditor(text: Binding(
                         get: { (variable.wildcardOptions ?? []).joined(separator: "\n") },
                         set: { text in
-                            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-                                .map { $0.trimmingCharacters(in: .whitespaces) }
+                            // Split only on newlines — do NOT trim whitespace mid-edit
+                            // or spaces within options will be eaten on every keystroke
+                            let lines = text.components(separatedBy: "\n")
                                 .filter { !$0.isEmpty }
                             variable.wildcardOptions = lines.isEmpty ? nil : lines
                         }
