@@ -5,43 +5,33 @@ import AppKit
 
 struct StoryFlowVariablesPanel: View {
     @Bindable var vm: StoryFlowViewModel
-    @State private var expandedID: UUID? = nil
-    @State private var showDeleteConfirm: UUID? = nil
+    @State private var collapsedSections: Set<WorkflowVariableType> = []
+
+    private let sectionOrder: [WorkflowVariableType] = [.prompt, .config, .wildcard, .image, .lora]
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            if vm.variables.isEmpty {
-                emptyState
-            } else {
-                variableList
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(sectionOrder, id: \.self) { type in
+                        sectionForType(type)
+                        Divider()
+                    }
+                }
             }
         }
         .background(Color(NSColor.controlBackgroundColor))
     }
 
-    // MARK: — Header
+    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 6) {
             Text("Variables")
                 .font(.headline)
             Spacer()
-            Menu {
-                ForEach(WorkflowVariableType.allCases, id: \.self) { type in
-                    Button {
-                        vm.addVariable(type: type)
-                    } label: {
-                        Label(type.displayName, systemImage: type.iconName)
-                    }
-                }
-            } label: {
-                Image(systemName: "plus")
-            }
-            .menuStyle(.borderlessButton)
-            .frame(width: 24)
-
             Button {
                 NSWorkspace.shared.open(StoryFlowStorage.shared.variablesFolder)
             } label: {
@@ -54,49 +44,105 @@ struct StoryFlowVariablesPanel: View {
         .padding(.vertical, 8)
     }
 
-    // MARK: — Empty state
+    // MARK: - Section
 
-    private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "square.stack.3d.up.slash")
-                .font(.system(size: 32))
-                .foregroundStyle(.tertiary)
-            Text("No variables")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text("Add one or open the variables folder to import.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
+    @ViewBuilder
+    private func sectionForType(_ type: WorkflowVariableType) -> some View {
+        let isCollapsed = collapsedSections.contains(type)
+        let variablesOfType = vm.variables.filter { $0.type == type }
+
+        VStack(alignment: .leading, spacing: 0) {
+            // Section header row
+            sectionHeader(type: type, count: variablesOfType.count, isCollapsed: isCollapsed)
+
+            // Section body (expanded)
+            if !isCollapsed {
+                if variablesOfType.isEmpty {
+                    // Empty state row
+                    HStack(spacing: 6) {
+                        Text("No \(type.displayName.lowercased()) variables")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Spacer()
+                        Button {
+                            vm.addVariable(type: type)
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 10))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                } else {
+                    // Variable rows
+                    ForEach(Binding(
+                        get: { variablesOfType },
+                        set: { newVars in
+                            // Update variables in vm.variables
+                            var updated = vm.variables
+                            for (idx, var1) in updated.enumerated() {
+                                if let idx2 = newVars.firstIndex(where: { $0.id == var1.id }) {
+                                    updated[idx] = newVars[idx2]
+                                }
+                            }
+                            vm.variables = updated
+                        }
+                    )) { $variable in
+                        VariableRow(
+                            variable: $variable,
+                            onSave: { vm.saveVariable(variable) },
+                            onDelete: { vm.deleteVariable(id: variable.id) }
+                        )
+                        Divider()
+                    }
+                }
+            }
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: — List
+    private func sectionHeader(type: WorkflowVariableType, count: Int, isCollapsed: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: type.iconName)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
 
-    private var variableList: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach($vm.variables) { $variable in
-                    VariableRow(
-                        variable: $variable,
-                        isExpanded: expandedID == variable.id,
-                        showDeleteConfirm: showDeleteConfirm == variable.id,
-                        onTap: {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                expandedID = expandedID == variable.id ? nil : variable.id
-                            }
-                        },
-                        onSave: { vm.saveVariable(variable) },
-                        onDeleteRequest: { showDeleteConfirm = variable.id },
-                        onDeleteConfirm: {
-                            showDeleteConfirm = nil
-                            vm.deleteVariable(id: variable.id)
-                        },
-                        onDeleteCancel: { showDeleteConfirm = nil }
-                    )
-                    Divider()
+            Text(type.displayName)
+                .font(.caption.weight(.medium))
+
+            // Count badge
+            Text("\(count)")
+                .font(.system(size: 10, weight: .semibold))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.2))
+                .foregroundStyle(.secondary)
+                .clipShape(Capsule())
+
+            Spacer()
+
+            Button {
+                vm.addVariable(type: type)
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 10))
+            }
+            .buttonStyle(.plain)
+
+            Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                if collapsedSections.contains(type) {
+                    collapsedSections.remove(type)
+                } else {
+                    collapsedSections.insert(type)
                 }
             }
         }
@@ -107,13 +153,10 @@ struct StoryFlowVariablesPanel: View {
 
 private struct VariableRow: View {
     @Binding var variable: WorkflowVariable
-    let isExpanded: Bool
-    let showDeleteConfirm: Bool
-    let onTap: () -> Void
+    @State private var isExpanded = false
+    @State private var showDeleteConfirm = false
     let onSave: () -> Void
-    let onDeleteRequest: () -> Void
-    let onDeleteConfirm: () -> Void
-    let onDeleteCancel: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -130,7 +173,7 @@ private struct VariableRow: View {
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { onTap() }
+        .onTapGesture { isExpanded.toggle() }
     }
 
     private var rowHeader: some View {
@@ -166,7 +209,7 @@ private struct VariableRow: View {
                 .lineLimit(1)
 
             Button {
-                onDeleteRequest()
+                showDeleteConfirm = true
             } label: {
                 Image(systemName: "minus.circle")
                     .font(.system(size: 11))
@@ -265,6 +308,28 @@ private struct VariableRow: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
+
+            case .wildcard:
+                HStack(alignment: .top) {
+                    Text("Options")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 60, alignment: .trailing)
+                        .padding(.top, 3)
+                    TextEditor(text: Binding(
+                        get: { (variable.wildcardOptions ?? []).joined(separator: "\n") },
+                        set: { text in
+                            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                                .map { $0.trimmingCharacters(in: .whitespaces) }
+                                .filter { !$0.isEmpty }
+                            variable.wildcardOptions = lines.isEmpty ? nil : lines
+                        }
+                    ))
+                    .font(.caption)
+                    .frame(minHeight: 80)
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
+                    .onChange(of: variable.wildcardOptions) { _, _ in onSave() }
+                }
             }
 
             // Notes field
@@ -292,13 +357,16 @@ private struct VariableRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Spacer()
-            Button("Cancel", action: onDeleteCancel)
+            Button("Cancel") { showDeleteConfirm = false }
                 .font(.caption2)
                 .buttonStyle(.borderless)
-            Button("Delete") { onDeleteConfirm() }
-                .font(.caption2)
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
+            Button("Delete") {
+                showDeleteConfirm = false
+                onDelete()
+            }
+            .font(.caption2)
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
         }
         .padding(8)
         .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))

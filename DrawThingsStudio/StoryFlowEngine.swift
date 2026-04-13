@@ -128,6 +128,19 @@ final class StoryFlowEngine {
         return fragments.isEmpty ? nil : fragments.joined(separator: ", ")
     }
 
+    private func resolveWildcards(_ text: String, variables: [WorkflowVariable]) -> String {
+        var result = text
+        let wildcards = variables.filter { $0.type == .wildcard }
+        for wc in wildcards {
+            let token = "~\(wc.name)"
+            if result.contains(token) {
+                let pick = wc.wildcardOptions?.randomElement() ?? ""
+                result = result.replacingOccurrences(of: token, with: pick)
+            }
+        }
+        return result
+    }
+
     // MARK: — Step execution
 
     private func executeStep(_ step: WorkflowStep, variables: [WorkflowVariable]) async throws {
@@ -175,6 +188,15 @@ final class StoryFlowEngine {
         case .note:
             let text = step.parameters["text"] ?? ""
             log("  📝 \(text)")
+
+        case .canvasToMoodboard:
+            guard let image = lastGeneratedImage else {
+                log("canvasToMoodboard: no canvas image, skipping")
+                break
+            }
+            let weight = Float(step.parameters["weight"] ?? "1.0") ?? 1.0
+            activeMoodboard.append((image, weight))
+            log("  ✓ Added canvas to moodboard (weight \(weight))")
         }
     }
 
@@ -195,14 +217,16 @@ final class StoryFlowEngine {
 
         // Prompt
         let promptVarName = step.parameters["promptVar"] ?? ""
-        let prompt = resolvePrompt(varName: promptVarName, variables: variables) ?? ""
+        var prompt = resolvePrompt(varName: promptVarName, variables: variables) ?? ""
+        prompt = resolveWildcards(prompt, variables: variables)
         if prompt.isEmpty { log("  ⚠ No prompt resolved for promptVar '\(promptVarName)'") }
 
         // Negative prompt
         let negVarName = step.parameters["negativePromptVar"] ?? ""
         if !negVarName.isEmpty,
            let negPrompt = resolvePrompt(varName: negVarName, variables: variables) {
-            cfg.negativePrompt = negPrompt
+            let resolvedNegPrompt = resolveWildcards(negPrompt, variables: variables)
+            cfg.negativePrompt = resolvedNegPrompt
         }
 
         // img2img source

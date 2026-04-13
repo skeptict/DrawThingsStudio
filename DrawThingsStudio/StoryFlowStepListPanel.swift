@@ -209,6 +209,7 @@ private struct StoryFlowStepCard: View {
         case .setImg2Img:     return .green
         case .saveResult:     return .blue
         case .note:           return .gray
+        case .canvasToMoodboard: return .purple
         }
     }
 
@@ -332,6 +333,12 @@ private struct StoryFlowStepCard: View {
                 Text("Clears all moodboard entries for subsequent steps.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+
+            case .canvasToMoodboard:
+                Text("Adds the current canvas image to the moodboard.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                weightRow
             }
         }
     }

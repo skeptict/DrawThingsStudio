@@ -8,10 +8,12 @@ enum WorkflowVariableType: String, Codable, CaseIterable {
     case prompt   // @ prefix — a text prompt fragment
     case image    // @ prefix — an image reference
     case lora     // @ prefix — a LoRA filename + weight
+    case wildcard // ~ prefix — random selection from options
 
     var prefix: String {
         switch self {
         case .config: return "#"
+        case .wildcard: return "~"
         default:      return "@"
         }
     }
@@ -22,6 +24,7 @@ enum WorkflowVariableType: String, Codable, CaseIterable {
         case .prompt: return "Prompt"
         case .image:  return "Image"
         case .lora:   return "LoRA"
+        case .wildcard: return "Wildcard"
         }
     }
 
@@ -31,6 +34,7 @@ enum WorkflowVariableType: String, Codable, CaseIterable {
         case .prompt: return "text.quote"
         case .image:  return "photo"
         case .lora:   return "slider.horizontal.3"
+        case .wildcard: return "dice"
         }
     }
 }
@@ -44,6 +48,7 @@ struct WorkflowVariable: Identifiable, Codable {
     var loraFile: String?
     var loraWeight: Double?
     var imageFileName: String?    // filename in WorkflowVariables/images/ folder
+    var wildcardOptions: [String]?
     var isBuiltIn: Bool = false
     var notes: String?
 
@@ -60,6 +65,9 @@ struct WorkflowVariable: Identifiable, Codable {
             let file = loraFile ?? "(no file)"
             let weight = loraWeight.map { String(format: "%.2f", $0) } ?? "1.00"
             return "\(file) ×\(weight)"
+        case .wildcard:
+            let count = wildcardOptions?.count ?? 0
+            return count == 0 ? "(empty)" : "\(count) option\(count == 1 ? "" : "s")"
         }
     }
 }
@@ -73,6 +81,7 @@ enum WorkflowStepType: String, Codable, CaseIterable {
     case setImg2Img
     case saveResult
     case note
+    case canvasToMoodboard
 
     var displayName: String {
         switch self {
@@ -82,6 +91,7 @@ enum WorkflowStepType: String, Codable, CaseIterable {
         case .setImg2Img:     return "Set img2img"
         case .saveResult:     return "Save Result"
         case .note:           return "Note"
+        case .canvasToMoodboard: return "Canvas → Moodboard"
         }
     }
 
@@ -93,6 +103,7 @@ enum WorkflowStepType: String, Codable, CaseIterable {
         case .setImg2Img:     return "arrow.triangle.2.circlepath"
         case .saveResult:     return "square.and.arrow.down"
         case .note:           return "note.text"
+        case .canvasToMoodboard: return "photo.stack.fill"
         }
     }
 
@@ -104,6 +115,7 @@ enum WorkflowStepType: String, Codable, CaseIterable {
         case .setImg2Img:     return "green"
         case .saveResult:     return "blue"
         case .note:           return "gray"
+        case .canvasToMoodboard: return "purple"
         }
     }
 }
@@ -147,6 +159,8 @@ struct WorkflowStep: Identifiable, Codable {
         case .note:
             let t = parameters["text"] ?? ""
             return t.isEmpty ? "(no text)" : t
+        case .canvasToMoodboard:
+            return "canvas  ×\(parameters["weight"] ?? "1.0")"
         }
     }
 }
