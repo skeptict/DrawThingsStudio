@@ -383,12 +383,12 @@ private struct VariableRow: View {
     }
 
     private func isValidConfigJSON(_ json: String) -> Bool {
-        let data = Data(json.utf8)
-        let camel = JSONDecoder()
-        if (try? camel.decode(DrawThingsGenerationConfig.self, from: data)) != nil { return true }
-        let snake = JSONDecoder()
-        snake.keyDecodingStrategy = .convertFromSnakeCase
-        return (try? snake.decode(DrawThingsGenerationConfig.self, from: data)) != nil
+        // Accept any JSON object — partial configs and integer sampler/seedMode
+        // from DT's HTTP API are all valid; the engine's mergeDict handles the
+        // field-by-field merge and Int→String conversions at generate time.
+        guard let data = json.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) else { return false }
+        return obj is [String: Any]
     }
 
     private var deleteConfirmBar: some View {
