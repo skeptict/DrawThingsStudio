@@ -257,9 +257,13 @@ final class StoryFlowEngine {
         // Save to output folder and fire gallery callback
         var savedURL: URL?
         if let folder = outputFolder {
-            savedURL = try? StoryFlowStorage.shared.saveOutputImage(img,
-                                                                    stepLabel: step.displayLabel,
-                                                                    to: folder)
+            savedURL = try? StoryFlowStorage.shared.saveOutputImage(
+                img,
+                stepLabel: step.displayLabel,
+                to: folder,
+                config: cfg,
+                prompt: prompt
+            )
             if let url = savedURL { log("  💾 Saved to \(url.lastPathComponent)") }
         }
         // Notify gallery so the image appears with metadata

@@ -118,19 +118,23 @@ final class StoryFlowStorage {
         return folder
     }
 
-    func saveOutputImage(_ image: NSImage, stepLabel: String, to folder: URL) throws -> URL {
+    func saveOutputImage(_ image: NSImage,
+                         stepLabel: String,
+                         to folder: URL,
+                         config: DrawThingsGenerationConfig? = nil,
+                         prompt: String? = nil) throws -> URL {
         ensureFolder(folder)
-        let safe = stepLabel.isEmpty ? "output" : stepLabel
+        let safe = (stepLabel.isEmpty ? "output" : stepLabel)
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ":", with: "-")
         let name = "\(safe)-\(UUID().uuidString.prefix(8)).png"
         let url = folder.appendingPathComponent(name)
-        guard let tiffData = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+        // Delegate to ImageStorageManager so EXIF metadata is embedded consistently.
+        do {
+            try ImageStorageManager.writePNG(image, to: url, config: config, prompt: prompt)
+        } catch {
             throw StoryFlowError.imageSaveFailed
         }
-        try pngData.write(to: url, options: .atomic)
         return url
     }
 
