@@ -50,34 +50,31 @@ final class StoryFlowViewModel {
                                      fileURL: URL?) {
         guard let ctx = modelContext else { return }
 
-        // Build the same JSON format as ImageStorageManager.encodeConfig
-        let configJSON = makeConfigJSON(cfg: cfg, prompt: prompt)
-
-        // If the file was already saved to the StoryFlow output folder, point
-        // the record at that path so we don't duplicate the image on disk.
-        // If for some reason there's no file URL yet, write to GeneratedImages.
-        let filePath: String
         if let url = fileURL {
-            filePath = url.path
+            // File already on disk (StoryFlow output folder) — create a record
+            // pointing at it directly so we don't write a duplicate.
+            let configJSON = makeConfigJSON(cfg: cfg, prompt: prompt)
+            let record = TSImage(
+                id: UUID(),
+                filePath: url.path,
+                source: .generated,
+                configJSON: configJSON
+            )
+            record.thumbnailData = ImageStorageManager.makeThumbnailData(from: img)
+            ctx.insert(record)
+            try? ctx.save()
         } else {
-            // Fallback: write to main generated-images folder
-            let id = UUID()
-            let fallbackPath = (try? ImageStorageManager.writePNG(img,
-                to: (try? ImageStorageManager.generatedImagesDirectory()) ?? URL(fileURLWithPath: NSTemporaryDirectory()),
-                id: id))?.path ?? ""
-            filePath = fallbackPath
+            // No output file yet — let ImageStorageManager write it to the
+            // default GeneratedImages folder and handle the insert itself.
+            try? ImageStorageManager.createAndInsert(
+                image: img,
+                source: .generated,
+                config: cfg,
+                prompt: prompt,
+                in: ctx
+            )
+            try? ctx.save()
         }
-
-        guard !filePath.isEmpty else { return }
-
-        let record = TSImage(
-            id: UUID(),
-            filePath: filePath,
-            source: .generated,
-            configJSON: configJSON
-        )
-        record.thumbnailData = ImageStorageManager.makeThumbnailData(from: img)
-        ctx.insert(record)
     }
 
     private func makeConfigJSON(cfg: DrawThingsGenerationConfig, prompt: String) -> String? {

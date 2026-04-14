@@ -280,7 +280,7 @@ final class StoryFlowEngine {
             return
         }
         mergeDict(dict, into: &currentConfig)
-        log("  ✓ Applied config #\(varName)")
+        log("  ✓ Applied config #\(cleanName)")
     }
 
     /// Merge a raw JSON dictionary into a `DrawThingsGenerationConfig`.
