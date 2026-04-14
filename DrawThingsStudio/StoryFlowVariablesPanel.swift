@@ -104,22 +104,21 @@ struct StoryFlowVariablesPanel: View {
         HStack(spacing: 6) {
             Image(systemName: type.iconName)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color(NSColor.secondaryLabelColor))
+                .foregroundStyle(.secondary)
                 .frame(width: 16)
 
             Text(type.displayName.uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Color(NSColor.secondaryLabelColor))
-                .kerning(0.5)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.primary)
+                .kerning(0.4)
 
-            // Count badge
             if count > 0 {
                 Text("\(count)")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 9, weight: .semibold))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
-                    .background(Color(NSColor.secondaryLabelColor).opacity(0.25))
-                    .foregroundStyle(Color(NSColor.secondaryLabelColor))
+                    .background(Color.secondary.opacity(0.2))
+                    .foregroundStyle(.secondary)
                     .clipShape(Capsule())
             }
 
@@ -130,17 +129,18 @@ struct StoryFlowVariablesPanel: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Color(NSColor.secondaryLabelColor))
             }
             .buttonStyle(.plain)
 
             Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
                 .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(Color(NSColor.tertiaryLabelColor))
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.7))
+        .padding(.vertical, 7)
+        // NSColor.controlColor is the standard macOS "surface" color —
+        // reliably distinct from controlBackgroundColor in both light and dark mode.
+        .background(Color(NSColor.controlColor))
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.15)) {
