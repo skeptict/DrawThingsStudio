@@ -8,12 +8,12 @@ enum WorkflowVariableType: String, Codable, CaseIterable {
     case prompt   // @ prefix — a text prompt fragment
     case image    // @ prefix — an image reference
     case lora     // @ prefix — a LoRA filename + weight
-    case wildcard // ~ prefix — random selection from options
+    case wildcard // $ prefix — random selection from pipe-separated options
 
     var prefix: String {
         switch self {
         case .config: return "#"
-        case .wildcard: return "~"
+        case .wildcard: return "$"
         default:      return "@"
         }
     }
@@ -48,7 +48,7 @@ struct WorkflowVariable: Identifiable, Codable {
     var loraFile: String?
     var loraWeight: Double?
     var imageFileName: String?    // filename in WorkflowVariables/images/ folder
-    var wildcardOptions: [String]?
+    var wildcardOptions: [String]?  // pipe-separated in UI, stored as array
     var isBuiltIn: Bool = false
     var notes: String?
 
@@ -75,47 +75,80 @@ struct WorkflowVariable: Identifiable, Codable {
 // MARK: - Step
 
 enum WorkflowStepType: String, Codable, CaseIterable {
+    /// Accumulator: merge one or more #config vars into the engine's current config state.
+    /// Parameters: configVars — comma-separated list of config variable names (without # prefix)
+    case configInstruction
+
+    /// Accumulator: set the current prompt from free text with @promptVar and $wildcard tokens.
+    /// Parameters: text — the prompt string with inline tokens
+    case promptInstruction
+
+    /// Fire generation with the current accumulated config + prompt state.
+    /// Parameters: outputName (optional) — name to store the result for later loadCanvas
     case generate
+
+    /// Load a previously-saved canvas as the img2img source.
+    /// Parameters: name — the outputName used in a prior generate step
+    case loadCanvas
+
+    /// Explicitly save the last generated image under a name.
+    /// Parameters: name — key to store under in savedCanvases
+    case saveCanvas
+
+    /// Add an image variable (or saved canvas) to the moodboard.
+    /// Parameters: imageVar, weight
     case addToMoodboard
+
+    /// Clear all moodboard entries.
     case clearMoodboard
-    case setImg2Img
-    case saveResult
-    case note
+
+    /// Add the current canvas (last generated image) to the moodboard.
+    /// Parameters: weight
     case canvasToMoodboard
+
+    /// No-op annotation visible in the log.
+    /// Parameters: text
+    case note
 
     var displayName: String {
         switch self {
-        case .generate:       return "Generate"
-        case .addToMoodboard: return "Add to Moodboard"
-        case .clearMoodboard: return "Clear Moodboard"
-        case .setImg2Img:     return "Set img2img"
-        case .saveResult:     return "Save Result"
-        case .note:           return "Note"
-        case .canvasToMoodboard: return "Canvas → Moodboard"
+        case .configInstruction:  return "Config"
+        case .promptInstruction:  return "Prompt"
+        case .generate:           return "Generate"
+        case .loadCanvas:         return "Load Canvas"
+        case .saveCanvas:         return "Save Canvas"
+        case .addToMoodboard:     return "Add to Moodboard"
+        case .clearMoodboard:     return "Clear Moodboard"
+        case .canvasToMoodboard:  return "Canvas → Moodboard"
+        case .note:               return "Note"
         }
     }
 
     var iconName: String {
         switch self {
-        case .generate:       return "paintbrush"
-        case .addToMoodboard: return "photo.stack"
-        case .clearMoodboard: return "trash"
-        case .setImg2Img:     return "arrow.triangle.2.circlepath"
-        case .saveResult:     return "square.and.arrow.down"
-        case .note:           return "note.text"
-        case .canvasToMoodboard: return "photo.stack.fill"
+        case .configInstruction:  return "gearshape.fill"
+        case .promptInstruction:  return "text.quote"
+        case .generate:           return "paintbrush"
+        case .loadCanvas:         return "square.and.arrow.down.on.square"
+        case .saveCanvas:         return "square.and.arrow.up"
+        case .addToMoodboard:     return "photo.stack"
+        case .clearMoodboard:     return "trash"
+        case .canvasToMoodboard:  return "photo.stack.fill"
+        case .note:               return "note.text"
         }
     }
 
     var accentColor: String {
         switch self {
-        case .generate:       return "accentColor"
-        case .addToMoodboard: return "purple"
-        case .clearMoodboard: return "orange"
-        case .setImg2Img:     return "green"
-        case .saveResult:     return "blue"
-        case .note:           return "gray"
-        case .canvasToMoodboard: return "purple"
+        case .configInstruction:  return "orange"
+        case .promptInstruction:  return "teal"
+        case .generate:           return "accentColor"
+        case .loadCanvas:         return "green"
+        case .saveCanvas:         return "blue"
+        case .addToMoodboard:     return "purple"
+        case .clearMoodboard:     return "orange"
+        case .canvasToMoodboard:  return "purple"
+        case .note:               return "gray"
         }
     }
 }
@@ -124,12 +157,15 @@ struct WorkflowStep: Identifiable, Codable {
     var id: UUID = UUID()
     var type: WorkflowStepType
     var label: String = ""
-    /// Keys depend on step type:
-    /// generate:       configVar, promptVar, img2imgVar (opt), outputVar, negativePromptVar (opt)
-    /// addToMoodboard: imageVar, weight (string, e.g. "0.8")
-    /// setImg2Img:     imageVar
-    /// saveResult:     outputVar
-    /// note:           text
+    /// Parameter keys by step type:
+    ///   configInstruction: configVars (comma-sep list of #var names, no prefix)
+    ///   promptInstruction: text (free text with @prompt and $wildcard tokens)
+    ///   generate:          outputName (optional name to store result)
+    ///   loadCanvas:        name (matches prior generate outputName or saveCanvas name)
+    ///   saveCanvas:        name
+    ///   addToMoodboard:    imageVar, weight
+    ///   canvasToMoodboard: weight
+    ///   note:              text
     var parameters: [String: String] = [:]
     var isExpanded: Bool = true
 
@@ -139,26 +175,39 @@ struct WorkflowStep: Identifiable, Codable {
 
     var parameterSummary: String {
         switch type {
+        case .configInstruction:
+            let vars = parameters["configVars"] ?? ""
+            return vars.isEmpty ? "(none)" :
+                vars.split(separator: ",")
+                    .map { "#\($0.trimmingCharacters(in: .whitespaces))" }
+                    .joined(separator: "  ")
+
+        case .promptInstruction:
+            let t = parameters["text"] ?? ""
+            return t.isEmpty ? "(no text)" : String(t.prefix(60))
+
         case .generate:
-            let parts = [
-                parameters["configVar"].map { "#\($0)" },
-                parameters["promptVar"].map { "@\($0)" },
-                parameters["outputVar"].map { "→ @\($0)" }
-            ].compactMap { $0 }
-            return parts.joined(separator: "  ")
+            let out = parameters["outputName"] ?? ""
+            return out.isEmpty ? "" : "→ @\(out)"
+
+        case .loadCanvas:
+            return parameters["name"].map { "@\($0)" } ?? ""
+
+        case .saveCanvas:
+            return parameters["name"].map { "→ @\($0)" } ?? ""
+
         case .addToMoodboard:
             let img = parameters["imageVar"].map { "@\($0)" } ?? ""
             let w   = parameters["weight"] ?? "1.0"
             return "\(img)  ×\(w)"
-        case .setImg2Img:
-            return parameters["imageVar"].map { "@\($0)" } ?? ""
-        case .saveResult:
-            return parameters["outputVar"].map { "→ @\($0)" } ?? ""
+
         case .clearMoodboard:
             return "Clear all moodboard images"
+
         case .note:
             let t = parameters["text"] ?? ""
             return t.isEmpty ? "(no text)" : t
+
         case .canvasToMoodboard:
             return "canvas  ×\(parameters["weight"] ?? "1.0")"
         }

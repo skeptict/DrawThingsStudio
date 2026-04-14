@@ -79,7 +79,6 @@ struct StoryFlowVariablesPanel: View {
                     ForEach(Binding(
                         get: { variablesOfType },
                         set: { newVars in
-                            // Update variables in vm.variables
                             var updated = vm.variables
                             for (idx, var1) in updated.enumerated() {
                                 if let idx2 = newVars.firstIndex(where: { $0.id == var1.id }) {
@@ -155,10 +154,9 @@ private struct VariableRow: View {
     @Binding var variable: WorkflowVariable
     @State private var isExpanded = false
     @State private var showDeleteConfirm = false
-    /// Local text state for the wildcard TextEditor.
-    /// Must NOT be a two-way Binding derived from the model — doing so causes
-    /// every keystroke to trigger onSave → vm.variables update → re-render →
-    /// TextEditor text reset → cursor jumps to end of line.
+    /// Local text state for the wildcard TextField.
+    /// Avoids cursor-jump issue that occurs when a two-way Binding re-renders
+    /// the field on every keystroke via vm.variables → re-render.
     @State private var wildcardText: String = ""
     let onSave: () -> Void
     let onDelete: () -> Void
@@ -179,10 +177,9 @@ private struct VariableRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            // Seed wildcardText from model before expanding so the TextEditor
-            // has the correct initial value without going through a Binding.
+            // Seed local state before expanding to avoid cursor jump.
             if !isExpanded && variable.type == .wildcard {
-                wildcardText = (variable.wildcardOptions ?? []).joined(separator: "\n")
+                wildcardText = (variable.wildcardOptions ?? []).joined(separator: "|")
             }
             isExpanded.toggle()
         }
@@ -337,22 +334,24 @@ private struct VariableRow: View {
                 }
 
             case .wildcard:
+                // Pipe-separated options on a single line: red|green|blue
                 HStack(alignment: .top) {
-                    Text("Options")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 60, alignment: .trailing)
-                        .padding(.top, 3)
-                    TextEditor(text: $wildcardText)
-                        .font(.caption)
-                        .frame(minHeight: 80)
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
-                        .onChange(of: wildcardText) { _, newValue in
-                            let lines = newValue.components(separatedBy: "\n")
-                                .filter { !$0.isEmpty }
-                            variable.wildcardOptions = lines.isEmpty ? nil : lines
-                            onSave()
-                        }
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Options")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 60, alignment: .trailing)
+                        Text("pipe-sep.")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 60, alignment: .trailing)
+                    }
+                    .padding(.top, 3)
+                    TextField("red|green|blue", text: $wildcardText)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11, design: .monospaced))
+                        .onSubmit { commitWildcard() }
+                        .onChange(of: wildcardText) { _, _ in commitWildcard() }
                 }
             }
 
@@ -373,6 +372,14 @@ private struct VariableRow: View {
             }
         }
         .padding(.top, 4)
+    }
+
+    private func commitWildcard() {
+        let options = wildcardText
+            .split(separator: "|", omittingEmptySubsequences: true)
+            .map { String($0) }
+        variable.wildcardOptions = options.isEmpty ? nil : options
+        onSave()
     }
 
     private func isValidConfigJSON(_ json: String) -> Bool {

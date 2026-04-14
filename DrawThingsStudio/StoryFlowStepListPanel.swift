@@ -165,11 +165,50 @@ struct StoryFlowStepListPanel: View {
 
     private var addStepButton: some View {
         Menu {
-            ForEach(WorkflowStepType.allCases, id: \.self) { type in
-                Button {
-                    vm.addStep(type: type)
-                } label: {
-                    Label(type.displayName, systemImage: type.iconName)
+            // Accumulator instructions
+            Section("Accumulator") {
+                ForEach([WorkflowStepType.configInstruction,
+                         .promptInstruction], id: \.self) { type in
+                    Button {
+                        vm.addStep(type: type)
+                    } label: {
+                        Label(type.displayName, systemImage: type.iconName)
+                    }
+                }
+            }
+            // Execution
+            Section("Execution") {
+                Button { vm.addStep(type: .generate) } label: {
+                    Label("Generate", systemImage: WorkflowStepType.generate.iconName)
+                }
+            }
+            // Canvas
+            Section("Canvas") {
+                ForEach([WorkflowStepType.loadCanvas,
+                         .saveCanvas], id: \.self) { type in
+                    Button {
+                        vm.addStep(type: type)
+                    } label: {
+                        Label(type.displayName, systemImage: type.iconName)
+                    }
+                }
+            }
+            // Moodboard
+            Section("Moodboard") {
+                ForEach([WorkflowStepType.addToMoodboard,
+                         .canvasToMoodboard,
+                         .clearMoodboard], id: \.self) { type in
+                    Button {
+                        vm.addStep(type: type)
+                    } label: {
+                        Label(type.displayName, systemImage: type.iconName)
+                    }
+                }
+            }
+            // Utility
+            Section("Utility") {
+                Button { vm.addStep(type: .note) } label: {
+                    Label("Note", systemImage: WorkflowStepType.note.iconName)
                 }
             }
         } label: {
@@ -203,13 +242,15 @@ private struct StoryFlowStepCard: View {
 
     var accentColor: Color {
         switch step.type {
-        case .generate:       return .accentColor
-        case .addToMoodboard: return .purple
-        case .clearMoodboard: return .orange
-        case .setImg2Img:     return .green
-        case .saveResult:     return .blue
-        case .note:           return .gray
-        case .canvasToMoodboard: return .purple
+        case .configInstruction:  return .orange
+        case .promptInstruction:  return .teal
+        case .generate:           return .accentColor
+        case .loadCanvas:         return .green
+        case .saveCanvas:         return .blue
+        case .addToMoodboard:     return .purple
+        case .clearMoodboard:     return .orange
+        case .canvasToMoodboard:  return .purple
+        case .note:               return .gray
         }
     }
 
@@ -290,28 +331,93 @@ private struct StoryFlowStepCard: View {
     private var cardBody: some View {
         VStack(alignment: .leading, spacing: 5) {
             switch step.type {
-            case .generate:
-                paramField("Config", key: "configVar", placeholder: "flux-default",
-                           prefix: "#")
-                paramField("Prompt", key: "promptVar", placeholder: "positive-base",
-                           prefix: "@")
-                paramField("Neg Prompt", key: "negativePromptVar", placeholder: "negative-base (opt)",
-                           prefix: "@")
-                paramField("img2img", key: "img2imgVar", placeholder: "(optional)",
-                           prefix: "@")
-                paramField("Output", key: "outputVar", placeholder: "result-1",
-                           prefix: "@")
 
+            // ── Config instruction ───────────────────────────────────────────
+            case .configInstruction:
+                HStack(alignment: .top) {
+                    Text("Configs")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .trailing)
+                        .padding(.top, 3)
+                    VStack(alignment: .leading, spacing: 3) {
+                        TextField("model-base, sampler-fast", text: Binding(
+                            get: { step.parameters["configVars"] ?? "" },
+                            set: { step.parameters["configVars"] = $0.isEmpty ? nil : $0 }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 11, design: .monospaced))
+                        .onSubmit { onChange() }
+                        Text("Comma-separated #config variable names")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+            // ── Prompt instruction ───────────────────────────────────────────
+            case .promptInstruction:
+                HStack(alignment: .top) {
+                    Text("Prompt")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .trailing)
+                        .padding(.top, 3)
+                    VStack(alignment: .leading, spacing: 3) {
+                        TextEditor(text: Binding(
+                            get: { step.parameters["text"] ?? "" },
+                            set: { step.parameters["text"] = $0 }
+                        ))
+                        .font(.caption)
+                        .frame(minHeight: 56)
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
+                        .onChange(of: step.parameters["text"]) { _, _ in onChange() }
+                        Text("Use @promptVar and $wildcardVar tokens")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+            // ── Generate ─────────────────────────────────────────────────────
+            case .generate:
+                paramField("Output name", key: "outputName", placeholder: "result-1 (optional)",
+                           prefix: "@")
+                Text("Fires with the accumulated config + prompt state.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+            // ── Load canvas ──────────────────────────────────────────────────
+            case .loadCanvas:
+                paramField("Canvas name", key: "name", placeholder: "result-1", prefix: "@")
+                Text("Sets the named canvas as the img2img source.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+            // ── Save canvas ──────────────────────────────────────────────────
+            case .saveCanvas:
+                paramField("Canvas name", key: "name", placeholder: "my-canvas", prefix: "@")
+                Text("Saves the last generated image under this name.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+            // ── Add to moodboard ─────────────────────────────────────────────
             case .addToMoodboard:
                 paramField("Image", key: "imageVar", placeholder: "my-image", prefix: "@")
                 weightRow
 
-            case .setImg2Img:
-                paramField("Image", key: "imageVar", placeholder: "my-image", prefix: "@")
+            // ── Canvas → moodboard ───────────────────────────────────────────
+            case .canvasToMoodboard:
+                Text("Adds the current canvas image to the moodboard.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                weightRow
 
-            case .saveResult:
-                paramField("Output", key: "outputVar", placeholder: "saved-result", prefix: "@")
+            // ── Clear moodboard ───────────────────────────────────────────────
+            case .clearMoodboard:
+                Text("Clears all moodboard entries for subsequent steps.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
 
+            // ── Note ──────────────────────────────────────────────────────────
             case .note:
                 HStack(alignment: .top) {
                     Text("Note")
@@ -328,17 +434,6 @@ private struct StoryFlowStepCard: View {
                     .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
                     .onChange(of: step.parameters["text"]) { _, _ in onChange() }
                 }
-
-            case .clearMoodboard:
-                Text("Clears all moodboard entries for subsequent steps.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-
-            case .canvasToMoodboard:
-                Text("Adds the current canvas image to the moodboard.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                weightRow
             }
         }
     }
