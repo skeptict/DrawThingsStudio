@@ -154,6 +154,53 @@ This file is reference only. Claude Code does not need to read it unless investi
 - ~~Image Inspector three-state layout~~ — Balanced / Focus / Immersive with spring transitions
 - ~~Zoom/pan/crop/paint in Image Inspector~~ — Full image workbench features
 
+## Sessions 19–20 (Apr 2026) — StoryFlow v2 Accumulator Redesign
+Branch: `feature/storyflow-v2`
+
+Complete redesign of StoryFlow to match the original StoryFlow web editor's accumulator model:
+
+**Architecture (StoryFlowEngine.swift)**
+- Accumulator state: `currentConfig: DrawThingsGenerationConfig` + `currentPrompt: String` persist across steps
+- Config instructions merge field-by-field from variable JSON (partial configs, last-write-wins)
+- Prompt instructions resolve `@promptVar` and `$wildcardVar` tokens at set time
+- Generate fires with the accumulated state; no config duplication between steps
+- `mergeDict` handles both camelCase and snake_case JSON keys, and Int→String conversion for `sampler`/`seedMode` (DT HTTP API returns integer enum values; conversion table from config.fbs ordinals)
+- Multiple runs per session fixed: guard changed from `guard case .idle` to `if case .running { return }`
+- Named canvas system: `savedCanvases[name]` for generate→loadCanvas handoff
+- `onImageGenerated` callback fires after each generate step → ViewModel inserts TSImage record into SwiftData gallery
+
+**Step types (StoryFlowModels.swift)**
+- Added: `configInstruction`, `promptInstruction`, `loadCanvas`, `saveCanvas`
+- Removed: `setImg2Img`, `saveResult`
+- Wildcard sigil changed `~` → `$`; format changed newline-separated → pipe-separated
+
+**UI — Step List (StoryFlowStepListPanel.swift)**
+- Flat single-row cards: `[drag strip][type label 108pt][primary field fills][red X]`
+- No expand/collapse; all fields always visible
+- Add-step menu organized in sections: Accumulator / Execution / Canvas / Moodboard / Utility
+
+**UI — Variables Panel (StoryFlowVariablesPanel.swift)**
+- Section headers: 3pt accentColor left bar + `Color.primary.opacity(0.07)` background (reliable in any theme)
+- All font sizes bumped ~+2pt throughout (caption2→caption, caption→footnote, 10pt→12pt, etc.)
+- Wildcard editor: multiline TextEditor → single-line TextField with pipe-separated format
+- Config JSON validator relaxed to accept any `[String: Any]` (was full Codable decode, rejected valid partial DT configs)
+
+**Gallery integration (StoryFlowViewModel.swift)**
+- `configure(modelContext:)` wires up `onImageGenerated` callback before `loadAll()`
+- `insertGalleryRecord` creates TSImage pointing at StoryFlow output file path (no duplicate write)
+- Fixed: `ctx.save()` called after every insert — autosave was silently dropping records
+
+**Output Panel (StoryFlowOutputPanel.swift)**
+- Previous Runs section replaced with single "Open Output Folder" button (workflow-level parent dir)
+
+**Research: Draw Things PNG metadata format**
+- DT uses EXIF UserComment (primary) + iTXt `dts_metadata` chunk (fallback)
+- JSON format: short keys (`"c"`, `"uc"`, `"scale"`) + `"v2"` sub-object with camelCase full config
+- Implementation target: `ImageStorageManager.writePNG` — switch from NSBitmapImageRep to CGImageDestination to gain metadata control
+- Noted as next goal; requires explicit approval before touching ported file
+
+---
+
 ## Design Decision Pending — Generate Image / Inspector Unification
 
 Current thinking (March 2026): The separation between Image Inspector and 
