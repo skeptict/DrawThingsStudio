@@ -77,7 +77,13 @@ struct StoryFlowVariablesPanel: View {
                 } else {
                     // Variable rows
                     ForEach(Binding(
-                        get: { variablesOfType },
+                        // Live read from vm.variables so that mutations made through
+                        // the binding's setter are immediately visible when the getter
+                        // is called again (e.g. reading `variable` after setting
+                        // wildcardOptions inside commitWildcard). Capturing the local
+                        // `variablesOfType` snapshot instead caused every onSave to
+                        // read back the pre-mutation value and overwrite the update.
+                        get: { vm.variables.filter { $0.type == type } },
                         set: { newVars in
                             var updated = vm.variables
                             for (idx, var1) in updated.enumerated() {
