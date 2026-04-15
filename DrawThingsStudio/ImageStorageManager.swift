@@ -160,10 +160,19 @@ enum ImageStorageManager {
 
         if let cfg = config,
            let jsonStr = buildDTMetadataJSON(config: cfg, prompt: prompt) {
-            // Embed in EXIF UserComment — Draw Things' primary metadata location.
+            let promptText = prompt ?? ""
+
+            // EXIF UserComment — Draw Things' primary metadata location,
+            // readable by PNGMetadataParser and external tools (exiftool, etc.)
+            // IPTC Caption-Abstract — indexed by Spotlight as kMDItemDescription,
+            // displayed by Finder's Get Info as "Description".
             let props: [String: Any] = [
                 kCGImagePropertyExifDictionary as String: [
                     kCGImagePropertyExifUserComment as String: jsonStr
+                ],
+                kCGImagePropertyIPTCDictionary as String: [
+                    kCGImagePropertyIPTCCaptionAbstract as String: promptText,
+                    kCGImagePropertyIPTCOriginatingProgram as String: "TanqueStudio"
                 ]
             ]
             CGImageDestinationAddImage(dest, cgImage, props as CFDictionary)
