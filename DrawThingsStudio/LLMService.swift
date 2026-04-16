@@ -136,19 +136,21 @@ struct LLMService {
         var trimmed = base.trimmingCharacters(in: .whitespacesAndNewlines)
         trimmed = trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
 
-        // Prepend scheme if missing
-        if !trimmed.contains("://") {
+        let hadScheme = trimmed.contains("://")
+
+        if !hadScheme {
             trimmed = "http://\(trimmed)"
         }
 
-        // Append default port if no port is present after the host
-        // Parse the URL to check — if no port, append provider default
-        if let url = URL(string: trimmed), url.port == nil {
+        // Only append the default port when the user entered a bare host/IP (no
+        // scheme). A URL entered with an explicit scheme is treated as intentional
+        // — don't override its port behaviour.
+        if !hadScheme, let url = URL(string: trimmed), url.port == nil {
             let defaultPort = URL(string: provider.defaultBaseURL)?.port ?? 11434
             trimmed = "\(trimmed):\(defaultPort)"
         }
 
-        return "\(trimmed)/\(path)"
+        return path.isEmpty ? trimmed : "\(trimmed)/\(path)"
     }
 }
 
