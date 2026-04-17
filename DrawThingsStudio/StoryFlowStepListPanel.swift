@@ -163,18 +163,15 @@ struct StoryFlowStepListPanel: View {
     }
 
     /// Compute the visual loop depth for each step without changing the ForEach structure.
-    /// Depth is recorded *before* processing each step's type, so:
-    ///   loop → depth 0 (opens block), inside steps → depth 1, endLoop → depth 1 (closes block).
+    ///   loop → depth 0 (opens block), inside steps → depth 1, endLoop → depth 0 (same as loop).
     private func loopDepths(for steps: [WorkflowStep]) -> [UUID: Int] {
         var result: [UUID: Int] = [:]
         var depth = 0
         for step in steps {
+            // endLoop closes the block — record at the outer depth, not the inner depth.
+            if step.type == .endLoop { depth = max(0, depth - 1) }
             result[step.id] = depth
-            switch step.type {
-            case .loop:    depth += 1
-            case .endLoop: depth = max(0, depth - 1)
-            default: break
-            }
+            if step.type == .loop { depth += 1 }
         }
         return result
     }
