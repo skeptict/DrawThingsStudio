@@ -36,7 +36,11 @@ final class StoryFlowStorage {
     }
 
     var outputFolder: URL {
-        appSupportFolder.appendingPathComponent("WorkflowOutput", isDirectory: true)
+        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport
+            .appendingPathComponent("TanqueStudio", isDirectory: true)
+            .appendingPathComponent("GeneratedImages", isDirectory: true)
+            .appendingPathComponent("StoryFlow", isDirectory: true)
     }
 
     private func ensureFolder(_ url: URL) {
@@ -105,8 +109,8 @@ final class StoryFlowStorage {
     // MARK: — Output
 
     /// Returns the output URL for a workflow run.
-    /// Uses the user's configured Generate save folder when available (security-scoped bookmark);
-    /// falls back to App Support/TanqueStudio/WorkflowOutput otherwise.
+    /// Uses the user's configured Generate save folder + StoryFlow subfolder when available;
+    /// falls back to GeneratedImages/StoryFlow/ in App Support otherwise.
     /// Does NOT create the directory here — creation happens in saveOutputImage under active access.
     func outputFolder(for workflowName: String) -> URL {
         let safe = workflowName
@@ -120,9 +124,9 @@ final class StoryFlowStorage {
             .appendingPathComponent(ts, isDirectory: true)
     }
 
-    /// Resolve the base output directory. Mirrors the logic in ImageStorageManager — uses the
-    /// security-scoped bookmark URL when a custom Generate folder is set, otherwise App Support.
-    /// Resolves but does NOT start security-scoped access (caller manages access lifetime).
+    /// Resolve the base output directory.
+    /// Custom folder: [bookmark]/StoryFlow/
+    /// Default:       GeneratedImages/StoryFlow/ in App Support
     private func resolvedOutputBase() -> URL {
         if let bookmark = AppSettings.shared.defaultImageFolderBookmark,
            !AppSettings.shared.defaultImageFolder.isEmpty {
@@ -133,7 +137,7 @@ final class StoryFlowStorage {
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             ) {
-                return resolved
+                return resolved.appendingPathComponent("StoryFlow", isDirectory: true)
             }
         }
         return outputFolder
