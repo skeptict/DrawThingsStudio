@@ -135,14 +135,21 @@ struct StoryFlowStepListPanel: View {
                 .overlay(alignment: .bottom) { addStepButton }
 
             } else {
+                let steps = vm.selectedWorkflow?.steps ?? []
+                // Precompute loop depth per step ID so we can indent without
+                // changing the ForEach structure (preserves Binding + .onMove).
+                let depths = loopDepths(for: steps)
+
                 List {
                     ForEach(Binding(
                         get: { vm.selectedWorkflow?.steps ?? [] },
                         set: { vm.selectedWorkflow?.steps = $0 }
                     )) { $step in
                         StoryFlowStepCard(step: $step,
+                                          allVariables: vm.variables,
                                           onDelete: { vm.deleteStep(id: step.id) },
                                           onChange: { vm.updateStep(step) })
+                            .padding(.leading, CGFloat(depths[step.id] ?? 0) * 16)
                             .listRowInsets(EdgeInsets(top: 3, leading: 8, bottom: 3, trailing: 8))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -153,6 +160,23 @@ struct StoryFlowStepListPanel: View {
                 .overlay(alignment: .bottomTrailing) { addStepButton }
             }
         }
+    }
+
+    /// Compute the visual loop depth for each step without changing the ForEach structure.
+    /// Depth is recorded *before* processing each step's type, so:
+    ///   loop → depth 0 (opens block), inside steps → depth 1, endLoop → depth 1 (closes block).
+    private func loopDepths(for steps: [WorkflowStep]) -> [UUID: Int] {
+        var result: [UUID: Int] = [:]
+        var depth = 0
+        for step in steps {
+            result[step.id] = depth
+            switch step.type {
+            case .loop:    depth += 1
+            case .endLoop: depth = max(0, depth - 1)
+            default: break
+            }
+        }
+        return result
     }
 
     // MARK: — Add step menu
@@ -208,6 +232,70 @@ struct StoryFlowStepListPanel: View {
     }
 }
 
+// MARK: - Variable Picker Field
+//
+// A TextField with a chevron button that opens a popover listing matching variables.
+// Used in step cards for parameter fields that accept variable references.
+
+private struct VariablePickerField: View {
+    let placeholder: String
+    let variableTypes: [WorkflowVariableType]
+    let allVariables: [WorkflowVariable]
+    @Binding var text: String
+    let onChange: () -> Void
+
+    @State private var showPicker = false
+
+    private var filtered: [WorkflowVariable] {
+        let candidates = allVariables.filter { variableTypes.contains($0.type) }
+        if text.isEmpty { return candidates }
+        return candidates.filter { $0.name.localizedCaseInsensitiveContains(text) }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 11, design: .monospaced))
+                .onSubmit { onChange() }
+
+            if !filtered.isEmpty {
+                Button { showPicker.toggle() } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .popover(isPresented: $showPicker, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(filtered) { variable in
+                            Button {
+                                text = variable.name
+                                showPicker = false
+                                onChange()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: variable.type.iconName)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 14)
+                                    Text(variable.type.prefix + variable.name)
+                                        .font(.caption)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                            }
+                            .buttonStyle(.plain)
+                            Divider()
+                        }
+                    }
+                    .frame(minWidth: 200)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Step Card
 //
 // Flat single-row layout:  [drag handle] [type label] [primary field] [delete button]
@@ -215,6 +303,7 @@ struct StoryFlowStepListPanel: View {
 
 private struct StoryFlowStepCard: View {
     @Binding var step: WorkflowStep
+    let allVariables: [WorkflowVariable]
     let onDelete: () -> Void
     let onChange: () -> Void
 
@@ -289,24 +378,28 @@ private struct StoryFlowStepCard: View {
         switch step.type {
 
         case .configInstruction:
-            // Comma-separated list of config var names (with or without # prefix)
-            TextField("#model, #sampler", text: Binding(
-                get: { step.parameters["configVars"] ?? "" },
-                set: { step.parameters["configVars"] = $0.isEmpty ? nil : $0 }
-            ))
-            .textFieldStyle(.roundedBorder)
-            .font(.system(size: 11, design: .monospaced))
-            .onSubmit { onChange() }
+            VariablePickerField(
+                placeholder: "#model, #sampler",
+                variableTypes: [.config],
+                allVariables: allVariables,
+                text: Binding(
+                    get: { step.parameters["configVars"] ?? "" },
+                    set: { step.parameters["configVars"] = $0.isEmpty ? nil : $0 }
+                ),
+                onChange: onChange
+            )
 
         case .promptInstruction:
-            // Prompt text with inline @var and $wildcard tokens
-            TextField("@character in $scene doing something", text: Binding(
-                get: { step.parameters["text"] ?? "" },
-                set: { step.parameters["text"] = $0 }
-            ))
-            .textFieldStyle(.roundedBorder)
-            .font(.caption)
-            .onSubmit { onChange() }
+            VariablePickerField(
+                placeholder: "@character in $scene doing something",
+                variableTypes: [.prompt, .wildcard],
+                allVariables: allVariables,
+                text: Binding(
+                    get: { step.parameters["text"] ?? "" },
+                    set: { step.parameters["text"] = $0 }
+                ),
+                onChange: onChange
+            )
 
         case .generate:
             // Optional name to store the result for later loadCanvas
@@ -328,14 +421,17 @@ private struct StoryFlowStepCard: View {
             .onSubmit { onChange() }
 
         case .addToMoodboard:
-            TextField("image var", text: Binding(
-                get: { step.parameters["imageVar"] ?? "" },
-                set: { step.parameters["imageVar"] = $0.isEmpty ? nil : $0 }
-            ))
-            .textFieldStyle(.roundedBorder)
-            .font(.caption)
+            VariablePickerField(
+                placeholder: "image var",
+                variableTypes: [.image],
+                allVariables: allVariables,
+                text: Binding(
+                    get: { step.parameters["imageVar"] ?? "" },
+                    set: { step.parameters["imageVar"] = $0.isEmpty ? nil : $0 }
+                ),
+                onChange: onChange
+            )
             .frame(maxWidth: 140)
-            .onSubmit { onChange() }
             weightSlider
 
         case .canvasToMoodboard:
