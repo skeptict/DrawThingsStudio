@@ -81,20 +81,33 @@ struct LLMService {
                 _ = try await URLSession.shared.data(from: url)
                 return []
             } else {
-                // Key provided — attempt real model list. If /v1/models returns 403
-                // or fails, fall back silently; chat completions still authenticate.
+                // Key provided — try /v1/models with auth first, then without auth
+                // (some Jan versions don't require auth for model listing).
                 let urlString = normalizedURL(baseURL, path: "v1/models", provider: provider)
                 guard let url = URL(string: urlString) else { throw LLMError.invalidURL }
-                var request = URLRequest(url: url)
-                request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-                if let (data, response) = try? await URLSession.shared.data(for: request),
-                   let code = (response as? HTTPURLResponse)?.statusCode,
+
+                // Attempt with Bearer auth
+                var authRequest = URLRequest(url: url)
+                authRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                if let (data, resp) = try? await URLSession.shared.data(for: authRequest),
+                   let code = (resp as? HTTPURLResponse)?.statusCode,
                    (200..<300).contains(code),
                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let models = json["data"] as? [[String: Any]] {
                     let names = models.compactMap { $0["id"] as? String }
                     if !names.isEmpty { return names }
                 }
+
+                // Attempt without auth (some Jan configs serve model list unauthenticated)
+                if let (data, resp) = try? await URLSession.shared.data(from: url),
+                   let code = (resp as? HTTPURLResponse)?.statusCode,
+                   (200..<300).contains(code),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let models = json["data"] as? [[String: Any]] {
+                    let names = models.compactMap { $0["id"] as? String }
+                    if !names.isEmpty { return names }
+                }
+
                 return []
             }
         }
