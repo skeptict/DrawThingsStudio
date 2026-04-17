@@ -357,7 +357,7 @@ private struct AssistTabView: View {
             }
             refreshInput()
             checkPendingTrigger()
-            if availableModels.isEmpty {
+            if availableModels.isEmpty && !isFetchingModels {
                 fetchAvailableModels()
             }
         }
@@ -669,14 +669,15 @@ private struct AssistTabView: View {
         isFetchingModels = true
         let baseURL = AppSettings.shared.llmEffectiveBaseURL
         let provider = AppSettings.shared.llmProvider
+        let apiKey = AppSettings.shared.llmAPIKey
         Task { @MainActor in
+            defer { isFetchingModels = false }
             availableModels = (try? await LLMService.fetchModels(
-                baseURL: baseURL, provider: provider, apiKey: AppSettings.shared.llmAPIKey
+                baseURL: baseURL, provider: provider, apiKey: apiKey
             )) ?? []
             if !availableModels.isEmpty && !availableModels.contains(localModelName) {
                 localModelName = availableModels[0]
             }
-            isFetchingModels = false
         }
     }
 
