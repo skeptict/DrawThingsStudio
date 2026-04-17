@@ -180,8 +180,9 @@ After every implementation task, before declaring done:
 1. **Files changed** — list every file modified or created. Flag scope violations.
 2. **Implementation summary** — what was built and notable decisions
 3. **Build status** — run a build, confirm `BUILD SUCCEEDED`
-4. **Regression check** — sidebar loads with all 6 items; no layout errors
-5. **Risks or follow-ups** — flag anything out of scope or to revisit
+4. **UI smoke check** — For any new enum cases wired into a menu, picker, or list, verify the string appears in the compiled binary: `strings path/to/Debug/binary | grep "new item name"`. If the string is absent despite BUILD SUCCEEDED, the case is not reachable from the UI — do not declare done until it appears.
+5. **Regression check** — sidebar loads with all 6 items; no layout errors
+6. **Risks or follow-ups** — flag anything out of scope or to revisit
 
 ---
 
