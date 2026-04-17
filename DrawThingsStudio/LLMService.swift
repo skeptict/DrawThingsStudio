@@ -72,13 +72,15 @@ struct LLMService {
     /// user can still enter model names manually. When an API key is provided
     /// Jan's /v1/models returns a proper model list.
     static func fetchModels(baseURL: String, provider: LLMProvider, apiKey: String = "") async throws -> [String] {
-        if provider == .jan && apiKey.isEmpty {
-            // No key — test reachability via root URL; return empty list.
+        if provider == .jan {
+            // Jan's /v1/models endpoint can return 403 even with a valid key depending on
+            // server config. Always test reachability via root URL for Jan; actual chat
+            // completions still send the Bearer token correctly via runOperation.
             let rootString = normalizedURL(baseURL, path: "", provider: provider)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             guard let url = URL(string: rootString) else { throw LLMError.invalidURL }
             _ = try await URLSession.shared.data(from: url)
-            return []
+            return apiKey.isEmpty ? [] : ["(Jan — enter model name)"]
         }
 
         let urlString = normalizedURL(baseURL, path: "v1/models", provider: provider)
