@@ -102,6 +102,7 @@ final class StoryFlowViewModel {
     // MARK: — Load
 
     func loadAll() {
+        storage.migrateBuiltInsIfNeeded()
         storage.seedBuiltInsIfNeeded()
         variables = storage.loadVariables()
         workflows = storage.loadWorkflows()
@@ -200,6 +201,15 @@ final class StoryFlowViewModel {
     func deleteVariable(id: UUID) {
         try? storage.deleteVariable(id: id)
         variables.removeAll { $0.id == id }
+    }
+
+    /// Import Draw Things custom configs from the given URL.
+    /// Returns (added, skipped) counts.
+    func importDTCustomConfigs(from url: URL) -> (added: Int, skipped: Int) {
+        let existingNames = Set(variables.map { $0.name })
+        let result = storage.importDTCustomConfigs(from: url, existingNames: existingNames)
+        variables = storage.loadVariables()
+        return result
     }
 
     // MARK: — JSON text view

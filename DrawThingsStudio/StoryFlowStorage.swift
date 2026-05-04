@@ -193,6 +193,85 @@ final class StoryFlowStorage {
             try? saveVariable(v)
         }
         UserDefaults.standard.set(true, forKey: key)
+        UserDefaults.standard.set(2, forKey: "storyflow.seedVersion")
+    }
+
+    /// Migrate built-in configs written by older seeds to include real model names.
+    func migrateBuiltInsIfNeeded() {
+        let versionKey = "storyflow.seedVersion"
+        let current = UserDefaults.standard.integer(forKey: versionKey)
+        guard current < 2 else { return }
+
+        let modelUpdates: [String: (model: String, notes: String)] = [
+            "flux-default": ("flux_1_dev_q5p.ckpt",           "Standard Flux config — steps 20, CFG 3.5, Euler A Trailing"),
+            "qwen-image":   ("qwen_image_2512_bf16_q6p.ckpt", "Qwen Image T2I config — steps 20, CFG 1.0, Euler A Trailing"),
+            "turbo-fast":   ("z_image_turbo_1.0_q6p.ckpt",    "Fast turbo config — steps 4, CFG 1.0, LCM"),
+        ]
+
+        let existing = loadVariables()
+        for var v in existing {
+            guard v.isBuiltIn, v.type == .config,
+                  let update = modelUpdates[v.name] else { continue }
+            // Patch the model field inside the stored JSON dict.
+            if let jsonStr = v.configJSON,
+               let data = jsonStr.data(using: .utf8),
+               var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+                dict["model"] = update.model
+                if let updated = try? JSONSerialization.data(withJSONObject: dict,
+                                                              options: [.prettyPrinted, .sortedKeys]),
+                   let str = String(data: updated, encoding: .utf8) {
+                    v.configJSON = str
+                }
+            }
+            v.notes = update.notes
+            try? saveVariable(v)
+        }
+
+        UserDefaults.standard.set(2, forKey: versionKey)
+    }
+
+    /// Import config variables from Draw Things' custom_configs.json.
+    /// Supports both array-of-dicts (with a "name" key) and dict-of-dicts formats.
+    /// Skips configs whose `model` field is empty and names that already exist.
+    /// Returns (added, skipped) counts.
+    @discardableResult
+    func importDTCustomConfigs(from url: URL, existingNames: Set<String>) -> (added: Int, skipped: Int) {
+        guard let data = (try? Data(contentsOf: url)) else { return (0, 0) }
+
+        // Build a flat list of (name, raw dict) pairs.
+        var entries: [(name: String, dict: [String: Any])] = []
+
+        if let array = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] {
+            for item in array {
+                guard let name = item["name"] as? String, !name.isEmpty else { continue }
+                entries.append((name, item))
+            }
+        } else if let top = (try? JSONSerialization.jsonObject(with: data)) as? [String: [String: Any]] {
+            for (key, value) in top {
+                entries.append((key, value))
+            }
+        }
+
+        var added = 0
+        var skipped = 0
+        ensureFolder(variablesFolder)
+
+        for (name, dict) in entries {
+            let model = dict["model"] as? String ?? ""
+            guard !model.isEmpty else { skipped += 1; continue }
+            guard !existingNames.contains(name) else { skipped += 1; continue }
+
+            var v = WorkflowVariable(name: name, type: .config)
+            if let jsonData = try? JSONSerialization.data(withJSONObject: dict,
+                                                          options: [.prettyPrinted, .sortedKeys]),
+               let jsonStr = String(data: jsonData, encoding: .utf8) {
+                v.configJSON = jsonStr
+            }
+            try? saveVariable(v)
+            added += 1
+        }
+
+        return (added, skipped)
     }
 
     private func makeBuiltInVariables() -> [WorkflowVariable] {
@@ -204,7 +283,7 @@ final class StoryFlowStorage {
             steps: 20, guidanceScale: 3.5,
             seed: -1, seedMode: "Scale Alike",
             sampler: "Euler A Trailing",
-            model: "",
+            model: "flux_1_dev_q5p.ckpt",
             shift: 3.0, strength: 1.0,
             stochasticSamplingGamma: 0.3,
             batchSize: 1, batchCount: 1,
@@ -218,18 +297,18 @@ final class StoryFlowStorage {
             steps: 20, guidanceScale: 1.0,
             seed: -1, seedMode: "Scale Alike",
             sampler: "Euler A Trailing",
-            model: "",
+            model: "qwen_image_2512_bf16_q6p.ckpt",
             shift: 3.0, strength: 1.0
         )
         result.append(configVariable(name: "qwen-image", config: qwenConfig,
-                                     notes: "Qwen Image Edit config — steps 20, CFG 1.0, Euler A Trailing"))
+                                     notes: "Qwen Image T2I config — steps 20, CFG 1.0, Euler A Trailing"))
 
         let turboConfig = DrawThingsGenerationConfig(
             width: 1024, height: 1024,
             steps: 4, guidanceScale: 1.0,
             seed: -1, seedMode: "Scale Alike",
             sampler: "LCM",
-            model: "",
+            model: "z_image_turbo_1.0_q6p.ckpt",
             shift: 1.0, strength: 1.0
         )
         result.append(configVariable(name: "turbo-fast", config: turboConfig,

@@ -6,6 +6,7 @@ import AppKit
 struct StoryFlowVariablesPanel: View {
     @Bindable var vm: StoryFlowViewModel
     @State private var collapsedSections: Set<WorkflowVariableType> = []
+    @State private var importToast: String?
 
     private let sectionOrder: [WorkflowVariableType] = [.prompt, .config, .wildcard, .image, .lora]
 
@@ -23,6 +24,18 @@ struct StoryFlowVariablesPanel: View {
             }
         }
         .background(Color(NSColor.controlBackgroundColor))
+        .overlay(alignment: .bottom) {
+            if let msg = importToast {
+                Text(msg)
+                    .font(.caption)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: importToast)
     }
 
     // MARK: - Header
@@ -32,6 +45,11 @@ struct StoryFlowVariablesPanel: View {
             Text("Variables")
                 .font(.headline)
             Spacer()
+            Button { importFromDT() } label: {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .buttonStyle(.plain)
+            .help("Import configs from Draw Things custom_configs.json")
             Button {
                 NSWorkspace.shared.open(StoryFlowStorage.shared.variablesFolder)
             } label: {
@@ -42,6 +60,28 @@ struct StoryFlowVariablesPanel: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private func importFromDT() {
+        let panel = NSOpenPanel()
+        panel.title = "Select Draw Things custom_configs.json"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+
+        let dtModels = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Containers/com.liuliu.draw-things/Data/Documents/Models")
+        if FileManager.default.fileExists(atPath: dtModels.path) {
+            panel.directoryURL = dtModels
+        }
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let result = vm.importDTCustomConfigs(from: url)
+        importToast = "Added \(result.added) configs, skipped \(result.skipped)"
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            importToast = nil
+        }
     }
 
     // MARK: - Section
