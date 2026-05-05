@@ -36,25 +36,39 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(SidebarItem.allCases, selection: $selectedItem) { item in
-                Label {
-                    HStack(spacing: 4) {
-                        Text(item.rawValue)
-                        if item.isLabs {
-                            Text("Labs")
-                                .font(.system(size: 9, weight: .semibold))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundStyle(.orange)
-                                .clipShape(Capsule())
-                        }
-                    }
-                } icon: {
+                let isSelected = selectedItem == item
+                HStack(spacing: 8) {
                     Image(systemName: item.icon)
+                        .foregroundStyle(isSelected ? TanqueDS.Color.brass : TanqueDS.Color.textSecondary)
+                        .frame(width: 16, height: 16)
+                    Text(item.rawValue)
+                        .font(TanqueDS.Font.navItem)
+                        .foregroundStyle(TanqueDS.Color.textPrimary)
+                    if item.isLabs {
+                        Text("Labs")
+                            .font(TanqueDS.Font.badgeLabel)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(TanqueDS.Color.brassSubtle)
+                            .foregroundStyle(TanqueDS.Color.brass)
+                            .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.badgeCornerRadius))
+                    }
+                    Spacer()
                 }
+                .overlay(alignment: .leading) {
+                    if isSelected {
+                        Rectangle()
+                            .fill(TanqueDS.Color.brass)
+                            .frame(width: 2)
+                    }
+                }
+                .listRowBackground(TanqueDS.Color.surface1)
                 .tag(item)
             }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             .navigationSplitViewColumnWidth(min: 160, ideal: 200)
+            .background(TanqueDS.Color.surface1)
         } detail: {
             detailView(for: selectedItem)
         }

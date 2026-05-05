@@ -15,19 +15,18 @@ struct GenerateRightPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             imagePreview
-            Divider()
+            Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
             tabBar
-            Divider()
             tabContent
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(TanqueDS.Color.surface1)
     }
 
     // MARK: — Image preview
 
     private var imagePreview: some View {
         ZStack {
-            Color.black.opacity(0.12)
+            TanqueDS.Color.surface2
             if let image = vm.generatedImage {
                 Image(nsImage: image)
                     .resizable()
@@ -47,25 +46,31 @@ struct GenerateRightPanel: View {
     private var tabBar: some View {
         HStack(spacing: 0) {
             ForEach(GenerateViewModel.RightTab.allCases, id: \.self) { tab in
+                let isActive = vm.selectedRightTab == tab
                 Button {
                     vm.selectedRightTab = tab
                 } label: {
                     Text(tab.rawValue)
-                        .font(.caption.weight(
-                            vm.selectedRightTab == tab ? .semibold : .regular
-                        ))
+                        .font(TanqueDS.Font.tabLabel)
+                        .foregroundStyle(isActive ? TanqueDS.Color.textPrimary : TanqueDS.Color.textSecondary)
                         .padding(.vertical, 8)
                         .frame(maxWidth: .infinity)
                         .overlay(alignment: .bottom) {
-                            if vm.selectedRightTab == tab {
+                            if isActive {
                                 Rectangle()
-                                    .fill(Color.accentColor)
+                                    .fill(TanqueDS.Color.brass)
                                     .frame(height: 2)
                             }
                         }
                 }
                 .buttonStyle(.plain)
             }
+        }
+        .background(TanqueDS.Color.surface1)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(TanqueDS.Color.surfaceBorder)
+                .frame(height: 1)
         }
     }
 
@@ -88,7 +93,7 @@ struct GenerateRightPanel: View {
     private var metadataTab: some View {
         ScrollView {
             if let meta = vm.currentMetadata {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 0) {
                     if let prompt = meta.prompt {
                         MetadataRow(label: "PROMPT", value: prompt)
                     }
@@ -169,7 +174,7 @@ struct GenerateRightPanel: View {
                 pb.setData(data, forType: .tiff)
             }
 
-            Divider()
+            Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
                 .padding(.vertical, 2)
 
             sendToGenerateSection
@@ -182,7 +187,7 @@ struct GenerateRightPanel: View {
                                                canvasSize: canvasSize) { vm.addToMoodboard(img) }
             }
 
-            Divider()
+            Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
                 .padding(.vertical, 2)
 
             ActionButton(icon: "film.stack", title: "Send to StoryFlow", enabled: false) {}
@@ -204,8 +209,7 @@ struct GenerateRightPanel: View {
     private var sendToGenerateSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("SEND TO GENERATE")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .tanqueSectionLabel()
                 .padding(.bottom, 2)
 
             let hasMeta  = vm.currentMetadata != nil
@@ -275,13 +279,21 @@ private struct MetadataRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .font(TanqueDS.Font.body)
+                .foregroundStyle(TanqueDS.Color.textSecondary)
             Text(value)
-                .font(.caption)
+                .font(TanqueDS.Font.bodyMedium)
+                .foregroundStyle(TanqueDS.Color.textPrimary)
                 .textSelection(.enabled)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
+        .background(TanqueDS.Color.surface1)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(TanqueDS.Color.surfaceBorder)
+                .frame(height: 1)
+        }
     }
 }
 
@@ -846,7 +858,7 @@ private struct ActionButton: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 10)
-                .background(Color.secondary.opacity(0.08))
+                .background(TanqueDS.Color.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)

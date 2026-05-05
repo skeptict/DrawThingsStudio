@@ -17,188 +17,278 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
-            // MARK: Draw Things Connection
-            Section("Draw Things Connection") {
-                HStack(spacing: 4) {
-                    TextField("Host", text: $settings.dtHost)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { settings.addDTHost(settings.dtHost) }
-                    Button {
-                        showDTHostHistory.toggle()
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.borderless)
-                    .popover(isPresented: $showDTHostHistory, arrowEdge: .bottom) {
-                        hostHistoryPopover(
-                            history: settings.dtHostHistory,
-                            onSelect: { host in
-                                settings.dtHost = host
-                                showDTHostHistory = false
-                            },
-                            onDelete: { host in
-                                settings.dtHostHistory.removeAll { $0 == host }
-                            },
-                            onClear: {
-                                settings.dtHostHistory = []
-                                showDTHostHistory = false
+        ScrollView {
+            VStack(alignment: .leading, spacing: TanqueDS.Spacing.lg) {
+
+                // MARK: Draw Things Connection
+                VStack(alignment: .leading, spacing: TanqueDS.Spacing.sm) {
+                    Text("DRAW THINGS CONNECTION").tanqueSectionLabel()
+                    VStack(spacing: 0) {
+                        HStack(spacing: TanqueDS.Spacing.xs) {
+                            TextField("Host", text: $settings.dtHost)
+                                .textFieldStyle(.plain)
+                                .font(TanqueDS.Font.body)
+                                .foregroundStyle(TanqueDS.Color.textPrimary)
+                                .onSubmit { settings.addDTHost(settings.dtHost) }
+                            Button { showDTHostHistory.toggle() } label: {
+                                Image(systemName: "chevron.down").font(.caption)
+                                    .foregroundStyle(TanqueDS.Color.textSecondary)
                             }
-                        )
-                    }
-                }
-
-                HStack {
-                    Text("Port")
-                    Spacer()
-                    TextField("Port", value: $settings.dtPort, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 80)
-                        .multilineTextAlignment(.trailing)
-                }
-
-                SecureField("Shared Secret", text: $settings.dtSharedSecret)
-                    .textFieldStyle(.roundedBorder)
-
-                HStack {
-                    Button(action: testConnection) {
-                        Label("Test Connection", systemImage: "network")
-                    }
-                    .disabled(connectionStatus == .testing)
-
-                    Spacer()
-
-                    switch connectionStatus {
-                    case .idle:
-                        EmptyView()
-                    case .testing:
-                        ProgressView().scaleEffect(0.7)
-                    case .success:
-                        Label("Connected", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    case .failure:
-                        Label("Failed", systemImage: "xmark.circle.fill")
-                            .foregroundStyle(.red)
-                    }
-                }
-            }
-
-            // MARK: LLM Assist
-            Section("LLM Assist") {
-                Picker("Provider", selection: $settings.llmProvider) {
-                    ForEach(LLMProvider.allCases, id: \.self) { p in
-                        Text(p.displayName).tag(p)
-                    }
-                }
-
-                HStack(spacing: 4) {
-                    TextField(
-                        settings.llmProvider.defaultBaseURL,
-                        text: $settings.llmBaseURL
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    .help("Leave blank to use the provider default URL")
-                    .onSubmit { settings.addLLMHost(settings.llmBaseURL) }
-                    Button {
-                        showLLMHostHistory.toggle()
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.borderless)
-                    .popover(isPresented: $showLLMHostHistory, arrowEdge: .bottom) {
-                        hostHistoryPopover(
-                            history: settings.llmHostHistory,
-                            onSelect: { host in
-                                settings.llmBaseURL = host
-                                showLLMHostHistory = false
-                            },
-                            onDelete: { host in
-                                settings.llmHostHistory.removeAll { $0 == host }
-                            },
-                            onClear: {
-                                settings.llmHostHistory = []
-                                showLLMHostHistory = false
+                            .buttonStyle(.borderless)
+                            .popover(isPresented: $showDTHostHistory, arrowEdge: .bottom) {
+                                hostHistoryPopover(
+                                    history: settings.dtHostHistory,
+                                    onSelect: { host in settings.dtHost = host; showDTHostHistory = false },
+                                    onDelete: { host in settings.dtHostHistory.removeAll { $0 == host } },
+                                    onClear: { settings.dtHostHistory = []; showDTHostHistory = false }
+                                )
                             }
-                        )
-                    }
-                }
-
-                SecureField("API Key (required for Jan)", text: $settings.llmAPIKey)
-                    .textFieldStyle(.roundedBorder)
-                    .help("API key sent as Bearer token. Required for Jan.")
-
-                HStack {
-                    Button(action: testLLMConnection) {
-                        Label("Test Connection", systemImage: "network")
-                    }
-                    .disabled(llmStatus.isTesting)
-
-                    Spacer()
-
-                    switch llmStatus {
-                    case .idle:
-                        EmptyView()
-                    case .testing:
-                        ProgressView().scaleEffect(0.7)
-                    case .success(let count):
-                        if settings.llmProvider == .jan && count == 0 {
-                            Label("Connected (enter model name manually)", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                                .font(.caption)
-                        } else {
-                            Label("\(count) model\(count == 1 ? "" : "s")", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                                .font(.caption)
                         }
-                    case .failure(let msg):
-                        Label(msg, systemImage: "xmark.circle.fill")
-                            .foregroundStyle(.red)
-                            .font(.caption)
-                            .lineLimit(2)
-                    }
-                }
-            }
+                        .padding(.horizontal, TanqueDS.Spacing.md)
+                        .padding(.vertical, TanqueDS.Spacing.sm)
+                        .background(TanqueDS.Color.surface1)
 
-            // MARK: Image Folder
-            Section("Image Folder") {
-                HStack {
-                    Text(settings.defaultImageFolder.isEmpty
-                         ? "Default (App Support/TanqueStudio/GeneratedImages)"
-                         : settings.defaultImageFolder)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer()
-                    if !settings.defaultImageFolder.isEmpty {
-                        Button("Reset to Default") {
-                            settings.defaultImageFolder = ""
-                            settings.defaultImageFolderBookmark = nil
+                        Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
+
+                        HStack {
+                            Text("Port")
+                                .font(TanqueDS.Font.body)
+                                .foregroundStyle(TanqueDS.Color.textSecondary)
+                            Spacer()
+                            TextField("Port", value: $settings.dtPort, format: .number)
+                                .textFieldStyle(.plain)
+                                .font(TanqueDS.Font.bodyMedium)
+                                .foregroundStyle(TanqueDS.Color.textPrimary)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 80)
                         }
-                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, TanqueDS.Spacing.md)
+                        .padding(.vertical, TanqueDS.Spacing.sm)
+                        .background(TanqueDS.Color.surface1)
+
+                        Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
+
+                        SecureField("Shared Secret", text: $settings.dtSharedSecret)
+                            .textFieldStyle(.plain)
+                            .font(TanqueDS.Font.body)
+                            .foregroundStyle(TanqueDS.Color.textPrimary)
+                            .padding(.horizontal, TanqueDS.Spacing.md)
+                            .padding(.vertical, TanqueDS.Spacing.sm)
+                            .background(TanqueDS.Color.surface1)
+
+                        Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
+
+                        HStack {
+                            Button(action: testConnection) {
+                                Label("Test Connection", systemImage: "network")
+                                    .font(TanqueDS.Font.body)
+                            }
+                            .disabled(connectionStatus == .testing)
+                            Spacer()
+                            switch connectionStatus {
+                            case .idle:    EmptyView()
+                            case .testing: ProgressView().scaleEffect(0.7)
+                            case .success:
+                                Label("Connected", systemImage: "checkmark.circle.fill")
+                                    .font(TanqueDS.Font.body)
+                                    .foregroundStyle(TanqueDS.Color.connected)
+                            case .failure:
+                                Label("Failed", systemImage: "xmark.circle.fill")
+                                    .font(TanqueDS.Font.body)
+                                    .foregroundStyle(TanqueDS.Color.textMuted)
+                            }
+                        }
+                        .padding(.horizontal, TanqueDS.Spacing.md)
+                        .padding(.vertical, TanqueDS.Spacing.sm)
+                        .background(TanqueDS.Color.surface1)
                     }
-                    Button("Browse…") { browseForFolder() }
+                    .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius))
+                    .overlay(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius)
+                        .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1))
+                }
+
+                // MARK: LLM Assist
+                VStack(alignment: .leading, spacing: TanqueDS.Spacing.sm) {
+                    Text("LLM ASSIST").tanqueSectionLabel()
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text("Provider")
+                                .font(TanqueDS.Font.body)
+                                .foregroundStyle(TanqueDS.Color.textSecondary)
+                            Spacer()
+                            Picker("", selection: $settings.llmProvider) {
+                                ForEach(LLMProvider.allCases, id: \.self) { p in
+                                    Text(p.displayName).tag(p)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                        }
+                        .padding(.horizontal, TanqueDS.Spacing.md)
+                        .padding(.vertical, TanqueDS.Spacing.sm)
+                        .background(TanqueDS.Color.surface1)
+
+                        Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
+
+                        HStack(spacing: TanqueDS.Spacing.xs) {
+                            TextField(settings.llmProvider.defaultBaseURL, text: $settings.llmBaseURL)
+                                .textFieldStyle(.plain)
+                                .font(TanqueDS.Font.body)
+                                .foregroundStyle(TanqueDS.Color.textPrimary)
+                                .help("Leave blank to use the provider default URL")
+                                .onSubmit { settings.addLLMHost(settings.llmBaseURL) }
+                            Button { showLLMHostHistory.toggle() } label: {
+                                Image(systemName: "chevron.down").font(.caption)
+                                    .foregroundStyle(TanqueDS.Color.textSecondary)
+                            }
+                            .buttonStyle(.borderless)
+                            .popover(isPresented: $showLLMHostHistory, arrowEdge: .bottom) {
+                                hostHistoryPopover(
+                                    history: settings.llmHostHistory,
+                                    onSelect: { host in settings.llmBaseURL = host; showLLMHostHistory = false },
+                                    onDelete: { host in settings.llmHostHistory.removeAll { $0 == host } },
+                                    onClear: { settings.llmHostHistory = []; showLLMHostHistory = false }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, TanqueDS.Spacing.md)
+                        .padding(.vertical, TanqueDS.Spacing.sm)
+                        .background(TanqueDS.Color.surface1)
+
+                        Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
+
+                        SecureField("API Key (required for Jan)", text: $settings.llmAPIKey)
+                            .textFieldStyle(.plain)
+                            .font(TanqueDS.Font.body)
+                            .foregroundStyle(TanqueDS.Color.textPrimary)
+                            .help("API key sent as Bearer token. Required for Jan.")
+                            .padding(.horizontal, TanqueDS.Spacing.md)
+                            .padding(.vertical, TanqueDS.Spacing.sm)
+                            .background(TanqueDS.Color.surface1)
+
+                        Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
+
+                        HStack {
+                            Button(action: testLLMConnection) {
+                                Label("Test Connection", systemImage: "network")
+                                    .font(TanqueDS.Font.body)
+                            }
+                            .disabled(llmStatus.isTesting)
+                            Spacer()
+                            switch llmStatus {
+                            case .idle:    EmptyView()
+                            case .testing: ProgressView().scaleEffect(0.7)
+                            case .success(let count):
+                                if settings.llmProvider == .jan && count == 0 {
+                                    Label("Connected (enter model name manually)", systemImage: "checkmark.circle.fill")
+                                        .foregroundStyle(TanqueDS.Color.connected)
+                                        .font(TanqueDS.Font.bodySmall)
+                                } else {
+                                    Label("\(count) model\(count == 1 ? "" : "s")", systemImage: "checkmark.circle.fill")
+                                        .foregroundStyle(TanqueDS.Color.connected)
+                                        .font(TanqueDS.Font.body)
+                                }
+                            case .failure(let msg):
+                                Label(msg, systemImage: "xmark.circle.fill")
+                                    .foregroundStyle(TanqueDS.Color.textMuted)
+                                    .font(TanqueDS.Font.body)
+                                    .lineLimit(2)
+                            }
+                        }
+                        .padding(.horizontal, TanqueDS.Spacing.md)
+                        .padding(.vertical, TanqueDS.Spacing.sm)
+                        .background(TanqueDS.Color.surface1)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius))
+                    .overlay(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius)
+                        .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1))
+                }
+
+                // MARK: Image Folder
+                VStack(alignment: .leading, spacing: TanqueDS.Spacing.sm) {
+                    Text("IMAGE FOLDER").tanqueSectionLabel()
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text(settings.defaultImageFolder.isEmpty
+                                 ? "Default (App Support/TanqueStudio/GeneratedImages)"
+                                 : settings.defaultImageFolder)
+                                .font(TanqueDS.Font.body)
+                                .foregroundStyle(TanqueDS.Color.textSecondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                            if !settings.defaultImageFolder.isEmpty {
+                                Button("Reset to Default") {
+                                    settings.defaultImageFolder = ""
+                                    settings.defaultImageFolderBookmark = nil
+                                }
+                                .font(TanqueDS.Font.body)
+                                .foregroundStyle(TanqueDS.Color.textSecondary)
+                            }
+                            Button("Browse…") { browseForFolder() }
+                                .font(TanqueDS.Font.body)
+                        }
+                        .padding(.horizontal, TanqueDS.Spacing.md)
+                        .padding(.vertical, TanqueDS.Spacing.sm)
+                        .background(TanqueDS.Color.surface1)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius))
+                    .overlay(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius)
+                        .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1))
+                }
+
+                // MARK: Generation
+                VStack(alignment: .leading, spacing: TanqueDS.Spacing.sm) {
+                    Text("GENERATION").tanqueSectionLabel()
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text("Auto-save generated images")
+                                .font(TanqueDS.Font.body)
+                                .foregroundStyle(TanqueDS.Color.textSecondary)
+                            Spacer()
+                            Toggle("", isOn: $settings.autoSaveGenerated).labelsHidden()
+                        }
+                        .padding(.horizontal, TanqueDS.Spacing.md)
+                        .padding(.vertical, TanqueDS.Spacing.sm)
+                        .background(TanqueDS.Color.surface1)
+
+                        Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
+
+                        Text("Images are saved automatically after each generation. Turn off to save manually from the Actions tab.")
+                            .font(TanqueDS.Font.bodySmall)
+                            .foregroundStyle(TanqueDS.Color.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, TanqueDS.Spacing.md)
+                            .padding(.vertical, TanqueDS.Spacing.sm)
+                            .background(TanqueDS.Color.surface1)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius))
+                    .overlay(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius)
+                        .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1))
+                }
+
+                // MARK: Appearance
+                VStack(alignment: .leading, spacing: TanqueDS.Spacing.sm) {
+                    Text("APPEARANCE").tanqueSectionLabel()
+                    VStack(spacing: 0) {
+                        Text("More options coming")
+                            .font(TanqueDS.Font.body)
+                            .foregroundStyle(TanqueDS.Color.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, TanqueDS.Spacing.md)
+                            .padding(.vertical, TanqueDS.Spacing.sm)
+                            .background(TanqueDS.Color.surface1)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius))
+                    .overlay(RoundedRectangle(cornerRadius: TanqueDS.Layout.panelCornerRadius)
+                        .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1))
                 }
             }
-
-            // MARK: Generation
-            Section("Generation") {
-                Toggle("Auto-save generated images", isOn: $settings.autoSaveGenerated)
-                Text("Images are saved automatically after each generation. Turn off to save manually from the Actions tab.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            // MARK: Appearance
-            Section("Appearance") {
-                Text("More options coming")
-                    .foregroundStyle(.secondary)
-            }
+            .padding(TanqueDS.Spacing.xl)
+            .frame(width: 480)
         }
-        .formStyle(.grouped)
-        .frame(width: 480)
-        .padding()
+        .background(TanqueDS.Color.surface0)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func testConnection() {

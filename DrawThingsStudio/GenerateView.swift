@@ -3,6 +3,8 @@ import AppKit
 import Combine
 import SwiftData
 
+enum OutputFormat { case svg, png }
+
 // MARK: - Root View
 
 struct GenerateView: View {
@@ -16,6 +18,7 @@ struct GenerateView: View {
     @State private var canvasScale: CGFloat  = 1.0
     @State private var canvasOffset: CGSize  = .zero
     @State private var canvasSize: CGSize    = .zero
+    @State private var outputFormat: OutputFormat = .png
 
     private func showToast(_ message: String) {
         toastTask?.cancel()
@@ -27,99 +30,106 @@ struct GenerateView: View {
     }
 
     var body: some View {
-        ZStack {
-            HStack(spacing: 0) {
-                // Left panel — fixed 260pt, collapses to 0
-                ZStack(alignment: .topTrailing) {
-                    GenerateLeftPanel(vm: vm)
+        VStack(spacing: 0) {
+            GenerateTopBar(vm: vm, outputFormat: $outputFormat)
 
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) { vm.leftPanelCollapsed = true }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(6)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 8)
-                    .padding(.trailing, 4)
-                }
-                .frame(width: vm.leftPanelCollapsed ? 0 : 260)
-                .clipped()
+            ZStack {
+                HStack(spacing: 0) {
+                    // Left panel — fixed 260pt, collapses to 0
+                    ZStack(alignment: .topTrailing) {
+                        GenerateLeftPanel(vm: vm)
 
-                GenerateCenterPanel(vm: vm,
-                                   canvasScale: $canvasScale,
-                                   canvasOffset: $canvasOffset,
-                                   canvasSize: $canvasSize)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay(alignment: .topLeading) {
-                        if vm.leftPanelCollapsed {
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) { vm.leftPanelCollapsed = false }
-                            } label: {
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                    .padding(6)
-                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.leading, 4)
-                            .padding(.top, 8)
-                            .transition(.opacity)
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { vm.leftPanelCollapsed = true }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(6)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
                         }
+                        .buttonStyle(.plain)
+                        .padding(.top, 8)
+                        .padding(.trailing, 4)
                     }
+                    .frame(width: vm.leftPanelCollapsed ? 0 : 260)
+                    .clipped()
 
-                PanelDragHandle(
-                    width: Binding(get: { vm.galleryStripWidth }, set: { vm.galleryStripWidth = $0 }),
-                    minWidth: 80, maxWidth: 200,
-                    isLeadingPanel: false
-                )
+                    GenerateCenterPanel(vm: vm,
+                                       canvasScale: $canvasScale,
+                                       canvasOffset: $canvasOffset,
+                                       canvasSize: $canvasSize)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay(alignment: .topLeading) {
+                            if vm.leftPanelCollapsed {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.2)) { vm.leftPanelCollapsed = false }
+                                } label: {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                        .padding(6)
+                                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.leading, 4)
+                                .padding(.top, 8)
+                                .transition(.opacity)
+                            }
+                        }
 
-                GalleryStripView(vm: vm)
-                    .frame(width: vm.galleryStripWidth)
+                    PanelDragHandle(
+                        width: Binding(get: { vm.galleryStripWidth }, set: { vm.galleryStripWidth = $0 }),
+                        minWidth: 80, maxWidth: 200,
+                        isLeadingPanel: false
+                    )
 
-                PanelDragHandle(
-                    width: Binding(get: { vm.rightPanelWidth }, set: { vm.rightPanelWidth = $0 }),
-                    minWidth: 240, maxWidth: 440,
-                    isLeadingPanel: false
-                )
+                    GalleryStripView(vm: vm)
+                        .frame(width: vm.galleryStripWidth)
 
-                GenerateRightPanel(vm: vm,
-                                  onToast: showToast,
-                                  canvasScale: canvasScale,
-                                  canvasOffset: canvasOffset,
-                                  canvasSize: canvasSize)
-                    .frame(width: vm.rightPanelWidth)
+                    PanelDragHandle(
+                        width: Binding(get: { vm.rightPanelWidth }, set: { vm.rightPanelWidth = $0 }),
+                        minWidth: 240, maxWidth: 440,
+                        isLeadingPanel: false
+                    )
+
+                    GenerateRightPanel(vm: vm,
+                                      onToast: showToast,
+                                      canvasScale: canvasScale,
+                                      canvasOffset: canvasOffset,
+                                      canvasSize: canvasSize)
+                        .frame(width: vm.rightPanelWidth)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if let msg = toastMessage {
+                    VStack {
+                        Spacer()
+                        Text(msg)
+                            .font(.callout)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                            .shadow(radius: 4)
+                            .padding(.bottom, 24)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    .allowsHitTesting(false)
+                    .animation(.spring(duration: 0.3), value: toastMessage)
+                }
+
+                if vm.showImmersive {
+                    ImmersiveOverlay(vm: vm, savedImages: savedImages, onDismiss: { vm.showImmersive = false })
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            if let msg = toastMessage {
-                VStack {
-                    Spacer()
-                    Text(msg)
-                        .font(.callout)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-                        .shadow(radius: 4)
-                        .padding(.bottom, 24)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                .allowsHitTesting(false)
-                .animation(.spring(duration: 0.3), value: toastMessage)
+            .onAppear { vm.loadAssets() }
+            .onChange(of: vm.lastGenerationID) { _, id in
+                guard id != nil, AppSettings.shared.autoSaveGenerated else { return }
+                vm.saveCurrentImage(in: modelContext, source: .generated)
             }
 
-            if vm.showImmersive {
-                ImmersiveOverlay(vm: vm, savedImages: savedImages, onDismiss: { vm.showImmersive = false })
-            }
-        }
-        .onAppear { vm.loadAssets() }
-        .onChange(of: vm.lastGenerationID) { _, id in
-            guard id != nil, AppSettings.shared.autoSaveGenerated else { return }
-            vm.saveCurrentImage(in: modelContext, source: .generated)
+            GenerateStatusBar(vm: vm)
         }
     }
 }
@@ -511,6 +521,126 @@ struct PanelDragHandle: View {
                 .fill(isHovered ? Color.primary.opacity(0.25) : Color.primary.opacity(0.07))
                 .frame(width: 1)
                 .allowsHitTesting(false)
+        }
+    }
+}
+
+// MARK: - Top Bar
+
+private struct GenerateTopBar: View {
+    let vm: GenerateViewModel
+    @Binding var outputFormat: OutputFormat
+
+    private var isConnected: Bool { !vm.models.isEmpty }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Left: icon + wordmark
+            HStack(spacing: 6) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 28, height: 28)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                HStack(spacing: 4) {
+                    Text("TANQUE")
+                        .font(TanqueDS.Font.monoSemiBold(14))
+                        .foregroundStyle(TanqueDS.Color.textPrimary)
+                    Text("STUDIO")
+                        .font(TanqueDS.Font.mono(11))
+                        .foregroundStyle(TanqueDS.Color.textMuted)
+                }
+            }
+            .padding(.leading, TanqueDS.Spacing.md)
+
+            Spacer()
+
+            // Center: connection status
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(isConnected ? TanqueDS.Color.connected : TanqueDS.Color.textMuted)
+                    .frame(width: 6, height: 6)
+                Text(isConnected ? "connected" : "disconnected")
+                    .font(TanqueDS.Font.body)
+                    .foregroundStyle(isConnected ? TanqueDS.Color.connected : TanqueDS.Color.textMuted)
+            }
+
+            Spacer()
+
+            // Right: format toggle
+            HStack(spacing: 4) {
+                ForEach([OutputFormat.svg, OutputFormat.png], id: \.self) { format in
+                    let isActive = outputFormat == format
+                    Button {
+                        outputFormat = format
+                    } label: {
+                        Text(format == .svg ? "SVG" : "PNG")
+                            .font(TanqueDS.Font.bodyMedium)
+                            .foregroundStyle(isActive ? TanqueDS.Color.surface0 : TanqueDS.Color.textMuted)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(isActive ? TanqueDS.Color.brass : TanqueDS.Color.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.inputCornerRadius))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.trailing, TanqueDS.Spacing.md)
+        }
+        .frame(height: TanqueDS.Layout.topBarHeight)
+        .background(TanqueDS.Color.surface1)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(TanqueDS.Color.surfaceBorder)
+                .frame(height: 1)
+        }
+    }
+}
+
+// MARK: - Status Bar
+
+private struct GenerateStatusBar: View {
+    let vm: GenerateViewModel
+
+    private var modelName: String {
+        let name = (vm.config.model as NSString).lastPathComponent
+        return String(name.prefix(20))
+    }
+
+    private var aspectString: String {
+        "\(vm.config.width)×\(vm.config.height)"
+    }
+
+    var body: some View {
+        HStack(spacing: TanqueDS.Spacing.lg) {
+            Text("model \(modelName)")
+                .font(TanqueDS.Font.statusBar)
+                .foregroundStyle(TanqueDS.Color.textMuted)
+            Text("aspect \(aspectString)")
+                .font(TanqueDS.Font.statusBar)
+                .foregroundStyle(TanqueDS.Color.textMuted)
+            Text("steps \(vm.config.steps)")
+                .font(TanqueDS.Font.statusBar)
+                .foregroundStyle(TanqueDS.Color.textMuted)
+            Text("cfg \(vm.config.guidanceScale, specifier: "%.1f")")
+                .font(TanqueDS.Font.statusBar)
+                .foregroundStyle(TanqueDS.Color.textMuted)
+            Text("seed \(vm.config.seed)")
+                .font(TanqueDS.Font.statusBar)
+                .foregroundStyle(TanqueDS.Color.textMuted)
+            Spacer()
+            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                Text("v\(version)")
+                    .font(TanqueDS.Font.statusBar)
+                    .foregroundStyle(TanqueDS.Color.textMuted)
+            }
+        }
+        .padding(.horizontal, TanqueDS.Spacing.md)
+        .frame(height: TanqueDS.Layout.statusBarHeight)
+        .background(TanqueDS.Color.surface0)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(TanqueDS.Color.surfaceBorder)
+                .frame(height: 1)
         }
     }
 }

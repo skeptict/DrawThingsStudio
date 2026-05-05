@@ -17,16 +17,16 @@ struct GalleryStripView: View {
         }
 
         ZStack {
-            Color.green.opacity(0.06)
+            TanqueDS.Color.surface0
 
             if visibleImages.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 28))
-                        .foregroundStyle(.quaternary)
+                        .foregroundStyle(TanqueDS.Color.textMuted)
                     Text("No images")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(TanqueDS.Font.body)
+                        .foregroundStyle(TanqueDS.Color.textMuted)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -35,7 +35,8 @@ struct GalleryStripView: View {
                         ForEach(visibleImages) { tsImage in
                             GalleryStripCell(
                                 tsImage: tsImage,
-                                isSelected: tsImage.id == vm.selectedGalleryID
+                                isSelected: tsImage.id == vm.selectedGalleryID,
+                                isMostRecent: tsImage.id == visibleImages.first?.id
                             ) {
                                 selectImage(tsImage)
                             }
@@ -159,38 +160,44 @@ struct GalleryStripView: View {
 private struct GalleryStripCell: View {
     let tsImage: TSImage
     let isSelected: Bool
+    let isMostRecent: Bool
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 3) {
-                thumbnailView
-                    .aspectRatio(1, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 5)
-                            .strokeBorder(sourceBorderColor, lineWidth: 1.5)
-                    }
-                    .overlay {
-                        if isSelected {
-                            RoundedRectangle(cornerRadius: 5)
-                                .strokeBorder(Color.accentColor, lineWidth: 2)
-                        }
-                    }
-
-                Text(relativeTime(from: tsImage.createdAt))
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            thumbnailView
+                .aspectRatio(1, contentMode: .fit)
+                .background(TanqueDS.Color.surface2)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 5)
+                        .strokeBorder(borderColor, lineWidth: borderWidth)
+                }
+                .overlay(alignment: .bottom) {
+                    Text(relativeTime(from: tsImage.createdAt))
+                        .font(TanqueDS.Font.bodySmall)
+                        .foregroundStyle(TanqueDS.Color.textMuted)
+                        .lineLimit(1)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(TanqueDS.Color.surface0.opacity(0.85))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .padding(.bottom, 3)
+                }
         }
         .buttonStyle(.plain)
     }
 
-    private var sourceBorderColor: Color {
-        tsImage.source == .generated
-            ? Color.green.opacity(0.6)
-            : Color.gray.opacity(0.4)
+    private var borderColor: Color {
+        if isSelected || isMostRecent { return TanqueDS.Color.brass }
+        if Date().timeIntervalSince(tsImage.createdAt) < 60 { return TanqueDS.Color.connected }
+        return TanqueDS.Color.surfaceBorder
+    }
+
+    private var borderWidth: CGFloat {
+        if isSelected || isMostRecent { return 2 }
+        if Date().timeIntervalSince(tsImage.createdAt) < 60 { return 1.5 }
+        return 1
     }
 
     @ViewBuilder
@@ -200,10 +207,10 @@ private struct GalleryStripCell: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
-            Color.secondary.opacity(0.15)
+            TanqueDS.Color.surface2
                 .overlay {
                     Image(systemName: "photo")
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(TanqueDS.Color.textMuted)
                 }
         }
     }

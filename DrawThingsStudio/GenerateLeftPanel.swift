@@ -10,30 +10,30 @@ struct GenerateLeftPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     promptSection
-                    Divider()
+                    Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
                     configSection
-                    Divider()
+                    Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
                     savedConfigsSection
-                    Divider()
+                    Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
                     sizeTierSection
-                    Divider()
+                    Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
                     aspectRatioSection
-                    Divider()
+                    Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
                     loraSection
-                    Divider()
+                    Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
                     img2imgSection
-                    Divider()
+                    Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
                     moodboardSection
                 }
                 .padding(12)
             }
 
-            Divider()
+            Rectangle().fill(TanqueDS.Color.surfaceBorder).frame(height: 1)
 
             generateButton
                 .padding(12)
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(TanqueDS.Color.surface1)
         .sheet(isPresented: $vm.showLoRAPicker) {
             LoRAPickerSheet(vm: vm)
         }
@@ -50,17 +50,17 @@ struct GenerateLeftPanel: View {
     private var promptSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Prompt")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .tanqueSectionLabel()
             TextEditor(text: $vm.prompt)
-                .font(.body)
+                .font(TanqueDS.Font.body)
+                .foregroundStyle(TanqueDS.Color.textPrimary)
                 .frame(minHeight: 80, maxHeight: 160)
                 .scrollContentBackground(.hidden)
-                .background(Color.secondary.opacity(0.06))
+                .background(TanqueDS.Color.surface2)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+                        .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1)
                 )
                 .overlay(alignment: .bottomTrailing) {
                     Button { vm.requestLLMTrigger() } label: {
@@ -75,20 +75,21 @@ struct GenerateLeftPanel: View {
 
             DisclosureGroup(isExpanded: $vm.showNegativePrompt) {
                 TextEditor(text: $vm.negativePrompt)
-                    .font(.body)
+                    .font(TanqueDS.Font.body)
+                    .foregroundStyle(TanqueDS.Color.textPrimary)
                     .frame(minHeight: 60, maxHeight: 100)
                     .scrollContentBackground(.hidden)
-                    .background(Color.secondary.opacity(0.06))
+                    .background(TanqueDS.Color.surface2)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+                            .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1)
                     )
                     .padding(.top, 4)
             } label: {
                 Text("Negative Prompt")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(TanqueDS.Font.body)
+                    .foregroundStyle(TanqueDS.Color.textSecondary)
             }
         }
     }
@@ -101,13 +102,15 @@ struct GenerateLeftPanel: View {
             ConfigRow("Model") {
                 HStack(spacing: 4) {
                     TextField("model.safetensors", text: $vm.config.model)
-                        .font(.caption)
+                        .font(TanqueDS.Font.body)
+                        .foregroundStyle(TanqueDS.Color.textPrimary)
                         .truncationMode(.middle)
                     Button {
                         vm.showModelPicker = true
                     } label: {
                         Image(systemName: "chevron.down")
                             .font(.caption)
+                            .foregroundStyle(TanqueDS.Color.textSecondary)
                     }
                     .buttonStyle(.borderless)
                     .frame(width: 20)
@@ -155,14 +158,16 @@ struct GenerateLeftPanel: View {
                     TextField("W", value: $vm.config.width, format: .number)
                         .frame(width: 52)
                         .multilineTextAlignment(.trailing)
-                        .font(.caption.monospacedDigit())
+                        .font(TanqueDS.Font.body)
+                        .foregroundStyle(TanqueDS.Color.textPrimary)
                     Text("×")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(TanqueDS.Font.body)
+                        .foregroundStyle(TanqueDS.Color.textSecondary)
                     TextField("H", value: $vm.config.height, format: .number)
                         .frame(width: 52)
                         .multilineTextAlignment(.trailing)
-                        .font(.caption.monospacedDigit())
+                        .font(TanqueDS.Font.body)
+                        .foregroundStyle(TanqueDS.Color.textPrimary)
                 }
             }
 
@@ -179,7 +184,8 @@ struct GenerateLeftPanel: View {
             // Seed
             ConfigRow("Seed") {
                 TextField("–1 = random", value: $vm.config.seed, format: .number)
-                    .font(.caption.monospacedDigit())
+                    .font(TanqueDS.Font.body)
+                    .foregroundStyle(TanqueDS.Color.textPrimary)
                     .multilineTextAlignment(.trailing)
             }
 
@@ -213,7 +219,8 @@ struct GenerateLeftPanel: View {
                             in: 1...10
                         ) {
                             Text("\(vm.config.batchCount)")
-                                .font(.caption.monospacedDigit())
+                                .font(TanqueDS.Font.body)
+                                .foregroundStyle(TanqueDS.Color.textPrimary)
                                 .frame(width: 20)
                         }
                     }
@@ -221,8 +228,8 @@ struct GenerateLeftPanel: View {
                 .padding(.top, 6)
             } label: {
                 Text("Advanced")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(TanqueDS.Font.body)
+                    .foregroundStyle(TanqueDS.Color.textSecondary)
             }
         }
     }
@@ -233,14 +240,14 @@ struct GenerateLeftPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("Saved Configs")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .tanqueSectionLabel()
                 Spacer()
                 Button {
                     vm.showConfigPicker = true
                 } label: {
                     Image(systemName: "square.and.arrow.down")
                         .font(.caption)
+                        .foregroundStyle(TanqueDS.Color.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .help("Import from DT custom_configs.json")
@@ -248,20 +255,25 @@ struct GenerateLeftPanel: View {
 
             if AppSettings.shared.dtConfigsBookmark == nil {
                 Text("No config file selected")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(TanqueDS.Font.bodySmall)
+                    .foregroundStyle(TanqueDS.Color.textMuted)
                     .padding(.vertical, 2)
             } else {
                 Button {
                     vm.showConfigPicker = true
                 } label: {
                     Label("Choose Config…", systemImage: "list.bullet")
-                        .font(.caption)
+                        .font(TanqueDS.Font.body)
+                        .foregroundStyle(TanqueDS.Color.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 4)
                         .padding(.horizontal, 8)
-                        .background(Color.secondary.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .background(TanqueDS.Color.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.inputCornerRadius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: TanqueDS.Layout.inputCornerRadius)
+                                .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1)
+                        )
                 }
                 .buttonStyle(.plain)
             }
@@ -289,31 +301,28 @@ struct GenerateLeftPanel: View {
     private var sizeTierSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Canvas Size")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .tanqueSectionLabel()
 
             HStack(spacing: 6) {
                 ForEach(Self.sizeTiers, id: \.label) { tier in
+                    let isActive = currentSizeTier == tier.label
                     Button { applySize(targetArea: tier.area) } label: {
                         VStack(spacing: 2) {
                             Text(tier.label)
-                                .font(.caption.weight(.semibold))
+                                .font(TanqueDS.Font.bodyMedium)
+                                .foregroundStyle(isActive ? TanqueDS.Color.brass : TanqueDS.Color.textSecondary)
                             Text(tier.hint)
-                                .font(.system(size: 8))
+                                .font(TanqueDS.Font.bodySmall)
+                                .foregroundStyle(isActive ? TanqueDS.Color.brassDim : TanqueDS.Color.textMuted)
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 38)
-                        .background(
-                            currentSizeTier == tier.label
-                                ? Color.accentColor.opacity(0.12)
-                                : Color.secondary.opacity(0.08)
+                        .background(isActive ? TanqueDS.Color.brassSubtle : TanqueDS.Color.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.inputCornerRadius))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: TanqueDS.Layout.inputCornerRadius)
+                                .strokeBorder(isActive ? TanqueDS.Color.brass : TanqueDS.Color.surfaceBorder, lineWidth: 1)
                         )
-                        .foregroundStyle(
-                            currentSizeTier == tier.label
-                                ? Color.accentColor
-                                : Color.secondary
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
                 }
@@ -326,8 +335,7 @@ struct GenerateLeftPanel: View {
     private var aspectRatioSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Aspect Ratio")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .tanqueSectionLabel()
 
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 40, maximum: 52))],
@@ -352,20 +360,20 @@ struct GenerateLeftPanel: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("LoRAs")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .tanqueSectionLabel()
                 Spacer()
                 Button { vm.showLoRAPicker = true } label: {
                     Image(systemName: "plus.circle")
                         .font(.caption)
+                        .foregroundStyle(TanqueDS.Color.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
 
             if vm.config.loras.isEmpty {
                 Text("No LoRAs added")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(TanqueDS.Font.bodySmall)
+                    .foregroundStyle(TanqueDS.Color.textMuted)
                     .padding(.vertical, 4)
             } else {
                 ForEach(vm.config.loras, id: \.file) { lora in
@@ -395,8 +403,7 @@ struct GenerateLeftPanel: View {
     private var img2imgSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("img2img")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .tanqueSectionLabel()
 
             // Strength slider
             SliderConfigRow(
@@ -411,11 +418,11 @@ struct GenerateLeftPanel: View {
             // Source image drop zone
             VStack(alignment: .leading, spacing: 4) {
                 Text("Source")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(TanqueDS.Font.body)
+                    .foregroundStyle(TanqueDS.Color.textSecondary)
                     .frame(width: 50, alignment: .trailing)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 56)   // aligns with ConfigRow content column
+                    .padding(.leading, 56)
 
                 if let src = vm.sourceImage {
                     ZStack(alignment: .topTrailing) {
@@ -438,12 +445,12 @@ struct GenerateLeftPanel: View {
                     }
                 } else {
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1)
+                        .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1)
                         .frame(height: 64)
                         .overlay {
                             Label("Drop source image", systemImage: "photo.badge.plus")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(TanqueDS.Font.body)
+                                .foregroundStyle(TanqueDS.Color.textMuted)
                         }
                         .dropDestination(for: URL.self) { urls, _ in
                             guard let url = urls.first,
@@ -462,14 +469,13 @@ struct GenerateLeftPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Moodboard")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .tanqueSectionLabel()
                 Spacer()
                 if !vm.moodboardEntries.isEmpty {
                     Button("Clear") { vm.clearMoodboard() }
                         .buttonStyle(.borderless)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(TanqueDS.Font.body)
+                        .foregroundStyle(TanqueDS.Color.textSecondary)
                 }
             }
 
@@ -497,8 +503,8 @@ struct GenerateLeftPanel: View {
 
                         HStack(spacing: 4) {
                             Text("Weight")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .font(TanqueDS.Font.bodySmall)
+                                .foregroundStyle(TanqueDS.Color.textSecondary)
                             Slider(
                                 value: Binding(
                                     get: { Double(entry.weight) },
@@ -510,8 +516,10 @@ struct GenerateLeftPanel: View {
                                 ),
                                 in: 0...1, step: 0.05
                             )
+                            .tint(TanqueDS.Color.brass)
                             Text(String(format: "%.2f", entry.weight))
-                                .font(.caption2.monospacedDigit())
+                                .font(TanqueDS.Font.bodySmall)
+                                .foregroundStyle(TanqueDS.Color.textPrimary)
                                 .frame(width: 30)
                         }
                     }
@@ -524,12 +532,12 @@ struct GenerateLeftPanel: View {
 
     private func moodboardDropZone(label: String, height: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1)
+            .strokeBorder(TanqueDS.Color.surfaceBorder, lineWidth: 1)
             .frame(height: height)
             .overlay {
                 Label(label, systemImage: "photo.stack")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(TanqueDS.Font.body)
+                    .foregroundStyle(TanqueDS.Color.textMuted)
             }
             .dropDestination(for: URL.self) { urls, _ in
                 var added = false
@@ -554,15 +562,14 @@ struct GenerateLeftPanel: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: vm.isGenerating ? "stop.fill" : "paintbrush.fill")
-                    .font(.callout)
                 Text(vm.isGenerating ? "Cancel" : "Generate")
-                    .font(.callout.weight(.semibold))
             }
+            .font(TanqueDS.Font.monoSemiBold(13))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
-            .background(vm.isGenerating ? Color.red.opacity(0.85) : Color.accentColor)
-            .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(vm.isGenerating ? Color.red.opacity(0.85) : TanqueDS.Color.brass)
+            .foregroundStyle(TanqueDS.Color.surface0)
+            .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.inputCornerRadius))
         }
         .buttonStyle(.plain)
     }
@@ -604,26 +611,30 @@ private struct SliderConfigRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(TanqueDS.Font.body)
+                .foregroundStyle(TanqueDS.Color.textSecondary)
             HStack(spacing: 4) {
                 Slider(value: $value, in: range, step: step)
+                    .tint(TanqueDS.Color.brass)
                 Button {
                     value = max(range.lowerBound, value - increment)
                 } label: {
                     Image(systemName: "minus")
                         .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(TanqueDS.Color.textSecondary)
                 }
                 .buttonStyle(.borderless)
                 .frame(width: 16)
                 Text(String(format: displayFormat, value))
-                    .font(.caption.monospacedDigit())
+                    .font(TanqueDS.Font.body)
+                    .foregroundStyle(TanqueDS.Color.textPrimary)
                     .frame(width: 36, alignment: .center)
                 Button {
                     value = min(range.upperBound, value + increment)
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(TanqueDS.Color.textSecondary)
                 }
                 .buttonStyle(.borderless)
                 .frame(width: 16)
@@ -646,8 +657,8 @@ private struct ConfigRow<Content: View>: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(TanqueDS.Font.body)
+                .foregroundStyle(TanqueDS.Color.textSecondary)
                 .frame(width: 50, alignment: .trailing)
             content
         }
@@ -669,15 +680,19 @@ private struct AspectRatioTile: View {
         Button(action: action) {
             VStack(spacing: 3) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .fill(isSelected ? TanqueDS.Color.brass : TanqueDS.Color.textMuted)
                     .frame(width: tileWidth, height: tileHeight)
                 Text("\(ratioW):\(ratioH)")
-                    .font(.system(size: 8))
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .font(isSelected ? TanqueDS.Font.bodyMedium : TanqueDS.Font.body)
+                    .foregroundStyle(isSelected ? TanqueDS.Color.brass : TanqueDS.Color.textSecondary)
             }
             .frame(width: 40, height: 38)
-            .background(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .background(isSelected ? TanqueDS.Color.brassSubtle : TanqueDS.Color.surface2)
+            .clipShape(RoundedRectangle(cornerRadius: TanqueDS.Layout.inputCornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: TanqueDS.Layout.inputCornerRadius)
+                    .strokeBorder(isSelected ? TanqueDS.Color.brass : TanqueDS.Color.surfaceBorder, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -694,7 +709,8 @@ private struct LoRARow: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
                 Text(file)
-                    .font(.caption2)
+                    .font(TanqueDS.Font.bodySmall)
+                    .foregroundStyle(TanqueDS.Color.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -706,22 +722,26 @@ private struct LoRARow: View {
             }
             HStack(spacing: 4) {
                 Slider(value: $weight, in: 0...2, step: 0.05)
+                    .tint(TanqueDS.Color.brass)
                 Button {
                     weight = max(0, weight - 0.05)
                 } label: {
                     Image(systemName: "minus")
                         .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(TanqueDS.Color.textSecondary)
                 }
                 .buttonStyle(.borderless)
                 .frame(width: 16)
                 Text(String(format: "%.2f", weight))
-                    .font(.caption2.monospacedDigit())
+                    .font(TanqueDS.Font.bodySmall)
+                    .foregroundStyle(TanqueDS.Color.textPrimary)
                     .frame(width: 36, alignment: .center)
                 Button {
                     weight = min(2, weight + 0.05)
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(TanqueDS.Color.textSecondary)
                 }
                 .buttonStyle(.borderless)
                 .frame(width: 16)
