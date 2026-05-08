@@ -105,8 +105,10 @@ struct TanqueStudioApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .ignoresSafeArea()
         }
         .modelContainer(sharedModelContainer)
+        .windowStyle(.hiddenTitleBar)
 
         #if os(macOS)
         Settings {

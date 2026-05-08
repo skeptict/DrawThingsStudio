@@ -131,6 +131,7 @@ struct GenerateView: View {
 
             GenerateStatusBar(vm: vm)
         }
+        .ignoresSafeArea(edges: .top)
     }
 }
 
@@ -550,7 +551,7 @@ private struct GenerateTopBar: View {
                         .foregroundStyle(TanqueDS.Color.textMuted)
                 }
             }
-            .padding(.leading, TanqueDS.Spacing.md)
+            .padding(.leading, 80)
 
             Spacer()
 
@@ -586,7 +587,8 @@ private struct GenerateTopBar: View {
             }
             .padding(.trailing, TanqueDS.Spacing.md)
         }
-        .frame(height: TanqueDS.Layout.topBarHeight)
+        .padding(.top, 20)
+        .frame(height: TanqueDS.Layout.topBarHeight + 20)
         .background(TanqueDS.Color.surface1)
         .overlay(alignment: .bottom) {
             Rectangle()
