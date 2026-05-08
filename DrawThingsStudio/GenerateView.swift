@@ -519,7 +519,7 @@ struct PanelDragHandle: View {
                 )
 
             Rectangle()
-                .fill(isHovered ? Color.primary.opacity(0.25) : Color.primary.opacity(0.07))
+                .fill(isHovered ? TanqueDS.Color.surfaceBorder.opacity(0.8) : TanqueDS.Color.surfaceBorder.opacity(0.4))
                 .frame(width: 1)
                 .allowsHitTesting(false)
         }
